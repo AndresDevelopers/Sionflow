@@ -1,0 +1,242 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "lastName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "firstName", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "lastName", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "birthDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "baptismDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_conversos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "baptismDate", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_conversos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "councilCompleted", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_actividades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_actividades",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_servicios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_servicios",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_cumpleanos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_ministracion",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "companions", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_ministracion_distritos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "email", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "memberId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_observaciones_salud",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_anotaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_anotaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "isResolved", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_anotaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "source", "order": "ASCENDING" },
+        { "fieldPath": "isResolved", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_obra_misional_asignaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_obra_misional_investigadores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_obra_misional_amigos_conversos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "assignedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_reporte_anual",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "updatedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_admin_audit",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_bautismos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_futuros_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "baptismDate", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_ministracion_historial",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_notifications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

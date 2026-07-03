@@ -1,0 +1,75 @@
+{
+  "name": "QuorumFlow",
+  "short_name": "QuorumFlow",
+  "description": "Sistema completo de gestión para el secretario del Quórum de Élderes.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#5B21B6",
+  "categories": [
+    "productivity",
+    "utilities"
+  ],
+  "lang": "es",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/logo.svg",
+      "sizes": "540x720",
+      "type": "image/svg+xml",
+      "form_factor": "narrow"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Dashboard",
+      "short_name": "Dashboard",
+      "description": "Panel principal",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Miembros",
+      "short_name": "Miembros",
+      "description": "Gestionar miembros del quÃ³rum",
+      "url": "/members",
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Consejo",
+      "short_name": "Consejo",
+      "description": "Ver elementos del consejo",
+      "url": "/council",
+      "icons": [
+        {
+          "src": "/logo.svg",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "prefer_related_applications": false,
+  "related_applications": [],
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}

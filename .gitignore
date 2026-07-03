@@ -1,0 +1,74 @@
+# Dependencies
+node_modules/
+functions/node_modules/
+.pnpm-store/
+
+# Next.js
+.next/
+out/
+
+# Environment variables
+.env
+.env.*.local
+.env.local
+
+# Firebase
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+public/firebase-messaging-sw.js
+
+# Build outputs
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+.claude/
+
+# AI Assistants
+.agent/
+.augment/
+.commandcode/
+.kiro/
+.kilocode/
+.trae/
+.windsurf/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# TypeScript
+*.tsbuildinfo
+
+#Ignore vscode AI rules
+.github/instructions/codacy.instructions.md
+
+# ESLint reports
+eslint-report.json
+src-eslint-report.json
+
+# Service Worker (build artifacts)
+public/sw.js
+public/sw.js.map
+public/workbox-*.js
+public/workbox-*.js.map
+public/worker-*.js
+public/worker-*.js.map
+
+# Firebase service account keys
+*-firebase-adminsdk-*.json
+quorumflow-*.json
+
+# Misc
+.windsurfrules
+opencode.json

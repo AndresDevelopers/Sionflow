@@ -1,0 +1,170 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function currentUserRole() {
+      return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data.role;
+    }
+
+    function isSecretary() {
+      return signedIn() && (currentUserRole() == 'secretary' || currentUserRole() == 'admin');
+    }
+
+    function isAnnotationOwner() {
+      return signedIn()
+        && resource.data.userId != null
+        && resource.data.userId == request.auth.uid;
+    }
+
+    function isCreatingOwnAnnotation() {
+      return signedIn()
+        && request.resource.data.userId != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Full access for signed-in users to all data collections.
+    // Scoping is enforced at the application layer (queries filter by barrioOrg).
+    // This allows legacy data (without barrioOrg) to continue working 
+    // while migration is in progress.
+    match /c_miembros/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_anotaciones/{document} {
+      allow read: if signedIn();
+      allow create: if isCreatingOwnAnnotation();
+      allow update: if (isSecretary() || isAnnotationOwner())
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isSecretary() || isAnnotationOwner();
+    }
+    
+    match /c_conversos/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_conversos_info/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_futuros_miembros/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_ministracion/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_actividades/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_servicios/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_cumpleanos/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /c_admin_audit/{document} {
+      allow read: if isSecretary();
+      allow create: if isSecretary() && request.resource.data.actorUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /c_bautismos/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_fs_capacitaciones/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_fs_pendientes/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_fs_anotaciones/{document} {
+      allow read: if signedIn();
+      allow create: if isCreatingOwnAnnotation();
+      allow update: if (isSecretary() || isAnnotationOwner())
+        && request.resource.data.userId == resource.data.userId;
+      allow delete: if isSecretary() || isAnnotationOwner();
+    }
+    
+    match /c_obra_misional_asignaciones/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_obra_misional_investigadores/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_obra_misional_amigos_conversos/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_obra_misional_imagenes/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_reporte_anual/{document} {
+      allow read, write: if signedIn();
+    }
+    
+    match /c_push_subscriptions/{document} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+    
+    match /c_users/{document} {
+      allow read: if signedIn();
+      allow create: if signedIn() && document == request.auth.uid;
+      allow update: if signedIn()
+        && (
+          isSecretary()
+          || (
+            document == request.auth.uid
+            && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role'])
+          )
+        );
+    }
+
+    match /c_ministracion_distritos/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /c_ministracion_historial/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /c_observaciones_salud/{document} {
+      allow read, write: if signedIn();
+    }
+
+    match /c_notifications/{document} {
+      allow read: if signedIn();
+      allow write: if signedIn();
+    }
+
+    // Reference data — public read
+    match /c_barrios/{document} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+
+    match /c_organizaciones/{document} {
+      allow read: if true;
+      allow write: if request.auth != null;
+    }
+    
+    // Default: signed-in users can read anything
+    match /{document=**} {
+      allow read: if signedIn();
+    }
+  }
+}
