@@ -30,7 +30,7 @@ type FamilyWithCompanions = Family & { companionshipId: string; companions: stri
 type UrgentFamily = Family & { companions: string[] };
 
 export function UrgentNeedsClient() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, barrioOrg } = useAuth();
   const [allFamilies, setAllFamilies] = useState<FamilyWithCompanions[]>([]);
   const [urgentFamilies, setUrgentFamilies] = useState<UrgentFamily[]>([]);
   const [loading, setLoading] = useState(true);
@@ -113,13 +113,13 @@ export function UrgentNeedsClient() {
 
       await updateDoc(companionshipRef, { families: updatedFamilies });
 
-      // Send in-app notification to all users about the urgent family need
+      // Send in-app notification to all users in the same barrioOrg about the urgent family need
       await createNotificationsForAll({
         title: 'Necesidad Urgente de Familia',
         body: `La familia ${familyName} tiene una necesidad urgente: ${observation}`,
         contextType: 'urgent_family',
         actionUrl: '/ministering/urgent'
-      });
+      }, barrioOrg);
 
       // Send push notification to all subscribed users using FCM
       try {

@@ -96,6 +96,7 @@ const statusConfig = {
 
 export default function MembersPage() {
   const { toast } = useToast();
+  const { barrioOrg } = useAuth();
   const router = useRouter();
   const { members, loading, syncStatus, lastSyncTime, fetchMembers, clearCache } = useMembersSync({
     enableInitialFetch: true, // Enable initial fetch for members page
@@ -217,7 +218,7 @@ export default function MembersPage() {
             contextType: 'member',
             contextId: member.id,
             actionUrl: '/council'
-          });
+          }, barrioOrg);
         } catch (notifError) {
           console.error('Error sending urgent notification:', notifError);
         }

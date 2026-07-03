@@ -827,7 +827,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
               contextType: 'member',
               contextId: member.id,
               actionUrl: '/members'
-            });
+            }, barrioOrg);
           } catch (notifError) {
             console.error('Error sending urgent notification from form:', notifError);
           }
@@ -900,7 +900,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
               contextType: 'member',
               contextId: newMemberId,
               actionUrl: '/members'
-            });
+            }, barrioOrg);
           } catch (notifError) {
             console.error('Error sending urgent notification for new member:', notifError);
           }

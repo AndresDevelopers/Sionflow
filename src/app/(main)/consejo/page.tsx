@@ -52,7 +52,7 @@ async function saveConvertNotes(firestore: Firestore, convertId: string, notes: 
 }
 
 const ConsejoPage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const { toast } = useToast();
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [newConverts, setNewConverts] = useState<ConvertWithNotes[]>([]);
@@ -291,7 +291,8 @@ const ConsejoPage: React.FC = () => {
           await createNewConvertCouncilNotificationsForAll(
             currentConvert.name || 'Converso',
             convertId,
-            'actualizado'
+            'actualizado',
+            barrioOrg
           );
         } catch (notifError) {
           console.error('Error sending new convert notification:', notifError);

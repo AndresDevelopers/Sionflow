@@ -278,7 +278,7 @@ const reportQuestions = [
 ];
 
 export default function ReportsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, organizacion } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -389,7 +389,8 @@ export default function ReportsPage() {
         const generateCompleteReportCallable = httpsCallable(functions, 'generateCompleteReport');
         const result = await generateCompleteReportCallable({
           year,
-          includeAllActivities: false
+          includeAllActivities: false,
+          organizacion
         });
 
         const data = result.data as { fileContents: string };
@@ -407,7 +408,8 @@ export default function ReportsPage() {
           const generateReportCallable = httpsCallable(functions, 'generateReport');
           const result = await generateReportCallable({
             year,
-            includeAllActivities: false
+            includeAllActivities: false,
+            organizacion
           });
 
           const data = result.data as { fileContents: string };

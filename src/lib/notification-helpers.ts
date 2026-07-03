@@ -324,15 +324,18 @@ export async function createBulkNotifications(
 
 /**
  * Create notifications for all users in the system who have notifications enabled
+ * and belong to the same barrioOrg.
  * @param notificationParams - Notification parameters (excluding userId)
+ * @param barrioOrg - Optional barrioOrg scope. If provided, only users with matching barrioOrg will be notified.
  * @returns Promise<string[]> - Array of created notification IDs
  */
 export async function createNotificationsForAll(
-  notificationParams: Omit<CreateNotificationParams, 'userId'>
+  notificationParams: Omit<CreateNotificationParams, 'userId'>,
+  barrioOrg?: string | null
 ): Promise<string[]> {
   const userIds = await getAllUserIds();
 
-  // Filter users to only include those with notifications enabled
+  // Filter users to only include those with notifications enabled and matching barrioOrg
   const usersWithNotificationsEnabled: string[] = [];
 
   // Batch query in chunks of 30 (Firestore 'in' limit)
@@ -353,19 +356,29 @@ export async function createNotificationsForAll(
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
         if (userData) {
+          // Filter by barrioOrg if provided
+          if (barrioOrg) {
+            const userBarrioOrg = userData.barrioOrg || `${userData.barrio || 'Libertad'}|${userData.organizacion || 'Quórum de Élderes'}`;
+            if (userBarrioOrg !== barrioOrg) continue;
+          }
+
           // Por defecto las notificaciones in-app están activas (inAppNotificationsEnabled !== false)
           if (userData.inAppNotificationsEnabled !== false) {
             usersWithNotificationsEnabled.push(userId);
           }
         } else {
-          // Usuario nuevo sin preferencias, incluir por defecto
-          usersWithNotificationsEnabled.push(userId);
+          // Usuario nuevo sin preferencias, incluir por defecto (solo si no hay scope)
+          if (!barrioOrg) {
+            usersWithNotificationsEnabled.push(userId);
+          }
         }
       }
     } catch (error) {
       console.error(`Error checking notification preference for user chunk starting at index ${i}:`, error);
-      // En caso de error, incluir a los usuarios por defecto
-      usersWithNotificationsEnabled.push(...chunk);
+      // En caso de error, incluir a los usuarios por defecto (solo si no hay scope)
+      if (!barrioOrg) {
+        usersWithNotificationsEnabled.push(...chunk);
+      }
     }
   }
 
@@ -420,20 +433,23 @@ export async function createNewConvertCouncilNotification(
 }
 
 /**
- * Create in-app notifications for all users about new convert updates from council
+ * Create in-app notifications for all users about new convert updates from council.
+ * Only notifies users in the same barrioOrg.
  * @param convertName - Name of the convert
  * @param convertId - ID of the convert
  * @param action - The action that was performed
+ * @param barrioOrg - The barrioOrg to scope notifications to
  * @returns Promise<string[]> - Array of created notification IDs
  */
 export async function createNewConvertCouncilNotificationsForAll(
   convertName: string,
   convertId: string,
-  action: string = 'actualizado'
+  action: string = 'actualizado',
+  barrioOrg?: string | null
 ): Promise<string[]> {
   const userIds = await getAllUserIds();
 
-  // Filter users to only include those with in-app notifications enabled
+  // Filter users to only include those with in-app notifications enabled and matching barrioOrg
   const usersWithInAppEnabled: string[] = [];
 
   // Batch query in chunks of 30
@@ -454,17 +470,28 @@ export async function createNewConvertCouncilNotificationsForAll(
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
         if (userData) {
+          // Filter by barrioOrg if provided
+          if (barrioOrg) {
+            const userBarrioOrg = userData.barrioOrg || `${userData.barrio || 'Libertad'}|${userData.organizacion || 'Quórum de Élderes'}`;
+            if (userBarrioOrg !== barrioOrg) continue;
+          }
+
           // Check in-app notifications preference
           if (userData.inAppNotificationsEnabled !== false) {
             usersWithInAppEnabled.push(userId);
           }
         } else {
-          usersWithInAppEnabled.push(userId);
+          // New user, include by default (only if no scope)
+          if (!barrioOrg) {
+            usersWithInAppEnabled.push(userId);
+          }
         }
       }
     } catch (error) {
       console.error(`Error checking notification preference for convert council notification chunk:`, error);
-      usersWithInAppEnabled.push(...chunk);
+      if (!barrioOrg) {
+        usersWithInAppEnabled.push(...chunk);
+      }
     }
   }
 

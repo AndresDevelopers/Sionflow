@@ -583,7 +583,7 @@ export default function CouncilPage() {
             contextType: 'member',
             contextId: member.id,
             actionUrl: '/council'
-          });
+          }, barrioOrg);
           await updateMember(member.id, { urgentNotifiedAt: Timestamp.now() } as Partial<Member>);
         } catch (error) {
           logger.error({ error, memberId: member.id, message: 'Error sending daily urgent notification' });
