@@ -151,7 +151,7 @@ export default function AdminUsersPage() {
       }
     };
     load();
-  }, [defaultVisiblePages, toast]);
+  }, [defaultVisiblePages, toast, barrioOrg]);
 
   useEffect(() => {
     let list = users;

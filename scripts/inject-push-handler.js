@@ -1,6 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 
+require('dotenv').config({ path: path.join(__dirname, '../.env.local') });
+
+const APP_NAME = process.env.NEXT_PUBLIC_APP_NAME || "LuzViva";
+const APP_NOTIFICATION_TAG = (APP_NAME.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")) + "-notification";
+
 const swPath = path.join(__dirname, '../public/sw.js');
 
 const pushHandlerCode = `
@@ -26,7 +31,7 @@ self.addEventListener('push', function(event) {
     };
   }
 
-  const title = data.title || 'QuorumFlow';
+  const title = data.title || '${APP_NAME}';
   const options = {
     body: data.body || 'Tienes una nueva notificación',
     icon: data.icon || '/logo.svg',
@@ -36,7 +41,7 @@ self.addEventListener('push', function(event) {
       timestamp: data.timestamp || Date.now(),
     },
     vibrate: [200, 100, 200],
-    tag: 'quorumflow-notification',
+    tag: '${APP_NOTIFICATION_TAG}',
     requireInteraction: true,
   };
 

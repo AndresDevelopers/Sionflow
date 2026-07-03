@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { getAppStoragePrefix } from '@/lib/app-config';
 
 interface OfflineState {
     isOnline: boolean;
@@ -294,7 +295,7 @@ function openSyncDB(): Promise<IDBDatabase> {
             return;
         }
 
-        const request = indexedDB.open('QuorumFlowSync', 1);
+        const request = indexedDB.open(`${getAppStoragePrefix()}Sync`, 1);
 
         request.onerror = () => reject(request.error);
         request.onsuccess = () => resolve(request.result);

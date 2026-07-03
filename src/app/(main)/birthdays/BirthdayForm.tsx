@@ -74,7 +74,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: BirthdayFormProps) {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const { t } = useI18n();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -313,6 +313,7 @@ export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: B
         photoURL: finalPhotoURL,
         // Store metadata about entry mode and source
         entryMode: values.entryMode,
+        barrioOrg: barrioOrg || '',
         ...(values.entryMode === 'automatic' && values.selectedMemberId && {
           linkedMemberId: values.selectedMemberId,
           sourceType: 'member_selection'

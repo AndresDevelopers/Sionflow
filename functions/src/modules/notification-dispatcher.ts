@@ -294,7 +294,7 @@ class FcmRepository {
               },
             },
             fcmOptions: {
-              analyticsLabel: payload.tag ?? "quorumflow",
+              analyticsLabel: payload.tag ?? "app-notification",
             },
           },
           // ── Web (PWA) ─────────────────────────────────────────────────────

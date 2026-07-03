@@ -1,6 +1,9 @@
 // Custom Service Worker for handling push notifications
 // This extends the auto-generated service worker from next-pwa
 
+const APP_NAME = '<%= APP_NAME %>';
+const APP_NOTIFICATION_TAG = '<%= APP_NOTIFICATION_TAG %>';
+
 self.addEventListener('push', function(event) {
   console.log('[Service Worker] Push Received.');
   
@@ -22,7 +25,7 @@ self.addEventListener('push', function(event) {
     };
   }
 
-  const title = data.title || 'QuorumFlow';
+  const title = data.title || APP_NAME;
   const options = {
     body: data.body || 'Tienes una nueva notificación',
     icon: data.icon || '/logo.svg',
@@ -32,7 +35,7 @@ self.addEventListener('push', function(event) {
       timestamp: data.timestamp || Date.now(),
     },
     vibrate: [200, 100, 200],
-    tag: 'quorumflow-notification',
+    tag: APP_NOTIFICATION_TAG,
     requireInteraction: true,
   };
 

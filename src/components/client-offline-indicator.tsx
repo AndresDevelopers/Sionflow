@@ -18,6 +18,9 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useState, useEffect, useRef } from 'react';
+import { getAppName } from "@/lib/app-config";
+
+const appName = getAppName();
 
 function ClientOfflineIndicator() {
     const {
@@ -123,7 +126,7 @@ function ClientOfflineIndicator() {
             await installApp();
             toast({
                 title: "App Instalada",
-                description: "QuorumFlow se ha instalado correctamente en tu dispositivo.",
+                description: `${appName} se ha instalado correctamente en tu dispositivo.`,
             });
         } catch (error) {
             console.error('Installation error:', error);
@@ -292,7 +295,7 @@ function ClientOfflineIndicator() {
                             </Button>
                         </div>
                         <p className="text-xs text-green-600 mt-1">
-                            QuorumFlow está instalado y funciona completamente offline.
+                            {appName} está instalado y funciona completamente offline.
                         </p>
                     </CardContent>
                 </Card>

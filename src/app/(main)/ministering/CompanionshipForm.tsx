@@ -10,6 +10,7 @@ import { addDoc, updateDoc, doc, getDocs, getDoc, query, orderBy, where, serverT
 import { ministeringCollection, membersCollection, ministeringDistrictsCollection } from '@/lib/collections';
 import logger from '@/lib/logger';
 import { updateMinisteringTeachersOnCompanionshipChange } from '@/lib/ministering-reverse-sync';
+import { useAuth } from '@/contexts/auth-context';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -52,6 +53,7 @@ interface CompanionshipFormProps {
 export function CompanionshipForm({ companionship, onCancel }: CompanionshipFormProps) {
    const router = useRouter();
    const { toast } = useToast();
+   const { barrioOrg } = useAuth();
    const [isSubmitting, setIsSubmitting] = useState(false);
 
    const isEditMode = !!companionship;
@@ -412,6 +414,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
             await setDoc(newCompanionshipRef, {
                 companions: values.companions.map(c => c.value),
                 families: familiesWithObjects,
+                barrioOrg,
             });
 
             // Add to selected district (if any)

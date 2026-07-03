@@ -76,7 +76,7 @@ export function VoiceAnnotations({
   currentUserId,
 }: VoiceAnnotationsProps) {
   const { toast } = useToast();
-  const { userRole } = useAuth();
+  const { userRole, barrioOrg } = useAuth();
   const isSecretary = userRole === 'secretary';
   const [open, setOpen] = useState(false);
   const [newAnnotation, setNewAnnotation] = useState('');
@@ -137,6 +137,7 @@ export function VoiceAnnotations({
         isResolved: false,
         createdAt: serverTimestamp(),
         userId: currentUserId,
+        barrioOrg,
       });
 
       setNewAnnotation('');

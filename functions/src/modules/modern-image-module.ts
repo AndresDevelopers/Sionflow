@@ -4,7 +4,7 @@ import { DOMParser } from "@xmldom/xmldom";
 const docxtemplaterNamespace = require("docxtemplater");
 const { DocUtils } = docxtemplaterNamespace;
 
-const MODULE_NAME = "quorumflow/docxtemplater-modern-image-module";
+const MODULE_NAME = "docxtemplater-modern-image-module";
 const DEFAULT_IMAGE_EXTENSION = "png";
 
 // EMUs (English Metric Units) conversion

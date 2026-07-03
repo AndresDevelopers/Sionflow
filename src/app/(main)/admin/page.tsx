@@ -44,6 +44,7 @@ import {
 } from "@/lib/collections";
 import { normalizeRole, type UserRole } from "@/lib/roles";
 import { useAuth } from "@/contexts/auth-context";
+import { getAppName } from "@/lib/app-config";
 import logger from "@/lib/logger";
 import type { AuditAction } from "@/lib/audit-logger";
 import { format } from "date-fns";
@@ -190,7 +191,7 @@ export default function AdminHomePage() {
       }
     };
     load();
-  }, []);
+  }, [barrioOrg]);
 
   useEffect(() => {
     const loadAudit = async () => {
@@ -244,7 +245,7 @@ export default function AdminHomePage() {
           value={stats?.totalUsers}
           isLoading={isLoading}
           href="/admin/users"
-          description="Cuentas con acceso a QuorumFlow"
+          description={`Cuentas con acceso a ${getAppName()}`}
         />
         <AdminStatCard
           icon={UserCog}

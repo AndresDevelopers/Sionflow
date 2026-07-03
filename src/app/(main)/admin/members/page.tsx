@@ -118,7 +118,7 @@ export default function AdminMembersPage() {
       }
     };
     load();
-  }, [toast]);
+  }, [toast, barrioOrg]);
 
   const filtered = useMemo(() => {
     let list = members;

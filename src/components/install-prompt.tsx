@@ -3,6 +3,9 @@
 import { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { X } from 'lucide-react';
+import { getAppName } from "@/lib/app-config";
+
+const appName = getAppName();
 
 export function InstallPrompt() {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -61,7 +64,7 @@ export function InstallPrompt() {
     <div className="pointer-events-none fixed inset-x-4 bottom-[calc(env(safe-area-inset-bottom)+1rem)] z-50 w-full max-w-[min(100%,24rem)] sm:inset-x-auto sm:right-4 sm:w-96">
       <div className="pointer-events-auto rounded-xl border bg-card/95 p-4 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/75">
         <div className="mb-3 flex items-start justify-between">
-          <h3 className="font-medium">Instalar QuorumFlow</h3>
+          <h3 className="font-medium">Instalar {appName}</h3>
           <button
             onClick={handleDismiss}
             className="text-muted-foreground hover:text-foreground"
@@ -71,7 +74,7 @@ export function InstallPrompt() {
           </button>
         </div>
         <p className="mb-4 text-sm text-muted-foreground">
-          Instala QuorumFlow en tu dispositivo para un acceso más rápido y funcionalidad offline completa.
+          Instala {appName} en tu dispositivo para un acceso más rápido y funcionalidad offline completa.
         </p>
         <div className="flex gap-2">
           <Button

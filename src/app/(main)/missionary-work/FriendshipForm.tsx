@@ -9,6 +9,7 @@ import { addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from 'firebase/fir
 import { newConvertFriendsCollection } from '@/lib/collections';
 import type { Convert, NewConvertFriendship } from '@/lib/types';
 import logger from '@/lib/logger';
+import { useAuth } from '@/contexts/auth-context';
 
 import {
   Dialog,
@@ -62,6 +63,7 @@ export function FriendshipForm({
 }: FriendshipFormProps) {
   const isEditMode = !!friendship;
   const { toast } = useToast();
+  const { barrioOrg } = useAuth();
   const [isPending, startTransition] = useTransition();
 
   const form = useForm<FormValues>({
@@ -114,6 +116,7 @@ export function FriendshipForm({
             convertName: convert.name,
             friends: friendNames,
             assignedAt: serverTimestamp(),
+            barrioOrg,
           });
           toast({
             title: 'Éxito',

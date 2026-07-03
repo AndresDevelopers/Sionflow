@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { ToastAction } from '@/components/ui/toast';
 import { useToast } from '@/hooks/use-toast';
 import { onMessageListener } from '@/lib/firebase-messaging';
+import { getAppName } from "@/lib/app-config";
+
+const appName = getAppName();
 
 export function PushForegroundListener() {
   const router = useRouter();
@@ -19,7 +22,7 @@ export function PushForegroundListener() {
         (typeof payload.data === 'object' && payload.data && 'title' in payload.data
           ? payload.data.title
           : null) ??
-        'QuorumFlow';
+        appName;
 
       const body =
         (typeof payload.notification === 'object' && payload.notification && 'body' in payload.notification
@@ -36,7 +39,7 @@ export function PushForegroundListener() {
           : null;
 
       toast({
-        title: typeof title === 'string' ? title : 'QuorumFlow',
+        title: typeof title === 'string' ? title : appName,
         description: typeof body === 'string' ? body : 'Tienes una nueva notificacion.',
         ...(url
           ? {

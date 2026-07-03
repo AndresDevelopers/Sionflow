@@ -267,11 +267,13 @@ function AssignmentsTab({
   loading,
   onRefresh,
   user,
+  barrioOrg,
 }: {
   assignments: MissionaryAssignment[];
   loading: boolean;
   onRefresh: () => void;
   user: any;
+  barrioOrg: string;
 }) {
   const handleAddAssignment = async (description: string) => {
     if (!user) return;
@@ -281,6 +283,7 @@ function AssignmentsTab({
       isCompleted: false,
       createdAt: serverTimestamp(),
       userId: user.uid,
+      barrioOrg,
     });
     onRefresh();
   };
@@ -330,11 +333,13 @@ function InvestigatorsTab({
   newConverts,
   loading,
   onRefresh,
+  barrioOrg,
 }: {
   investigators: Investigator[];
   newConverts: Convert[];
   loading: boolean;
   onRefresh: () => void;
+  barrioOrg: string;
 }) {
   const { toast } = useToast();
   const [isAddOpen, setAddOpen] = useState(false);
@@ -475,6 +480,7 @@ function InvestigatorsTab({
           assignedMissionaries: validated.data.missionaries,
           status: 'active',
           createdAt: serverTimestamp(),
+          barrioOrg,
         });
         toast({ title: 'Éxito', description: 'Investigador agregado.' });
         setAddOpen(false);
@@ -776,10 +782,12 @@ function ImagesTab({
   images,
   loading,
   onRefresh,
+  barrioOrg,
 }: {
   images: MissionaryImage[];
   loading: boolean;
   onRefresh: () => void;
+  barrioOrg: string;
 }) {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -915,6 +923,7 @@ function ImagesTab({
           description: item.description,
           createdAt: serverTimestamp(),
           createdBy: user?.uid || 'unknown',
+          barrioOrg,
         });
         toast({ title: 'Éxito', description: 'Imagen guardada.' });
         setUploadedFiles((prev) => {
@@ -1399,6 +1408,7 @@ export default function MissionaryWorkPage() {
             loading={loading}
             onRefresh={fetchData}
             user={user}
+            barrioOrg={barrioOrg}
           />
         </TabsContent>
         <TabsContent value="investigators">
@@ -1407,6 +1417,7 @@ export default function MissionaryWorkPage() {
             newConverts={availableNewConverts}
             loading={loading}
             onRefresh={fetchData}
+            barrioOrg={barrioOrg}
           />
         </TabsContent>
         <TabsContent value="images">
@@ -1414,6 +1425,7 @@ export default function MissionaryWorkPage() {
             images={missionaryImages}
             loading={loading}
             onRefresh={fetchData}
+            barrioOrg={barrioOrg}
           />
         </TabsContent>
         <TabsContent value="new_converts">

@@ -74,7 +74,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 export function ConvertForm({ convert }: ConvertFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = !!convert;
@@ -239,6 +239,7 @@ export function ConvertForm({ convert }: ConvertFormProps) {
         name: values.name,
         baptismDate: Timestamp.fromDate(values.baptismDate),
         photoURL: finalPhotoURL,
+        barrioOrg,
         councilCompleted: convert?.councilCompleted || false,
         councilCompletedAt: convert?.councilCompletedAt || null,
         observation: convert?.observation || '',

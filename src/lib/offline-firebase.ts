@@ -16,10 +16,13 @@ import {
   Timestamp
 } from 'firebase/firestore';
 import { firestore } from './firebase';
+import { getAppStoragePrefix } from '@/lib/app-config';
+
+const prefix = getAppStoragePrefix();
 
 // Local storage keys
-const OFFLINE_DATA_KEY = 'quorumflow_offline_data';
-const OFFLINE_OPERATIONS_KEY = 'quorumflow_offline_operations';
+const OFFLINE_DATA_KEY = `${prefix}_offline_data`;
+const OFFLINE_OPERATIONS_KEY = `${prefix}_offline_operations`;
 
 interface OfflineOperation {
   id: string;

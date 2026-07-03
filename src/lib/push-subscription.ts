@@ -1,7 +1,8 @@
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { pushSubscriptionsCollection } from '@/lib/collections';
+import { getAppStoragePrefix } from '@/lib/app-config';
 
-const PUSH_DEVICE_STORAGE_KEY = 'quorumflow.push.device-id';
+const PUSH_DEVICE_STORAGE_KEY = `${getAppStoragePrefix()}.push.device-id`;
 
 export interface PushSubscriptionRecord {
   userId: string;

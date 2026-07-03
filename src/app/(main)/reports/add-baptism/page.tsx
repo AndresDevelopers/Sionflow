@@ -60,7 +60,7 @@ type FormValues = z.infer<typeof baptismSchema>;
 export default function AddBaptismPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
 
@@ -104,6 +104,7 @@ export default function AddBaptismPage() {
         date: Timestamp.fromDate(values.date),
         photoURL: photoURLs[0] || '',
         baptismPhotos: photoURLs,
+        barrioOrg,
       });
 
       toast({

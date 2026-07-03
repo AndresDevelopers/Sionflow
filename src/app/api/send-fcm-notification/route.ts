@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreAdmin, messagingAdmin } from '@/lib/firebase-admin';
+import { getAppNotificationTag } from '@/lib/app-config';
 
 // Firestore 'in' operator supports max 30 items
 const FIRESTORE_IN_LIMIT = 30;
@@ -125,7 +126,7 @@ export async function POST(request: NextRequest) {
             body,
             icon: '/logo.svg',
             badge: '/logo.svg',
-            tag: 'quorumflow-notification',
+            tag: getAppNotificationTag(),
           },
           fcmOptions: {
             link: url ?? '/',

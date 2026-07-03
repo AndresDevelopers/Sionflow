@@ -5,10 +5,11 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useWatch } from 'react-hook-form';
 import * as z from 'zod';
 import Image from 'next/image';
-import { Upload, X, AlertTriangle, Shield, CalendarIcon, MapPin, Loader2 } from 'lucide-react';
+import { Upload, X, CalendarIcon, MapPin, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
+import { getAppName } from "@/lib/app-config";
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -49,10 +50,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
 import { useI18n } from '@/contexts/i18n-context';
-import type { Member, MemberStatus, Ordinance, TempleOrdinance } from '@/lib/types';
-import { OrdinanceLabels, TempleOrdinanceLabels } from '@/lib/types';
+import type { Member, MemberStatus, Ordinance } from '@/lib/types';
+import { OrdinanceLabels } from '@/lib/types';
 import { createMember, updateMember, uploadMemberPhoto, uploadBaptismPhotos, getMembersForSelector, searchMembersByName, getMemberById } from '@/lib/members-data';
-import { syncMinisteringAssignments, getPreviousMinisteringTeachers } from '@/lib/ministering-sync';
+import { syncMinisteringAssignments } from '@/lib/ministering-sync';
 import { createNotificationsForAll } from '@/lib/notification-helpers';
 import { Timestamp } from 'firebase/firestore';
 import { ref, deleteObject } from 'firebase/storage';
@@ -93,17 +94,6 @@ const normalizeMemberStatus = (status?: string | null): MemberStatus => {
   return 'active';
 };
 
-const deriveMemberStatus = (member?: Member | null): MemberStatus => {
-  if (!member) return 'active';
-
-  const normalizedStatus = normalizeMemberStatus(member.status);
-  if (normalizedStatus === 'deceased') return 'deceased';
-  if (member.inactiveSince) return 'inactive';
-  if (member.lessActiveObservation || member.lessActiveCompletedAt) return 'less_active';
-
-  return normalizedStatus;
-};
-
 type MemberFormValues = z.infer<typeof memberFormSchema>;
 
 interface MemberFormProps {
@@ -112,7 +102,7 @@ interface MemberFormProps {
 }
 
 export function MemberForm({ member, onClose }: MemberFormProps) {
-  const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { user, loading: authLoading, barrioOrg, organizacion } = useAuth();
   const { toast } = useToast();
   const { t } = useI18n();
   const [loading, setLoading] = useState(false);
@@ -128,7 +118,6 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
   // Estados para el diálogo de duplicados
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
   const [duplicateMembers, setDuplicateMembers] = useState<Member[]>([]);
-  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [allowContinueWithDuplicate, setAllowContinueWithDuplicate] = useState(false);
   const [duplicateDecisionMade, setDuplicateDecisionMade] = useState(false);
 
@@ -325,7 +314,6 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
       return;
     }
 
-    setCheckingDuplicate(true);
     try {
       const duplicates = await searchMembersByName(firstName, lastName);
       setDuplicateMembers(duplicates);
@@ -345,7 +333,6 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
       setAllowContinueWithDuplicate(false);
       setDuplicateDecisionMade(false);
     } finally {
-      setCheckingDuplicate(false);
     }
   }, [member]);
 
@@ -536,7 +523,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         try {
           const response = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&accept-language=es`,
-            { headers: { 'User-Agent': 'QuorumFlow/1.0' } }
+            { headers: { 'User-Agent': `${getAppName()}/1.0` } }
           );
           if (!response.ok) {
             throw new Error('No se pudo obtener la dirección');
@@ -731,6 +718,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           baptismDate: Timestamp.fromDate(values.baptismDate),
           councilCompleted: false,
           observation: 'Registrado automáticamente desde Miembros',
+          barrioOrg: barrioOrg || '',
           createdAt: Timestamp.now(),
           createdBy: user.uid,
           memberId: member?.id || '', // Se actualizará después para nuevos miembros
@@ -745,6 +733,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           name: `${values.firstName.trim()} ${values.lastName.trim()}`,
           date: Timestamp.fromDate(values.baptismDate),
           source: 'Automático',
+          barrioOrg: barrioOrg || '',
           baptismPhotos: baptismPhotoURLs,
           createdAt: Timestamp.now(),
         };
@@ -795,7 +784,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           baptismDate: values.baptismDate ? Timestamp.fromDate(values.baptismDate) : undefined,
           deathDate: values.status === 'deceased'
             ? values.deathDate
-              ? values.deathDate.toISOString()
+              ? Timestamp.fromDate(values.deathDate)
               : null
             : null,
           photoURL: photoURL as any,
@@ -1347,8 +1336,11 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
               const baseOrdinances: Ordinance[] = ['baptism', 'confirmation'];
               
               // Regular ordinances excluding baptism and confirmation
+              // Priesthood ordinances are only hidden for Sociedad de Socorro
+              const isSocorro = organizacion === 'Sociedad de Socorro';
               const regularOrdinances = (Object.keys(OrdinanceLabels) as Ordinance[]).filter(
                 o => o !== 'baptism' && o !== 'confirmation'
+                  && !(isSocorro && (o === 'high_priest_ordination' || o === 'elder_ordination' || o === 'aronico_ordination'))
               );
               
               // Temple-specific ordinances for deceased members
@@ -1371,11 +1363,6 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                 if (ordinance === 'sealed_to_mother') return 'Sellado a la Madre';
                 if (ordinance === 'sealed_to_spouse') return 'Sellado al Cónyuge';
                 return ordinance;
-              };
-
-              // Check if ordinance is already completed
-              const isOrdinanceCompleted = (ordinance: string): boolean => {
-                return field.value?.includes(ordinance as Ordinance) || false;
               };
 
               return (

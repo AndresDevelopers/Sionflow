@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
 import { authAdmin, firestoreAdmin, messagingAdmin } from '@/lib/firebase-admin';
 import { hasLeadershipPrivileges, normalizeRole } from '@/lib/roles';
+import { getAppName } from '@/lib/app-config';
 import {
   type PushDiagnosticsResponse,
   pushDiagnosticsRequestSchema,
@@ -115,13 +116,13 @@ export async function POST(request: NextRequest) {
         const response = await messagingAdmin.sendEachForMulticast({
           tokens: uniqueTokens as string[],
           notification: {
-            title: 'QuorumFlow Push Diagnostic',
+            title: `${getAppName()} Push Diagnostic`,
             body: 'Dry-run validation for this subscription.',
           },
           data: {
             url: '/settings',
             tag: 'push-diagnostic-dry-run',
-            title: 'QuorumFlow Push Diagnostic',
+            title: `${getAppName()} Push Diagnostic`,
             body: 'Dry-run validation for this subscription.',
           },
           webpush: {

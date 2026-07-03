@@ -76,7 +76,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 export function ActivityForm({ activity }: ActivityFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!activity;
   
@@ -197,6 +197,7 @@ export function ActivityForm({ activity }: ActivityFormProps) {
         ...values,
         date: Timestamp.fromDate(values.date),
         imageUrls: finalImageUrls,
+        barrioOrg,
       };
 
       if (isEditMode && activity) {

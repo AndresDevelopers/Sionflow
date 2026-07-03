@@ -67,7 +67,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const baptismPhotosInputRef = useRef<HTMLInputElement>(null);
@@ -211,6 +211,7 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
         photoURL: finalPhotoURL,
         baptismPhotos: finalBaptismPhotos,
         isBaptized: values.isBaptized,
+        barrioOrg,
       };
 
       if (isEditMode && futureMember) {

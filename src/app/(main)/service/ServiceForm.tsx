@@ -66,7 +66,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 export function ServiceForm({ service }: ServiceFormProps) {
   const router = useRouter();
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditMode = !!service;
   
@@ -192,6 +192,7 @@ export function ServiceForm({ service }: ServiceFormProps) {
         ...values,
         date: Timestamp.fromDate(values.date),
         imageUrls: finalImageUrls,
+        barrioOrg,
       };
 
       if (isEditMode && service) {

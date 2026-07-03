@@ -1,6 +1,9 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useToast } from './use-toast';
 import { Button } from '@/components/ui/button';
+import { getAppName } from "@/lib/app-config";
+
+const appName = getAppName();
 
 // Check if running as PWA
 const isRunningAsPWA = (): boolean => {
@@ -64,7 +67,7 @@ export function usePWAInstallToast() {
       // Show the toast with a simple message
       const { dismiss } = toast({
         title: 'App Instalada',
-        description: 'QuorumFlow está instalado y funciona completamente offline.',
+        description: `${appName} está instalado y funciona completamente offline.`,
         duration: 5000, // Auto-dismiss after 5 seconds
       });
       
