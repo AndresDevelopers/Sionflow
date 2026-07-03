@@ -16,17 +16,15 @@
   "icons": [
     {
       "src": "/logo.svg",
-      "sizes": "any",
+      "sizes": "512x512",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
-  ],
-  "screenshots": [
+      "purpose": "any"
+    },
     {
       "src": "/logo.svg",
-      "sizes": "540x720",
+      "sizes": "512x512",
       "type": "image/svg+xml",
-      "form_factor": "narrow"
+      "purpose": "maskable"
     }
   ],
   "shortcuts": [
@@ -45,7 +43,7 @@
     {
       "name": "Miembros",
       "short_name": "Miembros",
-      "description": "Gestionar miembros del quÃ³rum",
+      "description": "Gestionar miembros del quórum",
       "url": "/members",
       "icons": [
         {

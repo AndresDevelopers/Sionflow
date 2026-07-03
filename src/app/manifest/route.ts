@@ -6,31 +6,26 @@ const shortName = appName.length > 12 ? appName.slice(0, 12) : appName;
 const appLogo = getAppLogo();
 const hasLogo = hasAppLogo();
 
-export async function GET() {
-  const icons = hasLogo
-    ? [
-        {
-          src: appLogo,
-          sizes: "any",
-          type: "image/svg+xml",
-          purpose: "any maskable",
-        },
-      ]
-    : [
-        {
-          src: "/icon-192.png",
-          sizes: "192x192",
-          type: "image/png",
-        },
-        {
-          src: "/icon-512.png",
-          sizes: "512x512",
-          type: "image/png",
-          purpose: "any maskable",
-        },
-      ];
+// Siempre incluir logo.svg como fallback confiable
+const FALLBACK_ICON = "/logo.svg";
 
-  const logoForShortcuts = hasLogo ? appLogo : "/icon-192.png";
+export async function GET() {
+  const primaryIcon = hasLogo ? appLogo : FALLBACK_ICON;
+
+  const icons = [
+    {
+      src: primaryIcon,
+      sizes: "512x512",
+      type: "image/svg+xml",
+      purpose: "any",
+    },
+    {
+      src: primaryIcon,
+      sizes: "512x512",
+      type: "image/svg+xml",
+      purpose: "maskable",
+    },
+  ];
 
   const manifest = {
     name: appName,
@@ -45,6 +40,7 @@ export async function GET() {
     lang: "es",
     scope: "/",
     icons,
+    // Screenshots solo si hay un logo personalizado (el fallback no sirve como screenshot)
     screenshots: hasLogo
       ? [
           {
@@ -61,21 +57,21 @@ export async function GET() {
         short_name: "Dashboard",
         description: "Panel principal",
         url: "/dashboard",
-        icons: [{ src: logoForShortcuts, sizes: "96x96" }],
+        icons: [{ src: primaryIcon, sizes: "96x96" }],
       },
       {
         name: "Miembros",
         short_name: "Miembros",
         description: "Gestionar miembros del quórum",
         url: "/members",
-        icons: [{ src: logoForShortcuts, sizes: "96x96" }],
+        icons: [{ src: primaryIcon, sizes: "96x96" }],
       },
       {
         name: "Consejo",
         short_name: "Consejo",
         description: "Ver elementos del consejo",
         url: "/council",
-        icons: [{ src: logoForShortcuts, sizes: "96x96" }],
+        icons: [{ src: primaryIcon, sizes: "96x96" }],
       },
     ],
     prefer_related_applications: false,

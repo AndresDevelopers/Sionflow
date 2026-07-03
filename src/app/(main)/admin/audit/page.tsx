@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDocs, orderBy, query, limit, Timestamp } from "firebase/firestore";
+import { getDocs, orderBy, query, limit, where, Timestamp } from "firebase/firestore";
 import {
   ScrollText,
   UserCog,
@@ -90,13 +90,13 @@ export default function AdminAuditPage() {
     const load = async () => {
       try {
         setIsLoading(true);
-        // Fetch all recent audit entries and filter client-side.
-        // This avoids Firestore composite index requirements and
-        // includes legacy entries without barrioOrg.
+        // Filtrar por barrio/organizacion directamente en Firestore
+        // usando el índice compuesto barrioOrg ASC + createdAt DESC
         const q = query(
           adminAuditCollection,
+          where("barrioOrg", "==", barrioOrg),
           orderBy("createdAt", "desc"),
-          limit(300)
+          limit(200)
         );
         const snap = await getDocs(q).catch(() => null);
 
@@ -104,13 +104,10 @@ export default function AdminAuditPage() {
         if (snap) {
           snap.forEach((d) => {
             const data = d.data();
-            const docBarrioOrg = (data.barrioOrg as string) || "";
-            // Solo entradas del mismo barrio
-            if (docBarrioOrg !== barrioOrg) return;
             list.push({ id: d.id, ...(data ?? {}) } as AuditDoc);
           });
         }
-        setEntries(list.slice(0, 200));
+        setEntries(list);
       } catch (err) {
         logger.error({ error: err, message: "Error loading audit log" });
         toast({

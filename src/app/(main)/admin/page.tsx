@@ -31,7 +31,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { getDocs, query, orderBy, limit as fbLimit, Timestamp } from "firebase/firestore";
+import { getDocs, query, where, orderBy, limit as fbLimit, Timestamp } from "firebase/firestore";
 import {
   usersCollection,
   membersCollection,
@@ -200,6 +200,7 @@ export default function AdminHomePage() {
         setIsAuditLoading(true);
         const q = query(
           adminAuditCollection,
+          where("barrioOrg", "==", barrioOrg),
           orderBy("createdAt", "desc"),
           fbLimit(50)
         );
@@ -208,9 +209,6 @@ export default function AdminHomePage() {
         if (snap) {
           snap.forEach((d) => {
             const data = d.data();
-            const docBarrioOrg = data.barrioOrg as string | undefined;
-            // Solo entradas del mismo barrio
-            if (docBarrioOrg !== barrioOrg) return;
             list.push({ id: d.id, ...(data ?? {}) } as AuditEntry);
           });
         }
@@ -252,7 +250,6 @@ export default function AdminHomePage() {
           label="Miembros del quórum"
           value={stats?.totalMembers}
           isLoading={isLoading}
-          href="/admin/members"
           description="En la base de datos"
         />
         <AdminStatCard

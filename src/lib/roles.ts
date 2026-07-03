@@ -58,4 +58,4 @@ export const canViewSettings = (role: UserRole): boolean =>
   hasLeadershipPrivileges(role);
 
 export const isAdmin = (role: UserRole | null | undefined): boolean =>
-  role === settingsAdminRole;
+  role === settingsAdminRole || role === 'president';
