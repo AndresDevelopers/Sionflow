@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { onSnapshot } from 'firebase/firestore';
+import { onSnapshot, query, where } from 'firebase/firestore';
 import { membersCollection } from '@/lib/collections';
 import type { Member, MemberStatus } from '@/lib/types';
 import { useAuth } from '@/contexts/auth-context';
@@ -58,7 +58,7 @@ export function useMembersSync(options: UseMembersSyncOptions = {}): UseMembersS
     enableRealtimeSync = false, // Disabled by default
   } = options;
 
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, barrioOrg } = useAuth();
   const { toast } = useToast();
 
   const [members, setMembers] = useState<Member[]>([]);
@@ -104,7 +104,7 @@ export function useMembersSync(options: UseMembersSyncOptions = {}): UseMembersS
       const isDevelopment = process.env.NODE_ENV !== 'production';
       const cacheBuster = (forceRefresh || isDevelopment) ? `?t=${Date.now()}` : '';
       
-      const response = await fetch(`/api/members${cacheBuster}`, {
+      const response = await fetch(`/api/members${cacheBuster}${cacheBuster ? '&' : '?'}barrioOrg=${encodeURIComponent(barrioOrg)}`, {
         cache: (forceRefresh || isDevelopment) ? 'no-store' : 'default',
         headers: {
           'Cache-Control': (forceRefresh || isDevelopment) ? 'no-cache' : 'default',
@@ -205,7 +205,7 @@ export function useMembersSync(options: UseMembersSyncOptions = {}): UseMembersS
       // Always set to idle in finally block to ensure state is reset
       setSyncStatus('idle');
     }
-  }, [authLoading, user, toast, enableCrossBrowserSync]);
+  }, [authLoading, user, toast, enableCrossBrowserSync, barrioOrg]);
 
   // Initial fetch - only when explicitly enabled
   useEffect(() => {
@@ -284,8 +284,9 @@ export function useMembersSync(options: UseMembersSyncOptions = {}): UseMembersS
     let unsubscribe: (() => void) | null = null;
 
     try {
+      const membersQuery = query(membersCollection, where('barrioOrg', '==', barrioOrg));
       unsubscribe = onSnapshot(
-        membersCollection,
+        membersQuery,
         (snapshot) => {
           console.log('🔄 Firestore update detected');
           const updatedMembers = snapshot.docs.map((doc) => {
@@ -325,7 +326,7 @@ export function useMembersSync(options: UseMembersSyncOptions = {}): UseMembersS
         unsubscribe();
       }
     };
-  }, [enableRealtimeSync, user, authLoading, enableCrossBrowserSync]);
+  }, [enableRealtimeSync, user, authLoading, enableCrossBrowserSync, barrioOrg]);
 
   return {
     members,

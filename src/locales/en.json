@@ -364,5 +364,15 @@
   "deceased.daysUntilRemoval": "Will be removed in {days} days",
   "deceased.templeWork": "Do Temple Work",
   "deceased.completed": "Completed",
-  "Church Chat": "Church Chat"
+  "Church Chat": "Church Chat",
+  "Donate": "Donate",
+  "donate.title": "Support Quroumflow",
+  "donate.description": "Your contribution, no matter the amount, helps us cover the monthly costs of keeping this app running — servers, databases, and essential services. Even a one-time donation makes a huge difference.",
+  "donate.optional": "Donating is completely optional. We are grateful for any support you can offer.",
+  "donate.scanQR": "Scan this QR code to donate:",
+  "donate.orClickLink": "Or click the link below:",
+  "donate.linkText": "Donate now",
+  "donate.loading": "Loading donation information...",
+  "donate.error": "Could not load the donation link. Please try again later.",
+  "donate.noLink": "Donation link not available at this time."
 }

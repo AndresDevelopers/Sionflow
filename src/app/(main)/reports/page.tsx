@@ -93,61 +93,83 @@ function pickPreferredBaptism(
   return existing;
 }
 
-async function getAvailableReportYears(): Promise<number[]> {
-  const [
-    manualBaptismsSnapshot,
-    convertsSnapshot,
-    futureMembersSnapshot,
-    membersSnapshot,
-  ] = await Promise.all([
-    getDocs(query(baptismsCollection, orderBy('date', 'desc'))),
-    getDocs(convertsCollection),
-    getDocs(futureMembersCollection),
-    getDocs(membersCollection),
-  ]);
-
+async function getAvailableReportYears(barrioOrg?: string): Promise<number[]> {
   const yearSet = new Set<number>();
 
-  for (const doc of manualBaptismsSnapshot.docs) {
-    const data = doc.data() as { date?: Timestamp };
-    if (data.date) yearSet.add(getYear(data.date.toDate()));
-  }
-
-  for (const doc of convertsSnapshot.docs) {
-    const data = doc.data() as { baptismDate?: Timestamp };
-    if (data.baptismDate) yearSet.add(getYear(data.baptismDate.toDate()));
-  }
-
-  for (const doc of futureMembersSnapshot.docs) {
-    const data = doc.data() as { baptismDate?: Timestamp };
-    if (data.baptismDate) yearSet.add(getYear(data.baptismDate.toDate()));
-  }
-
-  for (const doc of membersSnapshot.docs) {
-    const data = doc.data() as { baptismDate?: Timestamp; status?: unknown };
-    if (normalizeMemberStatus(data.status) !== 'deceased') {
-      if (data.baptismDate) yearSet.add(getYear(data.baptismDate.toDate()));
+  const safeGetYears = async (
+    label: string,
+    fetcher: () => Promise<{ docs: Array<{ id: string; data: () => Record<string, unknown> }> }>,
+    extractor: (data: Record<string, unknown>) => number | undefined
+  ) => {
+    try {
+      const snapshot = await fetcher();
+      for (const doc of snapshot.docs) {
+        const year = extractor(doc.data());
+        if (year !== undefined) yearSet.add(year);
+      }
+    } catch (err) {
+      logger.error({ error: err, message: `Error fetching years from ${label}` });
     }
-  }
+  };
+
+  await Promise.all([
+    safeGetYears('baptisms', () =>
+      getDocs(query(baptismsCollection, where('barrioOrg', '==', barrioOrg), orderBy('date', 'desc'))),
+      (data) => {
+        const d = data.date as Timestamp | undefined;
+        return d ? getYear(d.toDate()) : undefined;
+      }
+    ),
+    safeGetYears('converts', () =>
+      getDocs(query(convertsCollection, where('barrioOrg', '==', barrioOrg))),
+      (data) => {
+        const bd = data.baptismDate as Timestamp | undefined;
+        return bd ? getYear(bd.toDate()) : undefined;
+      }
+    ),
+    safeGetYears('futureMembers', () =>
+      getDocs(query(futureMembersCollection, where('barrioOrg', '==', barrioOrg))),
+      (data) => {
+        const bd = data.baptismDate as Timestamp | undefined;
+        return bd ? getYear(bd.toDate()) : undefined;
+      }
+    ),
+    safeGetYears('members', () =>
+      getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg))),
+      (data) => {
+        const status = data.status as unknown;
+        if (normalizeMemberStatus(status) === 'deceased') return undefined;
+        const bd = data.baptismDate as Timestamp | undefined;
+        return bd ? getYear(bd.toDate()) : undefined;
+      }
+    ),
+  ]);
 
   yearSet.add(getYear(new Date()));
 
   return Array.from(yearSet).sort((a, b) => b - a);
 }
 
-async function getBaptismsForYear(year: number): Promise<Baptism[]> {
+async function getBaptismsForYear(year: number, barrioOrg?: string): Promise<Baptism[]> {
   const start = startOfYear(new Date(year, 0, 1));
   const end = endOfYear(new Date(year, 0, 1));
 
   const startTimestamp = Timestamp.fromDate(start);
   const endTimestamp = Timestamp.fromDate(end);
 
-  // 4. Obtener todos los miembros para mapear o filtrar
-  const allMembersSnapshot = await getDocs(membersCollection);
-  const allMembersList = allMembersSnapshot.docs.map(doc => {
-    const data = doc.data() as Member;
-    return { ...data, id: doc.id };
-  });
+  // Obtener todos los miembros para mapear o filtrar
+  let allMembersList: Array<Member & { id: string }> = [];
+  try {
+    const membersConstraints: any[] = [];
+    if (barrioOrg) membersConstraints.push(where('barrioOrg', '==', barrioOrg));
+    const allMembersSnapshot = await getDocs(query(membersCollection, ...membersConstraints));
+    allMembersList = allMembersSnapshot.docs.map(doc => {
+      const data = doc.data() as Member;
+      return { ...data, id: doc.id };
+    });
+  } catch (err) {
+    logger.error({ error: err, message: 'Error fetching members in getBaptismsForYear' });
+  }
 
   const findMemberId = (name: string) => {
     const normalized = name.trim().toLowerCase();
@@ -156,64 +178,82 @@ async function getBaptismsForYear(year: number): Promise<Baptism[]> {
   };
 
   // 1. Obtener de futuros miembros
-  const futureMembersQuery = query(
-    futureMembersCollection,
-    where('baptismDate', '>=', startTimestamp),
-    where('baptismDate', '<=', endTimestamp)
-  );
-  const fmSnapshot = await getDocs(futureMembersQuery);
-  const fromFutureMembers = fmSnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      name: data.name,
-      date: data.baptismDate,
-      source: 'Futuro Miembro',
-      photoURL: data.photoURL,
-      baptismPhotos: data.baptismPhotos || [],
-      memberId: findMemberId(data.name)
-    } as Baptism
-  });
+  let fromFutureMembers: Baptism[] = [];
+  try {
+    const fmConstraints: any[] = [
+      where('baptismDate', '>=', startTimestamp),
+      where('baptismDate', '<=', endTimestamp)
+    ];
+    if (barrioOrg) fmConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const futureMembersQuery = query(futureMembersCollection, ...fmConstraints);
+    const fmSnapshot = await getDocs(futureMembersQuery);
+    fromFutureMembers = fmSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        date: data.baptismDate,
+        source: 'Futuro Miembro',
+        photoURL: data.photoURL,
+        baptismPhotos: data.baptismPhotos || [],
+        memberId: findMemberId(data.name)
+      } as Baptism
+    });
+  } catch (err) {
+    logger.error({ error: err, message: 'Error fetching future members in getBaptismsForYear' });
+  }
 
   // 2. Obtener de nuevos conversos
-  const convertsQuery = query(
-    convertsCollection,
-    where('baptismDate', '>=', startTimestamp),
-    where('baptismDate', '<=', endTimestamp)
-  );
-  const convertsSnapshot = await getDocs(convertsQuery);
-  const fromConverts = convertsSnapshot.docs.map(doc => {
-    const data = doc.data() as Convert & { baptismPhotos?: string[] };
-    return {
-      id: doc.id,
-      name: data.name,
-      date: data.baptismDate,
-      source: 'Nuevo Converso',
-      photoURL: data.photoURL,
-      baptismPhotos: data.baptismPhotos || [],
-      memberId: data.memberId || findMemberId(data.name)
-    } as Baptism
-  });
+  let fromConverts: Baptism[] = [];
+  try {
+    const convertsConstraints: any[] = [
+      where('baptismDate', '>=', startTimestamp),
+      where('baptismDate', '<=', endTimestamp)
+    ];
+    if (barrioOrg) convertsConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const convertsQuery = query(convertsCollection, ...convertsConstraints);
+    const convertsSnapshot = await getDocs(convertsQuery);
+    fromConverts = convertsSnapshot.docs.map(doc => {
+      const data = doc.data() as Convert & { baptismPhotos?: string[] };
+      return {
+        id: doc.id,
+        name: data.name,
+        date: data.baptismDate,
+        source: 'Nuevo Converso',
+        photoURL: data.photoURL,
+        baptismPhotos: data.baptismPhotos || [],
+        memberId: data.memberId || findMemberId(data.name)
+      } as Baptism
+    });
+  } catch (err) {
+    logger.error({ error: err, message: 'Error fetching converts in getBaptismsForYear' });
+  }
 
   // 3. Obtener bautismos manuales
-  const baptismsQuery = query(
-    baptismsCollection,
-    where('date', '>=', startTimestamp),
-    where('date', '<=', endTimestamp)
-  );
-  const bSnapshot = await getDocs(baptismsQuery);
-  const fromManual = bSnapshot.docs.map(doc => {
-    const data = doc.data();
-    return {
-      id: doc.id,
-      name: data.name,
-      date: data.date,
-      source: 'Manual',
-      photoURL: data.photoURL,
-      baptismPhotos: data.baptismPhotos || [],
-      memberId: data.memberId || findMemberId(data.name)
-    } as Baptism
-  });
+  let fromManual: Baptism[] = [];
+  try {
+    const baptismsConstraints: any[] = [
+      where('date', '>=', startTimestamp),
+      where('date', '<=', endTimestamp)
+    ];
+    if (barrioOrg) baptismsConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const baptismsQuery = query(baptismsCollection, ...baptismsConstraints);
+    const bSnapshot = await getDocs(baptismsQuery);
+    fromManual = bSnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name,
+        date: data.date,
+        source: 'Manual',
+        photoURL: data.photoURL,
+        baptismPhotos: data.baptismPhotos || [],
+        memberId: data.memberId || findMemberId(data.name)
+      } as Baptism
+    });
+  } catch (err) {
+    logger.error({ error: err, message: 'Error fetching manual baptisms in getBaptismsForYear' });
+  }
 
   // 4. Filtrar miembros bautizados en el año actual
   const fromMembers = allMembersList
@@ -278,7 +318,7 @@ const reportQuestions = [
 ];
 
 export default function ReportsPage() {
-  const { user, loading: authLoading, organizacion } = useAuth();
+  const { user, loading: authLoading, organizacion, barrioOrg } = useAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -308,21 +348,26 @@ export default function ReportsPage() {
   const fetchInitialData = useCallback(async () => {
     setLoading(true);
     setLoadingAnswers(true);
+    setAnswers({});
 
-    const [baptismsData, answersData] = await Promise.all([
-      getBaptismsForYear(selectedYear),
-      getAnnualReportAnswers(selectedYear)
-    ]);
+    try {
+      const [baptismsData, answersData] = await Promise.all([
+        getBaptismsForYear(selectedYear, barrioOrg),
+        getAnnualReportAnswers(selectedYear)
+      ]);
 
-    setBaptisms(baptismsData);
-    if (answersData) {
-      setAnswers(answersData);
+      setBaptisms(baptismsData);
+      if (answersData) {
+        setAnswers(answersData);
+      }
+    } catch (err) {
+      logger.error({ error: err, message: 'Error fetching report data for year', year: selectedYear });
+      setBaptisms([]);
+    } finally {
+      setLoading(false);
+      setLoadingAnswers(false);
     }
-    setLoading(false);
-    setLoadingAnswers(false);
-
-    return baptismsData;
-  }, [selectedYear]);
+  }, [selectedYear, barrioOrg]);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -344,7 +389,7 @@ export default function ReportsPage() {
 
     (async () => {
       try {
-        const years = await getAvailableReportYears();
+        const years = await getAvailableReportYears(barrioOrg);
         if (cancelled) return;
         setAvailableYears(years);
 
@@ -363,7 +408,7 @@ export default function ReportsPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, router, searchParams, selectedYear]);
+  }, [authLoading, user, router, searchParams, selectedYear, barrioOrg]);
 
 
 
@@ -374,7 +419,7 @@ export default function ReportsPage() {
   const handleSaveAnswers = async () => {
     try {
       const docRef = doc(annualReportsCollection, String(selectedYear));
-      await setDoc(docRef, answers, { merge: true });
+      await setDoc(docRef, { ...answers, barrioOrg }, { merge: true });
       toast({ title: 'Éxito', description: 'Respuestas guardadas correctamente.' });
     } catch (error) {
       logger.error({ error, message: 'Error saving annual report answers' });

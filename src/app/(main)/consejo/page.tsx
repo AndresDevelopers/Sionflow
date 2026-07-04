@@ -68,6 +68,7 @@ const ConsejoPage: React.FC = () => {
   useEffect(() => {
     const annotationsQuery = query(
       annotationsCollection,
+      where('barrioOrg', '==', barrioOrg),
       where('source', '==', 'council'),
       orderBy('createdAt', 'desc')
     );
@@ -85,12 +86,16 @@ const ConsejoPage: React.FC = () => {
     return () => {
       annotationsUnsubscribe();
     };
-  }, []);
+  }, [barrioOrg]);
 
   // Fetch converts in real-time
   useEffect(() => {
-    const convertsQuery = query(convertsCollection, orderBy('baptismDate', 'desc'));
-    const membersQuery = query(membersCollection, orderBy('baptismDate', 'desc'));
+    const convertsConstraints: any[] = [orderBy('baptismDate', 'desc')];
+    if (barrioOrg) convertsConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const convertsQuery = query(convertsCollection, ...convertsConstraints);
+    const membersConstraints: any[] = [orderBy('baptismDate', 'desc')];
+    if (barrioOrg) membersConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const membersQuery = query(membersCollection, ...membersConstraints);
 
     const unsubscribeConverts = onSnapshot(convertsQuery, async (snapshot) => {
       try {
@@ -204,7 +209,7 @@ const ConsejoPage: React.FC = () => {
     return () => {
       unsubscribeConverts();
     };
-  }, []);
+  }, [barrioOrg]);
 
   const handleAddAnnotation = async (description: string) => {
     if (!user) return;
@@ -214,6 +219,7 @@ const ConsejoPage: React.FC = () => {
       source: 'council',
       isCouncilAction: false,
       isResolved: false,
+      barrioOrg,
       createdAt: serverTimestamp(),
       userId: user.uid,
     });

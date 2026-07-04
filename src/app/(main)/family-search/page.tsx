@@ -81,7 +81,7 @@ const annotationSchema = z.object({
 
 
 export default function FamilySearchPage() {
-    const { user, loading: authLoading } = useAuth();
+    const { user, loading: authLoading, barrioOrg } = useAuth();
     const { t } = useI18n();
     const [trainings, setTrainings] = useState<FamilySearchTraining[]>([]);
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -119,10 +119,10 @@ export default function FamilySearchPage() {
 
     const fetchData = useCallback(async () => {
         setLoading(true);
-        const trainingsSnap = await getDocs(query(familySearchTrainingsCollection, orderBy('createdAt', 'desc')));
+        const trainingsSnap = await getDocs(query(familySearchTrainingsCollection, where('barrioOrg', '==', barrioOrg), orderBy('createdAt', 'desc')));
         setTrainings(trainingsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as FamilySearchTraining)));
         setLoading(false);
-    }, []);
+    }, [barrioOrg]);
 
     const fetchAnnotations = useCallback(async () => {
         setLoadingAnnotations(true);
@@ -130,6 +130,7 @@ export default function FamilySearchPage() {
             const q = query(
                 annotationsCollection,
                 where('source', '==', 'family-search'),
+                where('barrioOrg', '==', barrioOrg),
                 where('isResolved', '==', false)
             );
             const snapshot = await getDocs(q);
@@ -147,7 +148,7 @@ export default function FamilySearchPage() {
         } finally {
             setLoadingAnnotations(false);
         }
-    }, []);
+    }, [barrioOrg]);
 
     useEffect(() => {
         if (authLoading || !user) return;
@@ -167,6 +168,7 @@ export default function FamilySearchPage() {
             try {
                 const trainingData: any = {
                     familyName: data.familyName,
+                    barrioOrg,
                     createdAt: serverTimestamp()
                 };
 

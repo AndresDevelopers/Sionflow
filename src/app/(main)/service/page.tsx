@@ -58,7 +58,7 @@ type SuggestedServices = {
 };
 
 
-async function getServicesForYear(year: number): Promise<Service[]> {
+async function getServicesForYear(year: number, barrioOrg?: string): Promise<Service[]> {
   try {
     const start = startOfYear(new Date(year, 0, 1));
     const end = endOfYear(new Date(year, 0, 1));
@@ -66,11 +66,16 @@ async function getServicesForYear(year: number): Promise<Service[]> {
     const startTimestamp = Timestamp.fromDate(start);
     const endTimestamp = Timestamp.fromDate(end);
 
-    const q = query(
-      servicesCollection,
+    const constraints: any[] = [
       where('date', '>=', startTimestamp),
       where('date', '<=', endTimestamp),
       orderBy('date', 'desc')
+    ];
+    if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+
+    const q = query(
+      servicesCollection,
+      ...constraints
     );
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Service));
@@ -81,7 +86,7 @@ async function getServicesForYear(year: number): Promise<Service[]> {
 }
 
 export default function ServicePage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, barrioOrg } = useAuth();
   const searchParams = useSearchParams();
   const [services, setServices] = useState<Service[]>([]);
   const [serviceSuggestions, setServiceSuggestions] = useState<SuggestedServices | null>(null);
@@ -95,7 +100,7 @@ export default function ServicePage() {
 
   const fetchServices = useCallback(() => {
     setLoading(true);
-    getServicesForYear(selectedYear)
+    getServicesForYear(selectedYear, barrioOrg)
         .then(data => {
             setServices(data);
         })
@@ -106,7 +111,7 @@ export default function ServicePage() {
         .finally(() => {
             setLoading(false);
         });
-  }, [selectedYear, toast]);
+  }, [selectedYear, toast, barrioOrg]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -140,6 +145,7 @@ export default function ServicePage() {
         description: service.description,
         time: service.time || null,
         imageUrls: service.imageUrls || [],
+        barrioOrg,
       });
       await deleteDoc(doc(servicesCollection, service.id));
       toast({

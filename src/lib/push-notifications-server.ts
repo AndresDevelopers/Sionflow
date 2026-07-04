@@ -14,6 +14,7 @@ export interface PushNotificationParams {
   url?: string;
   userId?: string; // If provided, only send to this user. If not, send to all with push enabled.
   tag?: string;
+  barrioOrg?: string | null;
 }
 
 function getEcuadorDateKey(date: Date = new Date()): string {
@@ -64,7 +65,7 @@ async function getFCMTokensForUsers(userIds: string[]): Promise<string[]> {
  * Sends a push notification via FCM and also creates in-app notifications.
  */
 export async function sendServerSidePushNotification(params: PushNotificationParams) {
-  const { title, body, url, userId, tag = 'general-notification' } = params;
+  const { title, body, url, userId, tag = 'general-notification', barrioOrg } = params;
 
   let targetUserIds: string[] = [];
 
@@ -185,7 +186,8 @@ export async function sendServerSidePushNotification(params: PushNotificationPar
           isRead: false,
           actionUrl: url ?? '/',
           actionType: 'navigate',
-          contextType: tag === 'birthday-notification' ? 'birthday' : 'general'
+          contextType: tag === 'birthday-notification' ? 'birthday' : 'general',
+          ...(barrioOrg ? { barrioOrg } : {}),
         });
       } catch (error) {
         const code = typeof error === 'object' && error && 'code' in error ? (error as { code?: unknown }).code : undefined;

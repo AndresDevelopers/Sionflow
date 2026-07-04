@@ -61,21 +61,21 @@ function coerceToTimestamp(value: unknown): Timestamp | null | undefined {
   return undefined;
 }
 
-async function fetchMembers(status?: MemberStatus): Promise<Member[]> {
+async function fetchMembers(status?: MemberStatus, barrioOrg?: string): Promise<Member[]> {
   const db = firestoreAdmin;
   const membersCollection = db.collection('c_miembros');
 
-  let snapshot;
-  if (status) {
-    snapshot = await membersCollection
-      .where('status', '==', status)
-      .orderBy('lastName')
-      .get();
-  } else {
-    snapshot = await membersCollection
-      .orderBy('lastName')
-      .get();
+  let query: FirebaseFirestore.Query = membersCollection;
+
+  if (barrioOrg) {
+    query = query.where('barrioOrg', '==', barrioOrg);
   }
+
+  if (status) {
+    query = query.where('status', '==', status);
+  }
+
+  const snapshot = await query.orderBy('lastName').get();
 
   const members: Member[] = [];
   snapshot.forEach((doc: any) => {
@@ -105,11 +105,12 @@ const getMembersCached = unstable_cache(
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status') as MemberStatus | null;
+  const barrioOrg = searchParams.get('barrioOrg') || undefined;
 
   try {
     // In development, always fetch fresh data without cache
     if (process.env.NODE_ENV !== 'production') {
-      const members = await fetchMembers(status || undefined);
+      const members = await fetchMembers(status || undefined, barrioOrg);
       const response = NextResponse.json(members);
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       response.headers.set('Pragma', 'no-cache');
@@ -180,7 +181,8 @@ export async function POST(request: Request) {
       memberData.inactiveSince = Timestamp.now();
     }
 
-    const memberId = await createMember(memberData, 'Libertad|Quórum de Élderes');
+    const barrioOrg = data.barrioOrg || 'Libertad|Quórum de Élderes';
+    const memberId = await createMember(memberData, barrioOrg);
 
     // Always invalidate cache when creating/updating members
     revalidateTag('members', 'default');

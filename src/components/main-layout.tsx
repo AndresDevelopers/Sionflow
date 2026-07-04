@@ -4,7 +4,7 @@
 import { type ReactNode, useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Settings } from "lucide-react";
+import { Heart, LogOut, Settings } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -160,6 +160,13 @@ function UserNav() {
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link href="/settings">{t("Settings")}</Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/donate" className="text-red-500">
+            <Heart className="mr-2 h-4 w-4" />
+            {t("Donate")}
+          </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onClick={handleLogout}>

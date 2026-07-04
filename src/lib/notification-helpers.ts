@@ -18,6 +18,8 @@ export interface CreateNotificationParams {
   inAppOnly?: boolean;
   /** If true, sends only push notification without saving to in-app */
   pushOnly?: boolean;
+  /** barrioOrg scope for in-app filtering */
+  barrioOrg?: string | null;
 }
 
 /**
@@ -35,7 +37,8 @@ export async function createNotification(params: CreateNotificationParams): Prom
     actionUrl,
     actionType = 'navigate',
     inAppOnly = false,
-    pushOnly = false
+    pushOnly = false,
+    barrioOrg
   } = params;
 
   // Create in-app notification if not push-only
@@ -49,7 +52,8 @@ export async function createNotification(params: CreateNotificationParams): Prom
       ...(contextType && { contextType }),
       ...(contextId && { contextId }),
       ...(actionUrl && { actionUrl }),
-      ...(actionUrl && { actionType })
+      ...(actionUrl && { actionType }),
+      ...(barrioOrg && { barrioOrg })
     };
 
     const docRef = await addDoc(notificationsCollection, notification);

@@ -44,7 +44,7 @@ function deduplicateNotifications(items: AppNotification[]): AppNotification[] {
 }
 
 export function NotificationBell() {
-  const { user } = useAuth();
+  const { user, barrioOrg } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -62,14 +62,20 @@ export function NotificationBell() {
       const userNotifications = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as AppNotification)
       );
-      const deduplicated = deduplicateNotifications(userNotifications);
+      // Filtrar solo notificaciones del barrio y organización del usuario
+      const scopedNotifications = barrioOrg
+        ? userNotifications.filter(
+            (n) => !n.barrioOrg || n.barrioOrg === barrioOrg
+          )
+        : userNotifications;
+      const deduplicated = deduplicateNotifications(scopedNotifications);
       setNotifications(deduplicated);
       setHasUnread(deduplicated.some(n => !n.isRead));
     } catch (error) {
       console.error("Error fetching notifications:", error);
     }
     setLoading(false);
-  }, [user]);
+  }, [user, barrioOrg]);
 
   useEffect(() => {
     queueMicrotask(() => {

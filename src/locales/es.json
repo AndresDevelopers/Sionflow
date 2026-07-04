@@ -433,5 +433,15 @@
   "deceased.daysUntilRemoval": "Desaparecerá en {days} días",
   "deceased.templeWork": "Hacer Obra Vicaria",
   "deceased.completed": "Completado",
-  "Church Chat": "Chat Iglesia"
+  "Church Chat": "Chat Iglesia",
+  "Donate": "Donar",
+  "donate.title": "Apoya Quroumflow",
+  "donate.description": "Tu contribución, sin importar el monto, nos ayuda a cubrir los costos mensuales de mantener esta aplicación funcionando — servidores, bases de datos y servicios esenciales. Incluso una donación única hace una gran diferencia.",
+  "donate.optional": "Donar es completamente opcional. Agradecemos cualquier apoyo que puedas ofrecer.",
+  "donate.scanQR": "Escanea este código QR para donar:",
+  "donate.orClickLink": "O haz clic en el enlace de abajo:",
+  "donate.linkText": "Donar ahora",
+  "donate.loading": "Cargando información de donación...",
+  "donate.error": "No se pudo cargar el enlace de donación. Intenta nuevamente más tarde.",
+  "donate.noLink": "Enlace de donación no disponible en este momento."
 }

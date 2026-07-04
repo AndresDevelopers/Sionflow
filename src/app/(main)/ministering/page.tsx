@@ -3,7 +3,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { getDocs, query, orderBy, doc, writeBatch, setDoc, serverTimestamp } from 'firebase/firestore';
+import { getDocs, query, orderBy, where, doc, writeBatch, setDoc, serverTimestamp } from 'firebase/firestore';
 import { ministeringCollection, ministeringDistrictsCollection } from '@/lib/collections';
 import type { Companionship, Member, MinisteringDistrict } from '@/lib/types';
 import { getMembersByStatus } from '@/lib/members-data';
@@ -37,16 +37,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-async function getCompanionships(): Promise<Companionship[]> {
-  const q = query(ministeringCollection, orderBy('companions'));
+async function getCompanionships(barrioOrg: string): Promise<Companionship[]> {
+  const q = query(ministeringCollection, where('barrioOrg', '==', barrioOrg), orderBy('companions'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(
     (doc) => ({ id: doc.id, ...doc.data() } as Companionship)
   );
 }
 
-async function getDistricts(): Promise<MinisteringDistrict[]> {
-  const q = query(ministeringDistrictsCollection, orderBy('name'));
+async function getDistricts(barrioOrg: string): Promise<MinisteringDistrict[]> {
+  const q = query(ministeringDistrictsCollection, where('barrioOrg', '==', barrioOrg), orderBy('name'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(
     (doc) => ({ id: doc.id, ...doc.data() } as MinisteringDistrict)
@@ -132,7 +132,7 @@ export default function MinisteringPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-        let comps = await getCompanionships();
+        let comps = await getCompanionships(barrioOrg);
         const membersList = await getMembersByStatus(undefined, { barrioOrg });
         setMembers(membersList);
         const map = new Map<string, string>();
@@ -142,7 +142,7 @@ export default function MinisteringPage() {
         });
         setMemberMap(map);
         // Load districts
-        let districtsList = await getDistricts();
+        let districtsList = await getDistricts(barrioOrg);
         if (districtsList.length === 0) {
           // Create default 3 districts
           const defaultDistricts = [
@@ -156,7 +156,7 @@ export default function MinisteringPage() {
             batch.set(docRef, { ...district, updatedAt: serverTimestamp() });
           }
           await batch.commit();
-          districtsList = await getDistricts(); // Re-fetch after creation
+          districtsList = await getDistricts(barrioOrg); // Re-fetch after creation
         } else {
           // Rename districts to sequential names: Distrito 1, Distrito 2, etc.
           districtsList.sort((a, b) => a.name.localeCompare(b.name));
@@ -183,7 +183,7 @@ export default function MinisteringPage() {
     } finally {
         setLoading(false);
     }
-  }, [toast, t]);
+  }, [toast, t, barrioOrg]);
 
 
   useEffect(() => {

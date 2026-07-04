@@ -177,7 +177,9 @@ const renderPhoneWithAge = (member: Member, fallback: string = 'Sin teléfono') 
 
 export default function ObservationsPage() {
 
-  const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { user, loading: authLoading, barrioOrg, organizacion } = useAuth();
+
+  const isElderesQuorum = organizacion.toLowerCase().includes('élder') || organizacion.toLowerCase().includes('elder');
 
   const { toast } = useToast();
 
@@ -1106,45 +1108,30 @@ export default function ObservationsPage() {
 
         </Card>
 
+        {isElderesQuorum && (
         <Card className="cursor-pointer" onClick={() => withoutElderOrdinationRef.current?.scrollIntoView({ behavior: 'smooth' })}>
-
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-
             <CardTitle className="text-sm font-medium">Sin Ordenanza de Elderes</CardTitle>
-
             <UserCheck className="h-4 w-4 text-purple-600" />
-
           </CardHeader>
-
           <CardContent>
-
             <div className="text-2xl font-bold text-purple-600">{observationCounts.withoutElderOrdination}</div>
-
             <p className="text-xs text-muted-foreground">miembros sin ordenanza de élder</p>
-
           </CardContent>
-
         </Card>
-
+        )}
+        {isElderesQuorum && (
         <Card className="cursor-pointer" onClick={() => withoutHigherPriesthoodRef.current?.scrollIntoView({ behavior: 'smooth' })}>
-
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-
             <CardTitle className="text-sm font-medium">Sin Sacerdocio Mayor</CardTitle>
-
             <UserCheck className="h-4 w-4 text-indigo-600" />
-
           </CardHeader>
-
           <CardContent>
-
             <div className="text-2xl font-bold text-indigo-600">{observationCounts.withoutHigherPriesthood}</div>
-
             <p className="text-xs text-muted-foreground">miembros sin sacerdocio mayor</p>
-
           </CardContent>
-
         </Card>
+        )}
 
         <Card className="cursor-pointer" onClick={() => withoutMinisteringRef.current?.scrollIntoView({ behavior: 'smooth' })}>
 
@@ -1836,8 +1823,8 @@ export default function ObservationsPage() {
 
 
 
-      {/* Sección Sin Ordenanza de Elderes */}
-
+      {/* Sección Sin Ordenanza de Elderes - Solo visible para Quórum de Élderes */}
+      {isElderesQuorum && (
       <Card ref={withoutElderOrdinationRef}>
 
         <CardHeader>
@@ -2189,11 +2176,10 @@ export default function ObservationsPage() {
         </CardContent>
 
       </Card>
+      )}
 
-
-
-      {/* Sección Sin Sacerdocio Mayor */}
-
+      {/* Sección Sin Sacerdocio Mayor - Solo visible para Quórum de Élderes */}
+      {isElderesQuorum && (
       <Card ref={withoutHigherPriesthoodRef}>
 
         <CardHeader>
@@ -2545,8 +2531,7 @@ export default function ObservationsPage() {
         </CardContent>
 
       </Card>
-
-
+      )}
 
       {/* Sección Sin Maestros Ministrantes */}
 

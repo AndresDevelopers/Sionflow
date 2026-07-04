@@ -155,10 +155,12 @@ const faqData = [
 
 // --- Client-side Data Fetching Functions ---
 
-async function getMissionaryAssignments(): Promise<MissionaryAssignment[]> {
+async function getMissionaryAssignments(barrioOrg?: string): Promise<MissionaryAssignment[]> {
+  const constraints: any[] = [orderBy('createdAt', 'desc')];
+  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
   const q = query(
     missionaryAssignmentsCollection,
-    orderBy('createdAt', 'desc')
+    ...constraints
   );
   const snapshot = await getDocs(q);
   return snapshot.docs.map(
@@ -166,8 +168,10 @@ async function getMissionaryAssignments(): Promise<MissionaryAssignment[]> {
   );
 }
 
-async function getInvestigators(): Promise<Investigator[]> {
-  const q = query(investigatorsCollection, orderBy('createdAt', 'desc'));
+async function getInvestigators(barrioOrg?: string): Promise<Investigator[]> {
+  const constraints: any[] = [orderBy('createdAt', 'desc')];
+  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const q = query(investigatorsCollection, ...constraints);
   const snapshot = await getDocs(q);
   const allInvestigators = snapshot.docs.map(
     (doc) => ({ id: doc.id, ...doc.data() } as Investigator)
@@ -187,19 +191,23 @@ async function getInvestigators(): Promise<Investigator[]> {
 }
 
 
-async function getNewConvertFriendships(): Promise<NewConvertFriendship[]> {
-    const q = query(newConvertFriendsCollection, orderBy('assignedAt', 'desc'));
+async function getNewConvertFriendships(barrioOrg?: string): Promise<NewConvertFriendship[]> {
+    const constraints: any[] = [orderBy('assignedAt', 'desc')];
+    if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const q = query(newConvertFriendsCollection, ...constraints);
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as NewConvertFriendship));
 }
 
 
-async function getNewConvertsWithoutFriends(): Promise<Convert[]> {
+async function getNewConvertsWithoutFriends(barrioOrg?: string): Promise<Convert[]> {
   const twentyFourMonthsAgo = subMonths(new Date(), 24);
   const twentyFourMonthsAgoTimestamp = Timestamp.fromDate(twentyFourMonthsAgo);
 
   // Obtener conversos de la colección c_conversos
-  const convertsSnapshot = await getDocs(query(convertsCollection, orderBy('baptismDate', 'desc')));
+  const convertsConstraints: any[] = [orderBy('baptismDate', 'desc')];
+  if (barrioOrg) convertsConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const convertsSnapshot = await getDocs(query(convertsCollection, ...convertsConstraints));
   const convertsFromCollection = convertsSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as Convert))
     .filter(convert =>
@@ -209,7 +217,9 @@ async function getNewConvertsWithoutFriends(): Promise<Convert[]> {
     );
 
   // Obtener miembros bautizados hace 2 años
-  const membersSnapshot = await getDocs(query(membersCollection, orderBy('baptismDate', 'desc')));
+  const membersConstraints: any[] = [orderBy('baptismDate', 'desc')];
+  if (barrioOrg) membersConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const membersSnapshot = await getDocs(query(membersCollection, ...membersConstraints));
   const membersAsConverts = membersSnapshot.docs
     .map(doc => {
       const memberData = doc.data() as Member;
@@ -250,12 +260,14 @@ async function getNewConvertsWithoutFriends(): Promise<Convert[]> {
   return uniqueConverts;
 }
 
-async function getMissionaryImages(): Promise<MissionaryImage[]> {
+async function getMissionaryImages(barrioOrg?: string): Promise<MissionaryImage[]> {
   if (!missionaryImagesCollection) {
     console.warn('missionaryImagesCollection is not available');
     return [];
   }
-  const q = query(missionaryImagesCollection, orderBy('createdAt', 'desc'));
+  const constraints: any[] = [orderBy('createdAt', 'desc')];
+  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const q = query(missionaryImagesCollection, ...constraints);
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissionaryImage));
 }
@@ -1317,12 +1329,12 @@ export default function MissionaryWorkPage() {
         membersData,
         imagesData,
       ] = await Promise.all([
-        getMissionaryAssignments(),
-        getInvestigators(),
-        getNewConvertFriendships(),
-        getNewConvertsWithoutFriends(),
+        getMissionaryAssignments(barrioOrg),
+        getInvestigators(barrioOrg),
+        getNewConvertFriendships(barrioOrg),
+        getNewConvertsWithoutFriends(barrioOrg),
         getMembersForSelector(true, barrioOrg),
-        getMissionaryImages(),
+        getMissionaryImages(barrioOrg),
       ]);
       setAssignments(assignmentsData);
       setInvestigators(investigatorsData);
@@ -1335,7 +1347,7 @@ export default function MissionaryWorkPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [barrioOrg]);
 
   const fetchAnnotations = useCallback(async () => {
     setLoadingAnnotations(true);
@@ -1343,6 +1355,7 @@ export default function MissionaryWorkPage() {
       const q = query(
         annotationsCollection,
         where('source', '==', 'missionary-work'),
+        where('barrioOrg', '==', barrioOrg),
         where('isResolved', '==', false)
       );
       const snapshot = await getDocs(q);
@@ -1360,7 +1373,7 @@ export default function MissionaryWorkPage() {
     } finally {
       setLoadingAnnotations(false);
     }
-  }, []);
+  }, [barrioOrg]);
 
   const handleDeleteAnnotation = async (id: string) => {
     try {

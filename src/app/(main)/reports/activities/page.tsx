@@ -58,39 +58,51 @@ import { endOfYear, format, getYear, startOfYear } from 'date-fns';
 import { es } from 'date-fns/locale';
 import logger from '@/lib/logger';
 
-async function getAvailableActivityYears(): Promise<number[]> {
-  const snapshot = await getDocs(query(activitiesCollection, orderBy('date', 'desc')));
+async function getAvailableActivityYears(barrioOrg?: string): Promise<number[]> {
   const yearSet = new Set<number>();
 
-  snapshot.docs.forEach((doc) => {
-    const data = doc.data() as { date?: Timestamp };
-    if (data.date) yearSet.add(getYear(data.date.toDate()));
-  });
+  try {
+    const constraints: any[] = [orderBy('date', 'desc')];
+    if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const snapshot = await getDocs(query(activitiesCollection, ...constraints));
+
+    snapshot.docs.forEach((doc) => {
+      const data = doc.data() as { date?: Timestamp };
+      if (data.date) yearSet.add(getYear(data.date.toDate()));
+    });
+  } catch (err) {
+    logger.error({ error: err, message: 'Error fetching activity years' });
+  }
 
   yearSet.add(getYear(new Date()));
 
   return Array.from(yearSet).sort((a, b) => b - a);
 }
 
-async function getActivitiesForYear(year: number): Promise<Activity[]> {
+async function getActivitiesForYear(year: number, barrioOrg?: string): Promise<Activity[]> {
   const start = startOfYear(new Date(year, 0, 1));
   const end = endOfYear(new Date(year, 0, 1));
 
   const startTimestamp = Timestamp.fromDate(start);
   const endTimestamp = Timestamp.fromDate(end);
 
-  const activityQuery = query(
-    activitiesCollection,
+  const constraints: any[] = [
     where('date', '>=', startTimestamp),
     where('date', '<=', endTimestamp),
     orderBy('date', 'desc')
+  ];
+  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+
+  const activityQuery = query(
+    activitiesCollection,
+    ...constraints
   );
   const snapshot = await getDocs(activityQuery);
   return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Activity));
 }
 
 export default function ActivitiesPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, barrioOrg } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
@@ -116,7 +128,7 @@ export default function ActivitiesPage() {
   const fetchActivities = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await getActivitiesForYear(selectedYear);
+      const data = await getActivitiesForYear(selectedYear, barrioOrg);
       setActivities(data);
     } catch (error) {
       logger.error({ error, message: 'Error loading activities for year', year: selectedYear });
@@ -124,7 +136,7 @@ export default function ActivitiesPage() {
     } finally {
       setLoading(false);
     }
-  }, [selectedYear]);
+  }, [selectedYear, barrioOrg]);
 
   const handleDelete = async (activityId: string, activityTitle: string) => {
     try {
@@ -153,6 +165,7 @@ export default function ActivitiesPage() {
         time: activity.time || null,
         imageUrls: activity.imageUrls || [],
         councilNotified: false,
+        barrioOrg,
       });
       await deleteDoc(doc(activitiesCollection, activity.id));
       toast({
@@ -238,7 +251,7 @@ export default function ActivitiesPage() {
 
     (async () => {
       try {
-        const years = await getAvailableActivityYears();
+        const years = await getAvailableActivityYears(barrioOrg);
         if (cancelled) return;
         setAvailableYears(years);
 
@@ -257,7 +270,7 @@ export default function ActivitiesPage() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, router, searchParams, selectedYear]);
+  }, [authLoading, user, router, searchParams, selectedYear, barrioOrg]);
 
   return (
     <section className="page-section space-y-6">

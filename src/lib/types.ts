@@ -202,6 +202,7 @@ export type AppNotification = {
     | 'missionary_assignment';
     contextId?: string;
     notificationTag?: string | null;
+    barrioOrg?: string | null;
 }
 
 // Member management types

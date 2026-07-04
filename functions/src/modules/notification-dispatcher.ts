@@ -38,6 +38,7 @@ export interface BroadcastNotificationRequest {
   tag?: string;
   actions?: NotificationAction[];
   context?: NotificationContext;
+  barrioOrg?: string | null;
 }
 
 interface FcmTokenRecord {
@@ -89,6 +90,7 @@ interface NotificationRecord {
   contextType?: NotificationContextType;
   contextId?: string;
   notificationTag?: string | null;
+  barrioOrg?: string | null;
 }
 
 interface LoggerPort {
@@ -466,6 +468,7 @@ class NotificationRecordFactory {
       ...(context?.contextType ? { contextType: context.contextType } : {}),
       ...(context?.contextId ? { contextId: context.contextId } : {}),
       notificationTag: request.tag ?? null,
+      ...(request.barrioOrg ? { barrioOrg: request.barrioOrg } : {}),
     };
   }
 }

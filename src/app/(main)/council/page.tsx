@@ -52,12 +52,13 @@ import { ConvertInfoSheet, type ConvertWithInfo } from '@/app/(main)/converts/co
 import { syncMinisteringAssignments } from '@/lib/ministering-sync';
 
 
-async function getAnnotations(source: 'dashboard' | 'council', forCouncil: boolean = false): Promise<Annotation[]> {
+async function getAnnotations(source: 'dashboard' | 'council', forCouncil: boolean = false, barrioOrg?: string): Promise<Annotation[]> {
   try {
     let q;
     if (forCouncil) {
-      const fromDashboardQuery = query(annotationsCollection, where('isCouncilAction', '==', true), where('isResolved', '==', false));
-      const fromCouncilQuery = query(annotationsCollection, where('source', '==', 'council'), where('isResolved', '==', false));
+      const councilConstraints: any[] = [where('barrioOrg', '==', barrioOrg), where('isCouncilAction', '==', true), where('isResolved', '==', false)];
+      const fromDashboardQuery = query(annotationsCollection, ...councilConstraints);
+      const fromCouncilQuery = query(annotationsCollection, where('barrioOrg', '==', barrioOrg), where('source', '==', 'council'), where('isResolved', '==', false));
 
       const [dashboardSnapshot, councilSnapshot] = await Promise.all([
         getDocs(fromDashboardQuery),
@@ -70,7 +71,7 @@ async function getAnnotations(source: 'dashboard' | 'council', forCouncil: boole
       const allAnns = new Map([...dashboardAnns, ...councilAnns].map(ann => [ann.id, ann]));
       return Array.from(allAnns.values());
     } else {
-      q = query(annotationsCollection, where('source', '==', source), where('isResolved', '==', false));
+      q = query(annotationsCollection, where('barrioOrg', '==', barrioOrg), where('source', '==', source), where('isResolved', '==', false));
       const snapshot = await getDocs(q);
       return snapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as Annotation))
@@ -87,11 +88,13 @@ async function getAnnotations(source: 'dashboard' | 'council', forCouncil: boole
   }
 }
 
-async function getCouncilMembers(): Promise<Member[]> {
+async function getCouncilMembers(barrioOrg?: string): Promise<Member[]> {
   const twoYearsAgo = subYears(new Date(), 2);
   const twentyFourHoursAgo = subHours(new Date(), 24);
 
-  const snapshot = await getDocs(query(membersCollection, orderBy('baptismDate', 'desc')));
+  const membersConstraints: any[] = [orderBy('baptismDate', 'desc')];
+  if (barrioOrg) membersConstraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const snapshot = await getDocs(query(membersCollection, ...membersConstraints));
 
   const councilList = snapshot.docs
     .map(doc => {
@@ -116,14 +119,18 @@ async function getCouncilMembers(): Promise<Member[]> {
   return councilList;
 }
 
-async function getUpcomingBaptisms(): Promise<FutureMember[]> {
+async function getUpcomingBaptisms(barrioOrg?: string): Promise<FutureMember[]> {
   const now = new Date();
   const sevenDaysFromNow = addDays(now, 7);
 
-  const q = query(
-    futureMembersCollection,
+  const constraints: any[] = [
     where('baptismDate', '>=', Timestamp.fromDate(now)),
     where('baptismDate', '<=', Timestamp.fromDate(sevenDaysFromNow))
+  ];
+  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const q = query(
+    futureMembersCollection,
+    ...constraints
   );
 
   const snapshot = await getDocs(q);
@@ -134,8 +141,10 @@ async function getUpcomingBaptisms(): Promise<FutureMember[]> {
 
 type UrgentFamily = Family & { companionshipId: string, companions: string[] };
 
-async function getUrgentNeeds(): Promise<UrgentFamily[]> {
-  const snapshot = await getDocs(ministeringCollection);
+async function getUrgentNeeds(barrioOrg?: string): Promise<UrgentFamily[]> {
+  const ministeringConstraints: any[] = [];
+  if (barrioOrg) ministeringConstraints.push(where('barrioOrg', '==', barrioOrg));
+  const snapshot = await getDocs(query(ministeringCollection, ...ministeringConstraints));
   const urgentNeeds: UrgentFamily[] = [];
 
   snapshot.forEach(doc => {
@@ -154,12 +163,12 @@ async function getUrgentNeeds(): Promise<UrgentFamily[]> {
   return urgentNeeds;
 }
 
-async function getCouncilAnnotations(): Promise<Annotation[]> {
-  const councilAnns = await getAnnotations('council', true);
+async function getCouncilAnnotations(barrioOrg?: string): Promise<Annotation[]> {
+  const councilAnns = await getAnnotations('council', true, barrioOrg);
   return councilAnns.sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis());
 }
 
-async function getUpcomingServices(): Promise<Service[]> {
+async function getUpcomingServices(barrioOrg?: string): Promise<Service[]> {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -167,7 +176,9 @@ async function getUpcomingServices(): Promise<Service[]> {
   // (Firestore doesn't support OR / != cleanly for this pattern)
   // A separate query to get documents that don't have the councilNotified field at all
   const coll = collection(firestore, 'c_servicios');
-  const allServicesSnapshot = await getDocs(query(coll, where('date', '>=', Timestamp.fromDate(today))));
+  const constraints: any[] = [where('date', '>=', Timestamp.fromDate(today))];
+  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+  const allServicesSnapshot = await getDocs(query(coll, ...constraints));
 
   const notNotifiedOrFieldMissing = allServicesSnapshot.docs
     .map(doc => ({ id: doc.id, ...doc.data() } as Service))
@@ -178,13 +189,15 @@ async function getUpcomingServices(): Promise<Service[]> {
 }
 
 // Function to get upcoming activities from Reports page data source (show 14 days before, hide after date passes)
-async function getUpcomingActivities(): Promise<Activity[]> {
+async function getUpcomingActivities(barrioOrg?: string): Promise<Activity[]> {
   try {
     const now = new Date();
     const fourteenDaysFromNow = addDays(now, 14);
 
     // Get all activities using the same query as Reports page
-    const q = query(activitiesCollection, orderBy('date', 'desc'));
+    const constraints: any[] = [orderBy('date', 'desc')];
+    if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const q = query(activitiesCollection, ...constraints);
     const snapshot = await getDocs(q);
 
     const activities = snapshot.docs
@@ -323,14 +336,14 @@ export default function CouncilPage() {
     setLoading(true);
     try {
       const [converts, baptisms, needs, notes, upcomingServices, lessActive, urgent, activities, membersSnap, deceased] = await Promise.all([
-        getCouncilMembers(),
-        getUpcomingBaptisms(),
-        getUrgentNeeds(),
-        getCouncilAnnotations(),
-        getUpcomingServices(),
+        getCouncilMembers(barrioOrg),
+        getUpcomingBaptisms(barrioOrg),
+        getUrgentNeeds(barrioOrg),
+        getCouncilAnnotations(barrioOrg),
+        getUpcomingServices(barrioOrg),
         getLessActiveMembers(barrioOrg),
         getUrgentMembers(barrioOrg),
-        getUpcomingActivities(),
+        getUpcomingActivities(barrioOrg),
         getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg))),
         getDeceasedMembers(barrioOrg),
       ]);
@@ -353,7 +366,7 @@ export default function CouncilPage() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, barrioOrg]);
 
   useEffect(() => {
     if (authLoading || !user) return;

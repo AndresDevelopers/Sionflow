@@ -213,6 +213,15 @@
       ]
     },
     {
+      "collectionGroup": "c_bautismos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "c_futuros_miembros",
       "queryScope": "COLLECTION",
       "fields": [
@@ -233,6 +242,33 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_conversos",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "baptismDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_fs_capacitaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" },
+        { "fieldPath": "__name__", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_obra_misional_imagenes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
         { "fieldPath": "createdAt", "order": "DESCENDING" },
         { "fieldPath": "__name__", "order": "DESCENDING" }
       ]
