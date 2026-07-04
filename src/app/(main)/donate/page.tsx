@@ -4,8 +4,9 @@ import { useEffect, useState } from "react";
 import { doc, getDoc } from "firebase/firestore";
 import { firestore } from "@/lib/firebase";
 import { useI18n } from "@/contexts/i18n-context";
-import { Heart, ExternalLink } from "lucide-react";
+import { Heart, ExternalLink, Download } from "lucide-react";
 import Image from "next/image";
+import { getAppName } from "@/lib/app-config";
 
 type DonateConfig = {
   donateLink: string;
@@ -60,7 +61,7 @@ export default function DonatePage() {
         <div className="flex items-center justify-center gap-2">
           <Heart className="h-8 w-8 text-red-500" />
           <h1 className="text-3xl font-bold tracking-tight">
-            {t("donate.title")}
+            {t("donate.title").replace("{appName}", getAppName())}
           </h1>
         </div>
         <p className="text-muted-foreground leading-relaxed">
@@ -85,6 +86,13 @@ export default function DonatePage() {
               className="object-contain"
             />
           </div>
+          <a
+            href={`/api/download-qr?url=${encodeURIComponent(config.qrImageUrl)}`}
+            className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Download className="h-4 w-4" />
+            {t("donate.downloadQR")}
+          </a>
         </div>
       )}
 
