@@ -212,7 +212,7 @@ class FcmRepository {
                             },
                         },
                         fcmOptions: {
-                            analyticsLabel: payload.tag ?? "quorumflow",
+                            analyticsLabel: payload.tag ?? "app-notification",
                         },
                     },
                     // ── Web (PWA) ─────────────────────────────────────────────────────
@@ -359,6 +359,7 @@ class NotificationRecordFactory {
             ...(context?.contextType ? { contextType: context.contextType } : {}),
             ...(context?.contextId ? { contextId: context.contextId } : {}),
             notificationTag: request.tag ?? null,
+            ...(request.barrioOrg ? { barrioOrg: request.barrioOrg } : {}),
         };
     }
 }

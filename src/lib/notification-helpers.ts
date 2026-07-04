@@ -386,7 +386,11 @@ export async function createNotificationsForAll(
     }
   }
 
-  return createBulkNotifications(usersWithNotificationsEnabled, notificationParams);
+  // Incluir barrioOrg en el documento de notificación para que la campanita pueda filtrar
+  return createBulkNotifications(
+    usersWithNotificationsEnabled,
+    { ...notificationParams, barrioOrg }
+  );
 }
 
 // ============================================================================
@@ -423,7 +427,8 @@ export async function createNewConvertCouncilNotification(
   userId: string,
   convertName: string,
   convertId: string,
-  action: string = 'actualizado'
+  action: string = 'actualizado',
+  barrioOrg?: string | null
 ): Promise<string> {
   return createNotification({
     userId,
@@ -432,8 +437,9 @@ export async function createNewConvertCouncilNotification(
     contextType: 'convert',
     contextId: convertId,
     actionUrl: '/consejo',
-    inAppOnly: true // Only in-app, no push for council updates
-  });
+    inAppOnly: true,
+    barrioOrg
+  } satisfies CreateNotificationParams);
 }
 
 /**
@@ -500,7 +506,7 @@ export async function createNewConvertCouncilNotificationsForAll(
   }
 
   const notificationPromises = usersWithInAppEnabled.map(userId =>
-    createNewConvertCouncilNotification(userId, convertName, convertId, action)
+    createNewConvertCouncilNotification(userId, convertName, convertId, action, barrioOrg)
   );
 
   return Promise.all(notificationPromises);

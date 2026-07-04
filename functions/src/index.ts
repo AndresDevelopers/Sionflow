@@ -56,6 +56,22 @@ interface AnnualReportAnswers {
     p6?: string;
 }
 
+/**
+ * Sanitiza el nombre de organización recibido desde el frontend.
+ * Evita que valores como undefined, null, "undefined", "null", o vacíos
+ * lleguen a la plantilla DOCX.
+ */
+const sanitizeOrgName = (value: unknown): string => {
+    if (typeof value !== "string" || value.trim().length === 0) {
+        return "Quórum de Élderes";
+    }
+    const lower = value.trim().toLowerCase();
+    if (lower === "undefined" || lower === "null") {
+        return "Quórum de Élderes";
+    }
+    return value.trim();
+};
+
 // Tipo unificado para actividades y servicios
 interface ActivityOrService {
     id: string;
@@ -606,7 +622,9 @@ export const cleanupProfilePictures = functions.storage.object().onFinalize(asyn
     return null;
 });
 
-export const generateCompleteReport = functions.https.onCall(async (data: any, context: any) => {
+export const generateCompleteReport = functions
+    .runWith({ timeoutSeconds: 540, memory: "1GB" })
+    .https.onCall(async (data: any, context: any) => {
     if (!context.auth) {
         throw new functions.https.HttpsError(
             "unauthenticated",
@@ -616,13 +634,28 @@ export const generateCompleteReport = functions.https.onCall(async (data: any, c
 
     const year = data.year || getYear(new Date());
     const includeAllActivities = data.includeAllActivities || false;
-    const organizacion = data.organizacion || "Quórum de Élderes";
+    const organizacion = sanitizeOrgName(data.organizacion);
 
     try {
         const start = startOfYear(new Date(year, 0, 1));
         const end = endOfYear(new Date(year, 11, 31));
         const startTimestamp = admin.firestore.Timestamp.fromDate(start);
         const endTimestamp = admin.firestore.Timestamp.fromDate(end);
+
+        // Determinar queries según si incluye todas las actividades o solo las del año
+        const activitiesQuery = includeAllActivities
+            ? firestore.collection("c_actividades").orderBy("date", "desc")
+            : firestore.collection("c_actividades")
+                .where("date", ">=", startTimestamp)
+                .where("date", "<=", endTimestamp)
+                .orderBy("date", "desc");
+
+        const servicesQuery = includeAllActivities
+            ? firestore.collection("c_servicios").orderBy("date", "desc")
+            : firestore.collection("c_servicios")
+                .where("date", ">=", startTimestamp)
+                .where("date", "<=", endTimestamp)
+                .orderBy("date", "desc");
 
         // Obtener todas las colecciones necesarias
         const [
@@ -634,8 +667,8 @@ export const generateCompleteReport = functions.https.onCall(async (data: any, c
             membersSnapshot,
             reportAnswersDoc
         ] = await Promise.all([
-            firestore.collection("c_actividades").orderBy("date", "desc").get(),
-            firestore.collection("c_servicios").orderBy("date", "desc").get(),
+            activitiesQuery.get(),
+            servicesQuery.get(),
             firestore.collection("c_bautismos")
                 .where("date", ">=", startTimestamp)
                 .where("date", "<=", endTimestamp)
@@ -927,7 +960,9 @@ export const generateCompleteReport = functions.https.onCall(async (data: any, c
     }
 });
 
-export const generateReport = functions.https.onCall(async (data: any, context: any) => {
+export const generateReport = functions
+    .runWith({ timeoutSeconds: 300, memory: "512MB" })
+    .https.onCall(async (data: any, context: any) => {
     if (!context.auth) {
         throw new functions.https.HttpsError(
             "unauthenticated",
@@ -937,7 +972,7 @@ export const generateReport = functions.https.onCall(async (data: any, context: 
 
     const year = data.year || getYear(new Date());
     const includeAllActivities = data.includeAllActivities || false;
-    const organizacion = data.organizacion || "Quórum de Élderes";
+    const organizacion = sanitizeOrgName(data.organizacion);
 
     try {
         const start = startOfYear(new Date(year, 0, 1));

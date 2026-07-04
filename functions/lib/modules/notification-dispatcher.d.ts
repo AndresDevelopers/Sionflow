@@ -20,6 +20,7 @@ export interface BroadcastNotificationRequest {
     tag?: string;
     actions?: NotificationAction[];
     context?: NotificationContext;
+    barrioOrg?: string | null;
 }
 export interface NotificationDispatchTrace {
     category?: string;

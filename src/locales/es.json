@@ -403,6 +403,7 @@
   "memberProfile.noAddress": "Sin dirección",
   "memberProfile.memberId": "ID de Miembro / Cédula",
   "memberProfile.memberIdDescription": "Opcional. Identificador o cédula del miembro.",
+  "memberProfile.memberIdPrivacy": "Esta información es estrictamente confidencial. Por favor, manéjala con discreción y cuidado.",
   "memberProfile.photo": "Foto de Perfil",
   "memberProfile.baptismPhotos": "Fotos de Bautismo",
   "memberProfile.ministeringTeachers": "Maestros Ministrantes",

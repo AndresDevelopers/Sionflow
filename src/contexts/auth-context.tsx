@@ -88,8 +88,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUserRole(normalizeRole(data.role));
         setMainPage(data.mainPage || '/');
 
-        const barrioVal = data.barrio || 'Libertad';
-        const orgVal = data.organizacion || 'Quórum de Élderes';
+        const barrioVal = typeof data.barrio === "string" && data.barrio.trim().length > 0 ? data.barrio.trim() : "Libertad";
+        const orgVal = typeof data.organizacion === "string" && data.organizacion.trim().length > 0 ? data.organizacion.trim() : "Quórum de Élderes";
         setBarrio(barrioVal);
         setOrganizacion(orgVal);
         setBarrioOrg(`${barrioVal}|${orgVal}`);

@@ -499,7 +499,9 @@ export default function AdminUsersPage() {
                               {user.visiblePages.length} páginas
                             </summary>
                             <div className="mt-2 flex flex-col gap-1.5">
-                              {navigationItems.map((item) => (
+                              {navigationItems
+                                .filter((item) => item.href !== '/church-chat')
+                                .map((item) => (
                                 <label
                                   key={item.href}
                                   className="flex items-center gap-2 rounded border px-2 py-1"
@@ -642,7 +644,9 @@ export default function AdminUsersPage() {
                               {user.visiblePages.length} páginas visibles
                             </summary>
                             <div className="mt-2 flex flex-col gap-1.5">
-                              {navigationItems.map((item) => (
+                              {navigationItems
+                                .filter((item) => item.href !== '/church-chat')
+                                .map((item) => (
                                 <label
                                   key={item.href}
                                   className="flex items-center gap-2 rounded border px-2 py-1"

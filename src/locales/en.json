@@ -334,6 +334,7 @@
   "memberProfile.noAddress": "No address",
   "memberProfile.memberId": "Member ID / ID Card",
   "memberProfile.memberIdDescription": "Optional. Member identifier or ID card.",
+  "memberProfile.memberIdPrivacy": "This information is strictly confidential. Please handle it with discretion and care.",
   "memberProfile.photo": "Profile Photo",
   "memberProfile.baptismPhotos": "Baptism Photos",
   "memberProfile.ministeringTeachers": "Ministering Teachers",

@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const xmldom_1 = require("@xmldom/xmldom");
 const docxtemplaterNamespace = require("docxtemplater");
 const { DocUtils } = docxtemplaterNamespace;
-const MODULE_NAME = "quorumflow/docxtemplater-modern-image-module";
+const MODULE_NAME = "docxtemplater-modern-image-module";
 const DEFAULT_IMAGE_EXTENSION = "png";
 // EMUs (English Metric Units) conversion
 // 1 inch = 914400 EMUs

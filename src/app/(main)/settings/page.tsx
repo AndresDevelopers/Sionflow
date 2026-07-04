@@ -35,7 +35,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { doc, getDoc, updateDoc, Timestamp, setDoc } from 'firebase/firestore';
-import { usersCollection, storage } from '@/lib/collections';
+import { usersCollection, storage, membersCollection } from '@/lib/collections';
 import {
   Form,
   FormControl,
@@ -49,11 +49,13 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { AlertCircle, CalendarIcon, User, Camera, Loader2, X } from 'lucide-react';
+import { AlertCircle, CalendarIcon, User, Camera, Loader2, X, Link2, Search } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getMembersForSelector } from '@/lib/members-data';
+import type { Member } from '@/lib/types';
 import {
   canViewSettings,
   normalizeRole,
@@ -88,7 +90,7 @@ const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { t } = useI18n();
-  const { user, firebaseUser, refreshAuth } = useAuth();
+  const { user, firebaseUser, refreshAuth, barrioOrg } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [isDeleting, setIsDeleting] = useState(false);
@@ -123,6 +125,9 @@ export default function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isThemeSaving, setIsThemeSaving] = useState(false);
 
+  // Track original birthDate to detect user edits vs sync pulls
+  const originalBirthDateRef = useRef<Date | null>(null);
+
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isCheckingRole, setIsCheckingRole] = useState(true);
@@ -130,6 +135,15 @@ export default function SettingsPage() {
   const [userRole, setUserRole] = useState<UserRole>('user');
   const [mainPage, setMainPage] = useState<string>('/');
   const [visiblePages, setVisiblePages] = useState<string[]>([]);
+
+  // Synced member state
+  const [syncedMemberId, setSyncedMemberId] = useState<string | null>(null);
+  const [syncedMemberName, setSyncedMemberName] = useState<string | null>(null);
+  const [membersForSync, setMembersForSync] = useState<Member[]>([]);
+  const [isMembersLoading, setIsMembersLoading] = useState(false);
+  const [syncMemberSearch, setSyncMemberSearch] = useState('');
+  const [syncDropdownOpen, setSyncDropdownOpen] = useState(false);
+  const syncDropdownRef = useRef<HTMLDivElement>(null);
   const roleFriendlyNames = useMemo<Record<UserRole, string>>(
     () => ({
       user: 'Miembro',
@@ -215,6 +229,43 @@ export default function SettingsPage() {
     initializeFCM();
   }, [pushNotificationsEnabled, user]);
 
+  // Click outside to close sync dropdown
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (syncDropdownRef.current && !syncDropdownRef.current.contains(e.target as Node)) {
+        setSyncDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Load members for sync selector
+  useEffect(() => {
+    if (!hasSettingsAccess || !user) return;
+    let cancelled = false;
+    async function loadMembers() {
+      setIsMembersLoading(true);
+      try {
+        const members = await getMembersForSelector(false, barrioOrg);
+        if (!cancelled && members) {
+          setMembersForSync(members as Member[]);
+        }
+      } catch {
+        // silently fail
+      } finally {
+        if (!cancelled) setIsMembersLoading(false);
+      }
+    }
+    loadMembers();
+    return () => { cancelled = true; };
+  }, [hasSettingsAccess, user]);
+
+  // Filter members for sync dropdown
+  const filteredSyncMembers = membersForSync.filter(m =>
+    `${m.firstName} ${m.lastName}`.toLowerCase().includes(syncMemberSearch.toLowerCase())
+  );
+
   const form = useForm<FormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: {
@@ -222,6 +273,35 @@ export default function SettingsPage() {
       memberId: '',
     },
   });
+
+  // Keep synced member name and birthDate up-to-date
+  useEffect(() => {
+    if (!syncedMemberId) return;
+    let cancelled = false;
+
+    async function refreshSyncedMemberData() {
+      try {
+        const memberRef = doc(membersCollection, syncedMemberId!);
+        const memberSnap = await getDoc(memberRef);
+        if (!cancelled && memberSnap.exists()) {
+          const mData = memberSnap.data();
+          setSyncedMemberName(`${mData.firstName} ${mData.lastName}`);
+
+          // Pull birthDate from member — member is authoritative
+          if (mData.birthDate) {
+            const memberBirth = (mData.birthDate as Timestamp).toDate();
+            form.setValue('birthDate', memberBirth);
+            originalBirthDateRef.current = memberBirth;
+          }
+        }
+      } catch {
+        // silently fail, keep current values
+      }
+    }
+
+    refreshSyncedMemberData();
+    return () => { cancelled = true; };
+  }, [syncedMemberId, form]);
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -266,11 +346,23 @@ export default function SettingsPage() {
               : undefined,
             memberId: userData.memberId || '',
           });
+
+          // Store original birthDate for change detection
+          originalBirthDateRef.current = userData.birthDate
+            ? (userData.birthDate as Timestamp).toDate()
+            : null;
+
+          // Load synced member
+          setSyncedMemberId(userData.syncedMemberId || null);
+          setSyncedMemberName(userData.syncedMemberName || null);
         } else {
           form.reset({
             name: firebaseUser.displayName || '',
             memberId: '',
           });
+          originalBirthDateRef.current = null;
+          setSyncedMemberId(null);
+          setSyncedMemberName(null);
         }
 
         setPreviewUrl(firebaseUser.photoURL || null);
@@ -355,13 +447,115 @@ export default function SettingsPage() {
       });
 
       const userDocRef = doc(usersCollection, firebaseUser.uid);
-      await setDoc(userDocRef, {
+      const userUpdateData: Record<string, unknown> = {
         name: values.name,
         birthDate: Timestamp.fromDate(normalizeDateForEcuadorStorage(values.birthDate)),
         photoURL: finalPhotoURL,
         mainPage: mainPage,
         memberId: values.memberId?.trim() || null,
-      }, { merge: true });
+        syncedMemberId: syncedMemberId || null,
+        syncedMemberName: syncedMemberName || null,
+      };
+
+      await setDoc(userDocRef, userUpdateData, { merge: true });
+
+      // Bidirectional sync with selected member
+      if (syncedMemberId) {
+        const memberRef = doc(membersCollection, syncedMemberId);
+        const memberSnap = await getDoc(memberRef);
+
+        if (memberSnap.exists()) {
+          const mData = memberSnap.data();
+
+          // 1) Push user data to member
+          const memberUpdate: Record<string, unknown> = {};
+
+          // Name: parse first/last name from user's full name
+          const nameParts = (values.name || '').trim().split(/\s+/);
+          if (nameParts.length >= 2) {
+            const firstName = nameParts[0];
+            const lastName = nameParts.slice(1).join(' ');
+            memberUpdate.firstName = firstName;
+            memberUpdate.lastName = lastName;
+          } else if (nameParts.length === 1) {
+            memberUpdate.firstName = nameParts[0];
+          }
+
+          if (values.birthDate) {
+            // Only push birthDate to member if the user explicitly changed it
+            const currentBirthDate = values.birthDate;
+            const originalBirth = originalBirthDateRef.current;
+            const userChangedBirthDate =
+              !originalBirth ||
+              normalizeDateForEcuadorStorage(currentBirthDate).getTime() !== normalizeDateForEcuadorStorage(originalBirth).getTime();
+
+            if (userChangedBirthDate) {
+              memberUpdate.birthDate = Timestamp.fromDate(normalizeDateForEcuadorStorage(values.birthDate));
+            }
+          }
+          if (values.memberId?.trim()) {
+            memberUpdate.memberId = values.memberId.trim();
+          }
+          // Only push photo if user uploaded a new one (not on delete)
+          if (selectedFile && finalPhotoURL) {
+            memberUpdate.photoURL = finalPhotoURL;
+          }
+
+          if (Object.keys(memberUpdate).length > 0) {
+            await updateDoc(memberRef, { ...memberUpdate, updatedAt: Timestamp.now() });
+          }
+
+          // 2) Pull member data to user (only if user doesn't have it)
+          const pullUpdates: Record<string, unknown> = {};
+
+          const userDocSnap = await getDoc(userDocRef);
+          const currentUserData = userDocSnap.exists() ? userDocSnap.data() : {};
+
+          // Pull phone number
+          if (mData.phoneNumber && !currentUserData.phoneNumber) {
+            pullUpdates.phoneNumber = mData.phoneNumber;
+          }
+          // Pull email
+          if (mData.email && !currentUserData.email && !firebaseUser.email) {
+            pullUpdates.email = mData.email;
+          }
+          // Pull address
+          if (mData.address && !currentUserData.address) {
+            pullUpdates.address = mData.address;
+          }
+          // Pull birthDate from member — member is authoritative
+          if (mData.birthDate) {
+            const memberBirthMs = (mData.birthDate as Timestamp).toDate().getTime();
+            const userBirthTime = currentUserData.birthDate
+              ? (currentUserData.birthDate as Timestamp).toDate().getTime()
+              : 0;
+            if (!currentUserData.birthDate || userBirthTime !== memberBirthMs) {
+              pullUpdates.birthDate = mData.birthDate;
+              form.setValue('birthDate', (mData.birthDate as Timestamp).toDate());
+            }
+          }
+          // Pull memberId if user doesn't have one
+          if (mData.memberId && !currentUserData.memberId) {
+            pullUpdates.memberId = mData.memberId;
+            form.setValue('memberId', mData.memberId);
+          }
+          // Pull photo from member if user doesn't have one
+          if (mData.photoURL && !finalPhotoURL && !currentUserData.photoURL) {
+            pullUpdates.photoURL = mData.photoURL;
+          }
+
+          if (Object.keys(pullUpdates).length > 0) {
+            await setDoc(userDocRef, pullUpdates, { merge: true });
+          }
+
+          logger.info({
+            message: 'Bidirectional sync completed',
+            syncedMemberId,
+            pushedFields: Object.keys(memberUpdate),
+            pulledFields: Object.keys(pullUpdates),
+          });
+        }
+      }
 
       toast({
         title: t('settings.toast.profileUpdatedTitle'),
@@ -859,6 +1053,95 @@ export default function SettingsPage() {
                         </FormItem>
                       )}
                     />
+
+                    {/* ── Sync Member Selector ── */}
+                    <div className="space-y-2" ref={syncDropdownRef}>
+                      <Label className="text-sm font-medium flex items-center gap-1.5">
+                        <Link2 className="h-4 w-4 text-muted-foreground" />
+                        Sincronizar con miembro
+                      </Label>
+                      <p className="text-xs text-muted-foreground">
+                        Selecciona un miembro para sincronizar tus datos de perfil bidireccionalmente.
+                        Los cambios que hagas aquí se reflejarán en el miembro, y los datos del miembro
+                        que no tengas se copiarán a tu perfil.
+                      </p>
+
+                      {syncedMemberId && syncedMemberName ? (
+                        <div className="flex items-center gap-2 rounded-md border bg-muted/50 px-3 py-2">
+                          <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm flex-1 truncate">{syncedMemberName}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              setSyncedMemberId(null);
+                              setSyncedMemberName(null);
+                              setSyncMemberSearch('');
+                            }}
+                          >
+                            Desvincular
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              type="text"
+                              placeholder="Buscar miembro..."
+                              value={syncMemberSearch}
+                              onChange={(e) => {
+                                setSyncMemberSearch(e.target.value);
+                                if (!syncDropdownOpen) setSyncDropdownOpen(true);
+                              }}
+                              onFocus={() => setSyncDropdownOpen(true)}
+                              disabled={isMembersLoading}
+                              className="pl-9"
+                            />
+                          </div>
+
+                          {syncDropdownOpen && (
+                            <div className="absolute z-10 mt-1 w-full rounded-md border bg-popover shadow-lg">
+                              {isMembersLoading ? (
+                                <div className="flex items-center justify-center p-4">
+                                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                                </div>
+                              ) : filteredSyncMembers.length > 0 ? (
+                                <ul className="max-h-52 overflow-auto py-1">
+                                  {filteredSyncMembers.map((member) => (
+                                    <li key={member.id}>
+                                      <button
+                                        type="button"
+                                        className="w-full text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                        onClick={() => {
+                                          setSyncedMemberId(member.id);
+                                          setSyncedMemberName(`${member.firstName} ${member.lastName}`);
+                                          setSyncMemberSearch('');
+                                          setSyncDropdownOpen(false);
+                                        }}
+                                      >
+                                        <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                        <span>{member.firstName} {member.lastName}</span>
+                                      </button>
+                                    </li>
+                                  ))}
+                                </ul>
+                              ) : syncMemberSearch ? (
+                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                  No se encontraron miembros
+                                </div>
+                              ) : (
+                                <div className="p-4 text-center text-sm text-muted-foreground">
+                                  Escribe para buscar un miembro
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </>
                 )}
               </CardContent>
