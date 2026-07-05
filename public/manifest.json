@@ -1,7 +1,7 @@
 {
-  "name": "QuorumFlow",
-  "short_name": "QuorumFlow",
-  "description": "Sistema completo de gestión para el secretario del Quórum de Élderes.",
+  "name": "SionFlow",
+  "short_name": "SionFlow",
+  "description": "Sistema completo de gestión para la presidencia del Quórum de Élderes y Sociedad de Socorro.",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait-primary",
