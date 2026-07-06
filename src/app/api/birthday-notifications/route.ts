@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`[Birthdays] Checking for birthdays on ${currentDay}/${currentMonth} (Ecuador Time)`);
 
-    const birthdaysToday: { name: string; id: string }[] = [];
+    const birthdaysToday: { name: string; id: string; barrioOrg?: string | null }[] = [];
 
     // 1. Fetch from c_birthdays
     const birthdaysSnapshot = await birthdaysCollection.get();
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       if (data.birthDate) {
         const birthParts = getEcuadorDateParts(data.birthDate);
         if (birthParts && birthParts.month === currentMonth && birthParts.day === currentDay) {
-          birthdaysToday.push({ name: data.name, id: doc.id });
+          birthdaysToday.push({ name: data.name, id: doc.id, barrioOrg: data.barrioOrg || null });
         }
       }
     });
@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
           const name = `${data.firstName} ${data.lastName}`;
           // Avoid duplicates if they are already in birthdaysToday
           if (!birthdaysToday.find(b => b.name === name)) {
-            birthdaysToday.push({ name, id: doc.id });
+            birthdaysToday.push({ name, id: doc.id, barrioOrg: data.barrioOrg || null });
           }
         }
       }
@@ -75,7 +75,8 @@ export async function GET(request: NextRequest) {
         title: "🎂 ¡Feliz Cumpleaños!",
         body: `Hoy es el cumpleaños de ${birthday.name}. ¡No olvides felicitarlo!`,
         url: '/birthdays',
-        tag: 'birthday-notification'
+        tag: 'birthday-notification',
+        barrioOrg: birthday.barrioOrg
       });
       
       if (result.success) {

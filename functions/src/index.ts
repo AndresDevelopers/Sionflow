@@ -1694,8 +1694,13 @@ function getEligibleUsers(
         const hasPage = u.visiblePages === null || u.visiblePages.includes(page);
         if (!hasPage) continue;
 
-        // Filter by barrioOrg if provided: only notify users from the same barrio+organization
-        if (docBarrioOrg && u.barrioOrg && u.barrioOrg !== docBarrioOrg) continue;
+        // Filter by barrioOrg: never send cross-organization notifications.
+        // If the document has no barrioOrg, only legacy users without barrioOrg are eligible.
+        if (docBarrioOrg) {
+            if (u.barrioOrg && u.barrioOrg !== docBarrioOrg) continue;
+        } else {
+            if (u.barrioOrg) continue;
+        }
 
         const inAppCat = u.notificationPrefs.inApp[category] !== false;
         const pushCat = u.notificationPrefs.push[category] !== false;

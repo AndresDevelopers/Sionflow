@@ -6,10 +6,11 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/toaster";
 import { I18nProvider } from "@/contexts/i18n-context";
-import { getAppName } from "@/lib/app-config";
+import { getAppName, getAppIcon } from "@/lib/app-config";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 const appName = getAppName();
+const appIcon = getAppIcon();
 
 const ptSans = PT_Sans({
   subsets: ["latin"],
@@ -24,6 +25,15 @@ export const metadata: Metadata = {
   },
   description: "Sistema completo de gestión para la presidencia del quórum.",
   manifest: "/manifest",
+  icons: {
+    icon: appIcon,
+    apple: appIcon,
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: appName,
+  },
   other: {
     "google": "notranslate",
   },

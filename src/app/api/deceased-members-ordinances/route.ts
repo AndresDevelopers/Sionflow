@@ -19,6 +19,7 @@ interface DeceasedMember {
   lastName: string;
   templeOrdinances: string[];
   templeWorkCompletedAt: unknown | null;
+  barrioOrg?: string | null;
 }
 
 const ALL_TEMPLE_ORDINANCES = [
@@ -58,22 +59,21 @@ export async function GET() {
         lastName?: string;
         templeOrdinances?: string[];
         templeWorkCompletedAt?: unknown;
+        barrioOrg?: string | null;
       };
       return {
         id: docSnap.id,
         firstName: data.firstName || '',
         lastName: data.lastName || '',
         templeOrdinances: data.templeOrdinances || [],
-        templeWorkCompletedAt: data.templeWorkCompletedAt || null
+        templeWorkCompletedAt: data.templeWorkCompletedAt || null,
+        barrioOrg: data.barrioOrg || null
       };
     });
     
     // Filter members who still need ordinances
     const membersNeedingOrdinances = deceasedMembers.filter(member => {
-      // If all ordinances are completed, skip
-      if (hasAllTempleOrdinances(member)) {
-        return false;
-      }
+      if (hasAllTempleOrdinances(member)) return false;
       return true;
     });
     
@@ -87,22 +87,35 @@ export async function GET() {
         skipped: 0
       });
     }
-    
-    const missingCount = membersNeedingOrdinances.length;
-    const memberNames = membersNeedingOrdinances.map((m) => `${m.firstName} ${m.lastName}`).join(', ');
 
-    const title = "⚰️ Miembros Fallecidos Sin Ordenanzas Completas";
-    const body =
-      missingCount === 1
-        ? `Hay ${missingCount} miembro fallecido que necesita ordenanzas del templo: ${memberNames}`
-        : `Hay ${missingCount} miembros fallecidos que necesitan ordenanzas del templo: ${memberNames}`;
+    // Group by barrioOrg so each ward only sees their own deceased members
+    const byBarrioOrg = new Map<string, DeceasedMember[]>();
+    for (const m of membersNeedingOrdinances) {
+      const key = m.barrioOrg || '__no_barrio__';
+      if (!byBarrioOrg.has(key)) byBarrioOrg.set(key, []);
+      byBarrioOrg.get(key)!.push(m);
+    }
 
-    const pushResult = await sendServerSidePushNotification({
-      title,
-      body,
-      url: '/council',
-      tag: 'deceased-ordinances',
-    });
+    let totalSent = 0;
+    for (const [barrioOrg, members] of byBarrioOrg) {
+      const missingCount = members.length;
+      const memberNames = members.map((m) => `${m.firstName} ${m.lastName}`).join(', ');
+
+      const title = "⚰️ Miembros Fallecidos Sin Ordenanzas Completas";
+      const body =
+        missingCount === 1
+          ? `Hay ${missingCount} miembro fallecido que necesita ordenanzas del templo: ${memberNames}`
+          : `Hay ${missingCount} miembros fallecidos que necesitan ordenanzas del templo: ${memberNames}`;
+
+      const pushResult = await sendServerSidePushNotification({
+        title,
+        body,
+        url: '/council',
+        tag: 'deceased-ordinances',
+        barrioOrg: barrioOrg === '__no_barrio__' ? null : barrioOrg,
+      });
+      totalSent += pushResult.sentCount ?? 0;
+    }
     
     return NextResponse.json({
       success: true,
@@ -113,7 +126,7 @@ export async function GET() {
         name: `${m.firstName} ${m.lastName}`,
         missingOrdinances: getMissingTempleOrdinances(m)
       })),
-      sent: pushResult.sentCount ?? 0,
+      sent: totalSent,
       skipped: 0,
       dayOfWeek
     });

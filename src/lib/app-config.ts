@@ -5,6 +5,7 @@
  * Variables de entorno:
  * - NEXT_PUBLIC_APP_NAME: Nombre de la app (fallback: "LuzViva")
  * - NEXT_PUBLIC_APP_LOGO: Ruta del logo en /public (fallback: "" → solo texto)
+ * - NEXT_PUBLIC_APP_ICON: URL completa de un icono (PNG/SVG) para PWA y pestaña del navegador
  *
  * Si APP_LOGO está vacío o no definido, la app se muestra solo con el nombre.
  */
@@ -28,6 +29,21 @@ export function getAppLogo(): string {
 /** Returns true if a custom logo is configured */
 export function hasAppLogo(): boolean {
   return getAppLogo().length > 0;
+}
+
+/**
+ * Icono para PWA y pestaña del navegador.
+ * Debe ser una URL completa (https://...) a un PNG o SVG.
+ * Si no se define, se usa /logo.svg como fallback.
+ */
+export function getAppIcon(): string {
+  if (typeof window !== "undefined") {
+    return (
+      (process.env as Record<string, string>).NEXT_PUBLIC_APP_ICON ||
+      "/logo.svg"
+    );
+  }
+  return process.env.NEXT_PUBLIC_APP_ICON || "/logo.svg";
 }
 
 /**

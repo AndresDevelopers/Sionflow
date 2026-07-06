@@ -1,10 +1,21 @@
 import { NextResponse } from "next/server";
-import { getAppName, hasAppLogo, getAppLogo } from "@/lib/app-config";
+import { getAppName, hasAppLogo, getAppLogo, getAppIcon } from "@/lib/app-config";
 
 const appName = getAppName();
 const shortName = appName.length > 12 ? appName.slice(0, 12) : appName;
 const appLogo = getAppLogo();
 const hasLogo = hasAppLogo();
+const appIcon = getAppIcon();
+
+function getIconType(src: string): string {
+  const path = src.split("?")[0];
+  if (path.endsWith(".png")) return "image/png";
+  if (path.endsWith(".svg")) return "image/svg+xml";
+  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+  if (path.endsWith(".webp")) return "image/webp";
+  if (path.endsWith(".ico")) return "image/x-icon";
+  return "image/svg+xml";
+}
 
 // Siempre incluir logo.svg como fallback confiable
 const FALLBACK_ICON = "/logo.svg";
@@ -12,17 +23,19 @@ const FALLBACK_ICON = "/logo.svg";
 export async function GET() {
   const primaryIcon = hasLogo ? appLogo : FALLBACK_ICON;
 
+  const iconType = getIconType(appIcon);
+
   const icons = [
     {
-      src: primaryIcon,
+      src: appIcon,
       sizes: "512x512",
-      type: "image/svg+xml",
+      type: iconType,
       purpose: "any",
     },
     {
-      src: primaryIcon,
+      src: appIcon,
       sizes: "512x512",
-      type: "image/svg+xml",
+      type: iconType,
       purpose: "maskable",
     },
   ];

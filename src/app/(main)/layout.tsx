@@ -12,7 +12,7 @@ import { usersCollection } from "@/lib/collections";
 import { normalizeRole } from "@/lib/roles";
 
 function PrivateRoute({ children }: { children: ReactNode }) {
-  const { user, loading, mainPage } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const [checkingRole, setCheckingRole] = useState(true);
   const [isRestricted, setIsRestricted] = useState<boolean | null>(null);
@@ -74,41 +74,37 @@ function PrivateRoute({ children }: { children: ReactNode }) {
   // Redirect to user's main page if currently on the root path
   useEffect(() => {
     if (!loading && user && !checkingRole && window.location.pathname === '/') {
-      // Check if user has access to their selected main page
       const checkMainPageAccess = async () => {
         try {
           const userDocRef = doc(usersCollection, user.uid);
           const snapshot = await getDoc(userDocRef);
           
           if (snapshot.exists()) {
-            const data = snapshot.data() as { visiblePages?: string[] };
+            const data = snapshot.data() as { mainPage?: string; visiblePages?: string[] };
             const visiblePages = Array.isArray(data.visiblePages) ? data.visiblePages : [];
             const effectiveVisiblePages = Array.from(new Set([...visiblePages, '/church-chat']));
-            
-            // If main page is not in visible pages, redirect to first visible page or fallback to /members
-            if (!effectiveVisiblePages.includes(mainPage) && effectiveVisiblePages.length > 0) {
+            const savedMainPage = data.mainPage || '/';
+
+            // If saved main page is not in visible pages, redirect to first visible page or fallback
+            if (!effectiveVisiblePages.includes(savedMainPage) && effectiveVisiblePages.length > 0) {
               router.replace(effectiveVisiblePages[0]);
             } else if (effectiveVisiblePages.length === 0) {
-              // If no pages are visible, redirect to members as fallback
               router.replace('/members');
             } else {
-              // Main page is accessible, redirect to it
-              router.replace(mainPage);
+              router.replace(savedMainPage);
             }
           } else {
-            // No user data, fallback to members
             router.replace('/members');
           }
         } catch (error) {
           console.error("Error checking main page access", error);
-          // On error, fallback to members
           router.replace('/members');
         }
       };
       
       checkMainPageAccess();
     }
-  }, [loading, user, checkingRole, mainPage, router]);
+  }, [loading, user, checkingRole, router]);
 
   if (loading || checkingRole) {
     return (

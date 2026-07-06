@@ -72,10 +72,11 @@ export async function sendServerSidePushNotification(params: PushNotificationPar
   if (userId) {
     targetUserIds = [userId];
   } else {
-    // Broadcast: get all users with push notifications enabled
+    // Broadcast: get all users with push notifications enabled, filtered by barrioOrg if provided
     const usersSnapshot = await usersCollection.get();
     usersSnapshot.forEach((doc) => {
       const userData = doc.data();
+      if (barrioOrg && userData.barrioOrg !== barrioOrg) return;
       if (userData.pushNotificationsEnabled === true || userData.notificationsEnabled !== false) {
         targetUserIds.push(doc.id);
       }

@@ -288,7 +288,7 @@ export default function MembersPage() {
         <div className="flex flex-col gap-2">
           <h1 className="text-balance text-fluid-title font-semibold tracking-tight">Miembros</h1>
           <p className="text-balance text-fluid-subtitle text-muted-foreground">
-            Gestiona los miembros del quórum y su estado de actividad.
+            Gestiona los miembros y su estado de actividad.
           </p>
           {/* Sync Status Indicator */}
           <SyncStatus

@@ -44,7 +44,7 @@ function deduplicateNotifications(items: AppNotification[]): AppNotification[] {
 }
 
 export function NotificationBell() {
-  const { user, barrioOrg } = useAuth();
+  const { user, barrio, organizacion } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -62,12 +62,15 @@ export function NotificationBell() {
       const userNotifications = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as AppNotification)
       );
-      // Filtrar solo notificaciones del barrio y organización del usuario
-      const scopedNotifications = barrioOrg
-        ? userNotifications.filter(
-            (n) => !n.barrioOrg || n.barrioOrg === barrioOrg
-          )
-        : userNotifications;
+      // Filtrar solo notificaciones del barrio y organización del usuario.
+      // Si el usuario tiene scope definido, nunca mostrar notificaciones sin scope o de otro scope.
+      const scopedNotifications = userNotifications.filter((n) => {
+        const [nBarrio, nOrg] = n.barrioOrg ? n.barrioOrg.split("|") : [];
+        if (barrio && organizacion) {
+          return nBarrio === barrio && nOrg === organizacion;
+        }
+        return !n.barrioOrg;
+      });
       const deduplicated = deduplicateNotifications(scopedNotifications);
       setNotifications(deduplicated);
       setHasUnread(deduplicated.some(n => !n.isRead));
@@ -75,7 +78,7 @@ export function NotificationBell() {
       console.error("Error fetching notifications:", error);
     }
     setLoading(false);
-  }, [user, barrioOrg]);
+  }, [user, barrio, organizacion]);
 
   useEffect(() => {
     queueMicrotask(() => {
