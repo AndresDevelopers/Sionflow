@@ -29,6 +29,7 @@ import {
 import { PlusCircle, Settings, Users, X } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { buildMemberLink } from '@/lib/navigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -60,6 +61,7 @@ export default function MinisteringPage() {
   const [companionships, setCompanionships] = useState<Companionship[]>([]);
   const [loading, setLoading] = useState(true);
   const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const { toast } = useToast();
   const { t } = useI18n();
 
@@ -145,11 +147,13 @@ export default function MinisteringPage() {
         let districtsList = await getDistricts(barrioOrg);
         if (districtsList.length === 0) {
           // Create default 3 districts
-          const defaultDistricts = [
-            { name: 'Distrito 1', companionshipIds: [], leaderId: null, leaderName: null },
-            { name: 'Distrito 2', companionshipIds: [], leaderId: null, leaderName: null },
-            { name: 'Distrito 3', companionshipIds: [], leaderId: null, leaderName: null },
-          ];
+          const defaultDistricts = [1, 2, 3].map((n) => ({
+            name: t('ministering.districtDefaultName').replace('{number}', n.toString()),
+            companionshipIds: [],
+            leaderId: null,
+            leaderName: null,
+            barrioOrg,
+          }));
           const batch = writeBatch(doc(ministeringDistrictsCollection).firestore);
           for (const district of defaultDistricts) {
             const docRef = doc(ministeringDistrictsCollection);
@@ -423,12 +427,14 @@ export default function MinisteringPage() {
                   </Button>
                 )}
               </div>
+              {canWrite && (
               <Button asChild>
                 <Link href="/ministering/add">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   {t('ministering.addCompanionship')}
                 </Link>
               </Button>
+              )}
           </CardHeader>
           <CardContent>
             {/* Desktop View: Table */}

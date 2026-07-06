@@ -41,6 +41,7 @@ interface NewConvertsTabProps {
   onRefresh: () => void;
   onDelete: (id: string) => void;
   onEdit: (item: Convert | NewConvertFriendship) => void;
+  canWrite: boolean;
 }
 
 export function NewConvertsTab({ 
@@ -50,7 +51,8 @@ export function NewConvertsTab({
   loading, 
   onRefresh,
   onDelete,
-  onEdit
+  onEdit,
+  canWrite
 }: NewConvertsTabProps) {
   // Function to safely get member name by ID
   const getMemberName = (memberId: string): string => {
@@ -188,6 +190,7 @@ export function NewConvertsTab({
                       </TableCell>
                       <TableCell>{getFriendNames(friendship)}</TableCell>
                       <TableCell className="flex gap-2">
+                        {canWrite && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -195,6 +198,8 @@ export function NewConvertsTab({
                         >
                           Editar
                         </Button>
+                        )}
+                        {canWrite && (
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
                             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive">
@@ -220,6 +225,7 @@ export function NewConvertsTab({
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        )}
                       </TableCell>
                     </TableRow>
                   );

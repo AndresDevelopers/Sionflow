@@ -82,7 +82,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
   const loadMembers = useCallback(async () => {
     setLoadingMembers(true);
     try {
-      const snapshot = await getDocs(query(membersCollection, orderBy('firstName', 'asc')));
+      const snapshot = await getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg), orderBy('firstName', 'asc')));
       const membersList = snapshot.docs
         .map(doc => {
           const memberData = doc.data();
@@ -103,7 +103,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
       });
     }
     setLoadingMembers(false);
-  }, [toast]);
+  }, [toast, barrioOrg]);
 
   useEffect(() => {
     loadMembers();
@@ -112,7 +112,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
   useEffect(() => {
     const loadCompanionships = async () => {
       try {
-        const snapshot = await getDocs(ministeringCollection);
+        const snapshot = await getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)));
         const companionshipList = snapshot.docs.map(doc => ({
           id: doc.id,
           ...doc.data(),
@@ -128,13 +128,13 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
       }
     };
     loadCompanionships();
-  }, [toast]);
+  }, [toast, barrioOrg]);
 
   // Load districts
   useEffect(() => {
     const loadDistricts = async () => {
       try {
-        const snapshot = await getDocs(query(ministeringDistrictsCollection, orderBy('name')));
+        const snapshot = await getDocs(query(ministeringDistrictsCollection, where('barrioOrg', '==', barrioOrg), orderBy('name')));
         const districtsList = snapshot.docs.map(d => {
           const data = d.data() as Omit<MinisteringDistrict, 'id'>;
           return { ...data, id: d.id, companionshipIds: data.companionshipIds ?? [] };
@@ -156,7 +156,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
       }
     };
     loadDistricts();
-  }, [companionship]);
+  }, [companionship, barrioOrg]);
 
   // Handle district assignment
   const handleDistrictChange = async (districtId: string) => {
@@ -319,6 +319,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
         const validationResult = await validateCompanionshipData(
           companionNames,
           familyInputs,
+          barrioOrg,
           isEditMode ? companionship.id : undefined
         );
 
@@ -358,7 +359,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
                     continue;
                 }
                 const lastName = family.value.replace('Familia ', '');
-                const memberQuery = query(membersCollection, where('lastName', '==', lastName));
+                const memberQuery = query(membersCollection, where('barrioOrg', '==', barrioOrg), where('lastName', '==', lastName));
                 const memberSnap = await getDocs(memberQuery);
                 if (!memberSnap.empty) {
                     const memberDoc = memberSnap.docs[0];

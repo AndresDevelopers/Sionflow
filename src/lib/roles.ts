@@ -1,5 +1,25 @@
 export type UserRole = 'user' | 'counselor' | 'president' | 'secretary' | 'other';
 
+export type UserPermission = 'read' | 'all';
+
+export const normalizePermission = (permission?: unknown): UserPermission => {
+  if (typeof permission !== 'string') return 'read';
+  const normalized = permission.trim().toLowerCase();
+  if (normalized === 'all' || normalized === 'todo') return 'all';
+  return 'read';
+};
+
+export const canWrite = (permission: UserPermission | null | undefined): boolean =>
+  permission === 'all';
+
+export const getDefaultPermission = (role: UserRole): UserPermission =>
+  role === 'user' || role === 'other' ? 'read' : 'all';
+
+export const PERMISSION_META: Record<UserPermission, { label: string; description: string }> = {
+  read: { label: 'Lectura', description: 'Solo puede ver datos.' },
+  all:  { label: 'Todo',   description: 'Puede crear, editar y eliminar.' },
+};
+
 export const normalizeRole = (role?: unknown): UserRole => {
   if (typeof role !== 'string') {
     return 'user';

@@ -39,6 +39,7 @@ interface ConvertInfoSheetProps {
   onSaveFriends?: (convertId: string, convertName: string, friends: string[], friendshipId?: string) => Promise<void>;
   onSaveTeachers?: (memberId: string, teachers: string[], previousTeachers: string[]) => Promise<void>;
   saving: boolean;
+  canWrite: boolean;
   availableMembers?: Member[];
 }
 
@@ -49,7 +50,8 @@ export function ConvertInfoSheet({
   onSave, 
   onSaveFriends,
   onSaveTeachers,
-  saving, 
+  saving,
+  canWrite,
   availableMembers = []
 }: ConvertInfoSheetProps) {
   const [calling, setCalling] = useState(convert?.calling || '');
@@ -226,7 +228,7 @@ export function ConvertInfoSheet({
                   <span className={`inline-block w-2 h-2 rounded-full ${hasFriendship ? 'bg-green-500' : 'bg-amber-500'}`} />
                   Amigo del Quórum Asignado
                 </h3>
-                {onSaveFriends && (
+                {onSaveFriends && canWrite && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -388,7 +390,7 @@ export function ConvertInfoSheet({
                   <Users className="h-4 w-4" />
                   Maestros Ministrantes
                 </h3>
-                {onSaveTeachers && convert?.memberData?.id && (
+                {onSaveTeachers && convert?.memberData?.id && canWrite && (
                   <Button 
                     variant="ghost" 
                     size="sm" 
@@ -500,6 +502,7 @@ export function ConvertInfoSheet({
             >
               Cerrar
             </Button>
+            {canWrite && (
             <Button
               className="flex-1"
               onClick={handleSave}
@@ -507,6 +510,7 @@ export function ConvertInfoSheet({
             >
               {saving ? 'Guardando...' : 'Guardar Cambios'}
             </Button>
+            )}
           </div>
         </div>
       </SheetContent>

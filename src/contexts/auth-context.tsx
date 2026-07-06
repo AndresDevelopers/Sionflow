@@ -7,7 +7,7 @@ import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import { usersCollection } from "@/lib/collections";
-import { normalizeRole, type UserRole } from "@/lib/roles";
+import { normalizeRole, normalizePermission, type UserRole, type UserPermission } from "@/lib/roles";
 
 interface User {
   uid: string;
@@ -22,6 +22,7 @@ interface AuthContextType {
   loading: boolean;
   firebaseUser: FirebaseUser | null;
   userRole: UserRole | null;
+  userPermission: UserPermission | null;
   mainPage: string;
   userTheme: string;
   barrio: string;
@@ -44,6 +45,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [userRole, setUserRole] = useState<UserRole | null>(null);
+  const [userPermission, setUserPermission] = useState<UserPermission | null>(null);
   const [mainPage, setMainPage] = useState<string>('/');
   const [userTheme, setUserTheme] = useState<string>('system');
   const [barrio, setBarrio] = useState<string>('');
@@ -61,6 +63,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setUser(null);
         setFirebaseUser(null);
         setUserRole(null);
+        setUserPermission(null);
         setBarrio('');
         setOrganizacion('');
         setBarrioOrg('');
@@ -81,11 +84,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const userDoc = await getDoc(userDocRef);
         if (!userDoc.exists()) {
           setUserRole(normalizeRole(undefined));
+        setUserPermission(normalizePermission(undefined));
           return;
         }
 
         const data = userDoc.data();
         setUserRole(normalizeRole(data.role));
+        setUserPermission(normalizePermission(data.permission));
         setMainPage(data.mainPage || '/');
 
         const barrioVal = typeof data.barrio === "string" && data.barrio.trim().length > 0 ? data.barrio.trim() : "Libertad";
@@ -93,6 +98,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setBarrio(barrioVal);
         setOrganizacion(orgVal);
         setBarrioOrg(`${barrioVal}|${orgVal}`);
+
+        // Sync photoURL from Firestore (may come from synced member)
+        const firestorePhotoURL = typeof data.photoURL === "string" ? data.photoURL : null;
+        setUser((prev) =>
+          prev ? { ...prev, photoURL: firestorePhotoURL ?? prev.photoURL } : prev
+        );
 
         // Load and sync theme from Firestore
         const savedTheme = data.theme;
@@ -120,7 +131,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
 
-  const value = { user, loading, firebaseUser, userRole, mainPage, userTheme, barrio, organizacion, barrioOrg, refreshAuth };
+  const value = { user, loading, firebaseUser, userRole, userPermission, mainPage, userTheme, barrio, organizacion, barrioOrg, refreshAuth };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

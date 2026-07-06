@@ -25,6 +25,7 @@ describe('ConvertInfoSheet', () => {
         isOpen={true}
         onOpenChange={() => {}}
         onSave={async () => {}}
+        canWrite={true}
         saving={false}
         availableMembers={[{
           id: 'member_1',

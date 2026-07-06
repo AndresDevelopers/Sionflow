@@ -44,6 +44,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import logger from '@/lib/logger';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { buildMemberEditUrl } from '@/lib/navigation';
 import { getEcuadorDateParts, getTodayInEcuador } from '@/lib/date-utils';
@@ -77,6 +78,7 @@ function getUpcomingBirthdays(birthdays: Birthday[]): BirthdayWithNext[] {
 
 export default function BirthdaysPage() {
   const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const [birthdays, setBirthdays] = useState<BirthdayWithNext[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -182,6 +184,8 @@ export default function BirthdaysPage() {
           {format(item.nextBirthday, "d 'de' LLLL", { locale: es })}
         </TableCell>
         <TableCell className="text-right flex gap-2 justify-end">
+          {canWrite ? (
+          <>
           {item.isMember ? (
             <Button variant="ghost" size="icon" asChild>
               <Link href={item.memberId ? buildMemberEditUrl(item.memberId, '/birthdays') : `/members?search=${encodeURIComponent(item.name)}`} title={t('birthdays.editMember')}><Pencil className="h-4 w-4" /></Link>
@@ -214,6 +218,8 @@ export default function BirthdaysPage() {
               </AlertDialogContent>
             </AlertDialog>
           )}
+          </>
+          ) : null}
         </TableCell>
       </TableRow>
     ));

@@ -28,6 +28,7 @@ import { format, subMonths } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
@@ -221,6 +222,7 @@ async function getConvertsWithInfo(barrioOrg: string): Promise<ConvertWithInfo[]
 
 export default function ConvertsPage() {
   const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const { t } = useI18n();
   const { toast } = useToast();
   const [converts, setConverts] = useState<ConvertWithInfo[]>([]);
@@ -428,6 +430,7 @@ export default function ConvertsPage() {
                         <Button variant="ghost" size="icon" onClick={() => openConvertInfo(item)}>
                           <Info className="h-4 w-4" />
                         </Button>
+                        {canWrite && (
                         <Button variant="ghost" size="icon" asChild>
                           <Link href={item.id.startsWith('member_')
                             ? buildMemberEditUrl(item.id.substring(7), '/converts')
@@ -437,6 +440,7 @@ export default function ConvertsPage() {
                             <Pencil className="h-4 w-4" />
                           </Link>
                         </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
@@ -453,6 +457,7 @@ export default function ConvertsPage() {
           onSave={handleSaveConvertInfo}
           onSaveFriends={handleSaveFriends}
           onSaveTeachers={handleSaveTeachers}
+          canWrite={canWrite}
           saving={saving}
           availableMembers={availableMembers}
         />

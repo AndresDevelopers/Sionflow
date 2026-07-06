@@ -47,6 +47,7 @@ import { es } from 'date-fns/locale';
 import { EditAnnotationDialog } from '../dashboard/edit-annotation-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 
 interface VoiceAnnotationsProps {
   title: string;
@@ -77,6 +78,7 @@ export function VoiceAnnotations({
 }: VoiceAnnotationsProps) {
   const { toast } = useToast();
   const { userRole, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const isSecretary = userRole === 'secretary';
   const [open, setOpen] = useState(false);
   const [newAnnotation, setNewAnnotation] = useState('');
@@ -212,6 +214,7 @@ export function VoiceAnnotations({
                 <CardDescription>{description}</CardDescription>
               </div>
             </div>
+            {canWrite && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button>
@@ -242,6 +245,7 @@ export function VoiceAnnotations({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            )}
           </div>
         </CardHeader>
 
@@ -298,7 +302,7 @@ export function VoiceAnnotations({
                         Resolver
                       </Button>
                     )}
-                    {(isSecretary || (currentUserId && item.userId === currentUserId)) && (
+                    {canWrite && (isSecretary || (currentUserId && item.userId === currentUserId)) && (
                       <Button
                         variant="ghost"
                         size="icon"
@@ -308,7 +312,7 @@ export function VoiceAnnotations({
                         <Pencil className="h-4 w-4" />
                       </Button>
                     )}
-                    {onDeleteAnnotation && (isSecretary || (currentUserId && item.userId === currentUserId)) && (
+                    {canWrite && onDeleteAnnotation && (isSecretary || (currentUserId && item.userId === currentUserId)) && (
                       <Button
                         variant="ghost"
                         size="icon"

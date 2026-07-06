@@ -16,7 +16,11 @@ import { logAdminAction } from "@/lib/audit-logger";
 import {
   assignableRoles,
   normalizeRole,
+  normalizePermission,
+  getDefaultPermission,
   type UserRole,
+  type UserPermission,
+  PERMISSION_META,
 } from "@/lib/roles";
 import { navigationItems } from "@/lib/navigation";
 import {
@@ -61,6 +65,7 @@ interface UserData {
   name: string;
   email: string;
   role: UserRole;
+  permission: UserPermission;
   visiblePages: string[];
   createdAt?: Timestamp;
 }
@@ -104,6 +109,7 @@ export default function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState<UserRole | "all">("all");
   const [selectedUids, setSelectedUids] = useState<Set<string>>(new Set());
   const [bulkRole, setBulkRole] = useState<UserRole | "">("");
+  const [bulkPermission, setBulkPermission] = useState<UserPermission | "">("");
   const [isBulkSaving, setIsBulkSaving] = useState(false);
 
   const defaultVisiblePages = useMemo(
@@ -127,6 +133,7 @@ export default function AdminUsersPage() {
             name: data.name || "Sin nombre",
             email: data.email || "Sin email",
             role: normalizeRole(data.role),
+            permission: normalizePermission(data.permission),
             visiblePages: Array.isArray(data.visiblePages)
               ? data.visiblePages
               : defaultVisiblePages,
@@ -172,13 +179,15 @@ export default function AdminUsersPage() {
     setIsSaving(userId);
     try {
       const normalized = normalizeRole(newRole);
+      const defaultPerm = getDefaultPermission(normalized);
       const target = users.find((u) => u.uid === userId);
       await updateDoc(doc(usersCollection, userId), {
         role: normalized,
+        permission: defaultPerm,
         updatedAt: Timestamp.now(),
       });
       setUsers((prev) =>
-        prev.map((u) => (u.uid === userId ? { ...u, role: normalized } : u))
+        prev.map((u) => (u.uid === userId ? { ...u, role: normalized, permission: defaultPerm } : u))
       );
       if (firebaseUser) {
         await logAdminAction({
@@ -200,6 +209,44 @@ export default function AdminUsersPage() {
       toast({
         title: "Error",
         description: "No se pudo actualizar el rol.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(null);
+    }
+  };
+
+  const handlePermissionChange = async (userId: string, newPermission: UserPermission) => {
+    setIsSaving(userId);
+    try {
+      const target = users.find((u) => u.uid === userId);
+      await updateDoc(doc(usersCollection, userId), {
+        permission: newPermission,
+        updatedAt: Timestamp.now(),
+      });
+      setUsers((prev) =>
+        prev.map((u) => (u.uid === userId ? { ...u, permission: newPermission } : u))
+      );
+      if (firebaseUser) {
+        await logAdminAction({
+          action: "user.permission_changed",
+          actorUid: firebaseUser.uid,
+          actorName: firebaseUser.displayName || undefined,
+          targetId: userId,
+          targetName: target?.name,
+          details: { newPermission, previousPermission: target?.permission },
+          barrioOrg,
+        });
+      }
+      toast({
+        title: "Permiso actualizado",
+        description: `Ahora tiene acceso: ${PERMISSION_META[newPermission].label}.`,
+      });
+    } catch (err) {
+      logger.error({ error: err, message: "Error updating permission", userId });
+      toast({
+        title: "Error",
+        description: "No se pudo actualizar el permiso.",
         variant: "destructive",
       });
     } finally {
@@ -262,16 +309,18 @@ export default function AdminUsersPage() {
     if (!bulkRole || selectedUids.size === 0) return;
     setIsBulkSaving(true);
     try {
+      const defaultPerm = getDefaultPermission(bulkRole);
       const promises = Array.from(selectedUids).map((uid) =>
         updateDoc(doc(usersCollection, uid), {
           role: bulkRole,
+          permission: defaultPerm,
           updatedAt: Timestamp.now(),
         })
       );
       await Promise.all(promises);
       const targetUids = Array.from(selectedUids);
       setUsers((prev) =>
-        prev.map((u) => (selectedUids.has(u.uid) ? { ...u, role: bulkRole } : u))
+        prev.map((u) => (selectedUids.has(u.uid) ? { ...u, role: bulkRole, permission: defaultPerm } : u))
       );
       if (firebaseUser) {
         await logAdminAction({
@@ -294,6 +343,47 @@ export default function AdminUsersPage() {
       toast({
         title: "Error",
         description: "No se pudieron actualizar los roles.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkSaving(false);
+    }
+  };
+
+  const handleBulkPermission = async () => {
+    if (!bulkPermission || selectedUids.size === 0) return;
+    setIsBulkSaving(true);
+    try {
+      const promises = Array.from(selectedUids).map((uid) =>
+        updateDoc(doc(usersCollection, uid), {
+          permission: bulkPermission,
+          updatedAt: Timestamp.now(),
+        })
+      );
+      await Promise.all(promises);
+      setUsers((prev) =>
+        prev.map((u) => (selectedUids.has(u.uid) ? { ...u, permission: bulkPermission } : u))
+      );
+      if (firebaseUser) {
+        await logAdminAction({
+          action: "user.bulk_permission_changed",
+          actorUid: firebaseUser.uid,
+          actorName: firebaseUser.displayName || undefined,
+          targetId: Array.from(selectedUids).join(","),
+          details: { newPermission: bulkPermission, count: selectedUids.size },
+          barrioOrg,
+        });
+      }
+      toast({
+        title: "Permisos actualizados",
+        description: `${selectedUids.size} usuarios ahora tienen acceso: ${PERMISSION_META[bulkPermission].label}.`,
+      });
+      setBulkPermission("");
+    } catch (err) {
+      logger.error({ error: err, message: "Error bulk updating permissions" });
+      toast({
+        title: "Error",
+        description: "No se pudieron actualizar los permisos.",
         variant: "destructive",
       });
     } finally {
@@ -391,6 +481,30 @@ export default function AdminUsersPage() {
                   "Aplicar"
                 )}
               </Button>
+              <Select value={bulkPermission} onValueChange={(v) => setBulkPermission(v as UserPermission)}>
+                <SelectTrigger className="w-full sm:w-48 mt-2 sm:mt-0">
+                  <SelectValue placeholder="Asignar permiso..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(PERMISSION_META) as UserPermission[]).map((p) => (
+                    <SelectItem key={p} value={p}>{PERMISSION_META[p].label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button
+                onClick={handleBulkPermission}
+                disabled={!bulkPermission || isBulkSaving}
+                size="sm"
+              >
+                {isBulkSaving ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Aplicando...
+                  </>
+                ) : (
+                  "Aplicar"
+                )}
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -441,6 +555,7 @@ export default function AdminUsersPage() {
                       <TableHead>Nombre</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead className="w-48">Rol</TableHead>
+                      <TableHead className="w-36">Permiso</TableHead>
                       <TableHead>Visibilidad</TableHead>
                       <TableHead className="w-24 text-center">Acciones</TableHead>
                     </TableRow>
@@ -492,6 +607,26 @@ export default function AdminUsersPage() {
                               {ROLE_META[user.role].description}
                             </Badge>
                           </div>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={user.permission}
+                            onValueChange={(v) =>
+                              handlePermissionChange(user.uid, v as UserPermission)
+                            }
+                            disabled={isSaving === user.uid}
+                          >
+                            <SelectTrigger className="h-9 w-full">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(Object.keys(PERMISSION_META) as UserPermission[]).map((p) => (
+                                <SelectItem key={p} value={p}>
+                                  {PERMISSION_META[p].label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
                         </TableCell>
                         <TableCell>
                           <details className="text-xs">
@@ -633,6 +768,31 @@ export default function AdminUsersPage() {
                             >
                               {ROLE_META[user.role].label}
                             </Badge>
+                          </div>
+                        </div>
+
+                        {/* Permission selector */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground">Permiso</Label>
+                          <div className="mt-1">
+                            <Select
+                              value={user.permission}
+                              onValueChange={(v) =>
+                                handlePermissionChange(user.uid, v as UserPermission)
+                              }
+                              disabled={isSaving === user.uid}
+                            >
+                              <SelectTrigger className="h-9 w-full">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(Object.keys(PERMISSION_META) as UserPermission[]).map((p) => (
+                                  <SelectItem key={p} value={p}>
+                                    {PERMISSION_META[p].label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                         </div>
 

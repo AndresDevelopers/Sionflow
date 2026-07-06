@@ -53,6 +53,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useMembersSync } from '@/hooks/use-members-sync';
 import { SyncStatus } from '@/components/shared/sync-status';
 import type { Member, MemberStatus } from '@/lib/types';
@@ -97,6 +98,7 @@ const statusConfig = {
 export default function MembersPage() {
   const { toast } = useToast();
   const { barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const router = useRouter();
   const { members, loading, syncStatus, lastSyncTime, fetchMembers, clearCache } = useMembersSync({
     enableInitialFetch: true, // Enable initial fetch for members page
@@ -299,12 +301,14 @@ export default function MembersPage() {
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
           <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+            {canWrite ? (
             <DialogTrigger asChild>
               <Button className="w-full sm:w-auto">
                 <Plus className="mr-2 h-4 w-4" />
                 Agregar Miembro
               </Button>
             </DialogTrigger>
+            ) : null}
             <DialogContent className="left-0 top-0 h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-none p-4 sm:left-[50%] sm:top-1/2 sm:h-auto sm:w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6">
               <DialogHeader>
                 <DialogTitle>
@@ -576,6 +580,7 @@ export default function MembersPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
+                          {canWrite ? (
                           <Button
                             variant={member.isUrgent ? "destructive" : "outline"}
                             size="sm"
@@ -585,6 +590,9 @@ export default function MembersPage() {
                           >
                             <AlertTriangle className={`h-4 w-4 ${member.isUrgent ? 'text-white' : 'text-orange-500'}`} />
                           </Button>
+                          ) : (
+                            member.isUrgent ? <AlertTriangle className="h-4 w-4 text-orange-500" /> : null
+                          )}
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
@@ -596,6 +604,8 @@ export default function MembersPage() {
                             >
                               <Eye className="h-4 w-4" />
                             </Button>
+                            {canWrite && (
+                            <>
                             <Button
                               variant="outline"
                               size="sm"
@@ -628,6 +638,8 @@ export default function MembersPage() {
                                 </AlertDialogFooter>
                               </AlertDialogContent>
                             </AlertDialog>
+                            </>
+                            )}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -748,6 +760,7 @@ export default function MembersPage() {
                       </div>
 
                       {/* Urgente en móvil */}
+                      {canWrite && (
                       <div className="flex flex-wrap gap-2 mb-3">
                         <Button
                           variant={member.isUrgent ? "destructive" : "outline"}
@@ -759,6 +772,7 @@ export default function MembersPage() {
                           {member.isUrgent ? 'Urgente' : 'Marcar Urgente'}
                         </Button>
                       </div>
+                      )}
 
                       <div className="flex flex-wrap justify-end gap-2">
                         <Button
@@ -770,6 +784,8 @@ export default function MembersPage() {
                           <Eye className="mr-2 h-4 w-4" />
                           Ver Perfil
                         </Button>
+                        {canWrite && (
+                        <>
                         <Button
                           variant="outline"
                           size="sm"
@@ -805,6 +821,8 @@ export default function MembersPage() {
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
+                        </>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

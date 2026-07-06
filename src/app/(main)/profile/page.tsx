@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { Camera, Pencil, Save, X, Link2, Phone, Mail, MapPin, Church, Droplets } from 'lucide-react';
+import { Camera, Pencil, Save, X, Link2, Phone, Mail, MapPin, Church, Droplets, Loader2 } from 'lucide-react';
 import { OrdinanceLabels } from '@/lib/types';
 
 interface UserProfileData {
@@ -310,7 +310,14 @@ export default function ProfilePage() {
                                     <AvatarFallback>{displayInitials}</AvatarFallback>
                                 )}
                             </Avatar>
-                            {isEditing && canEditProfile && (
+                            {/* Loading overlay during upload */}
+                            {isSaving && isEditing && (
+                                <div className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center gap-1 z-10 mb-4">
+                                    <Loader2 className="h-8 w-8 text-white animate-spin" />
+                                    <span className="text-white text-[10px] font-medium">Subiendo…</span>
+                                </div>
+                            )}
+                            {isEditing && canEditProfile && !isSaving && (
                                 <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40">
                                     <Button
                                         type="button"
@@ -323,7 +330,7 @@ export default function ProfilePage() {
                                     </Button>
                                 </div>
                             )}
-                            {isEditing && canEditProfile && previewUrl && (
+                            {isEditing && canEditProfile && previewUrl && !isSaving && (
                                 <Button
                                     type="button"
                                     variant="destructive"

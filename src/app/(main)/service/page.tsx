@@ -12,6 +12,7 @@ import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 
 import {
   Card,
@@ -87,6 +88,7 @@ async function getServicesForYear(year: number, barrioOrg?: string): Promise<Ser
 
 export default function ServicePage() {
   const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const searchParams = useSearchParams();
   const [services, setServices] = useState<Service[]>([]);
   const [serviceSuggestions, setServiceSuggestions] = useState<SuggestedServices | null>(null);
@@ -325,12 +327,14 @@ export default function ServicePage() {
                 Proyectos de servicio registrados en el año seleccionado.
               </CardDescription>
             </div>
+            {canWrite && (
             <Button asChild>
                 <Link href="/service/add">
                     <PlusCircle className="mr-2 h-4 w-4" />
                     Servicio
                 </Link>
             </Button>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -406,6 +410,8 @@ export default function ServicePage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
+                       {canWrite && (
+                       <>
                        <Button variant="ghost" size="icon" asChild>
                          <Link href={`/service/${item.id}/edit`}><Pencil className="h-4 w-4" /></Link>
                        </Button>
@@ -441,6 +447,8 @@ export default function ServicePage() {
                           </AlertDialogFooter>
                         </AlertDialogContent>
                       </AlertDialog>
+                      </>
+                       )}
                     </TableCell>
                   </TableRow>
                 ))

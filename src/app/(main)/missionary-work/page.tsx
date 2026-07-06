@@ -122,6 +122,7 @@ import {
 import { z } from 'zod';
 import logger from '@/lib/logger';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { subHours, subMonths } from 'date-fns';
 import { FriendshipForm } from './FriendshipForm';
 import { analyzeImage } from '@/ai/flows/analyze-image-flow';
@@ -1176,6 +1177,7 @@ function NewConvertsTab({
 }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { canWrite } = usePermission();
   const [isFormOpen, setFormOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -1261,6 +1263,7 @@ function NewConvertsTab({
                       {friendship ? friendship.friends.map(getMemberName).join(', ') : <span className="text-muted-foreground italic">Pendiente</span>}
                     </TableCell>
                     <TableCell className="text-right">
+                      {canWrite && (
                       <div className="flex justify-end gap-2">
                         {friendship ? (
                           <Button
@@ -1282,6 +1285,7 @@ function NewConvertsTab({
                           </Button>
                         )}
                       </div>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -1316,6 +1320,7 @@ export default function MissionaryWorkPage() {
   const [loading, setLoading] = useState(true);
   const [loadingAnnotations, setLoadingAnnotations] = useState(true);
   const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const { toast } = useToast();
 
   const fetchData = useCallback(async () => {

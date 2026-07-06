@@ -952,6 +952,7 @@ export default function CouncilPage() {
         onSave={handleSaveConvertInfo}
         onSaveFriends={handleSaveFriends}
         onSaveTeachers={handleSaveTeachers}
+        canWrite={true}
         saving={sheetSaving}
         availableMembers={availableMembers}
       />

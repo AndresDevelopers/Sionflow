@@ -45,6 +45,7 @@ import { es } from 'date-fns/locale';
 import { saveAs } from 'file-saver';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useToast } from '@/hooks/use-toast';
 import logger from '@/lib/logger';
 import { Textarea } from '@/components/ui/textarea';
@@ -319,6 +320,7 @@ const reportQuestions = [
 
 export default function ReportsPage() {
   const { user, loading: authLoading, organizacion, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -565,7 +567,9 @@ export default function ReportsPage() {
           )}
         </CardContent>
         <CardContent className="flex justify-end">
+          {canWrite && (
           <Button onClick={handleSaveAnswers}><Save className="mr-2 h-4 w-4" /> Guardar Respuestas</Button>
+          )}
         </CardContent>
       </Card>
 

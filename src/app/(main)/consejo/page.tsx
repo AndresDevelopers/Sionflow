@@ -9,6 +9,7 @@ import { normalizeMemberStatus } from '@/lib/members-data';
 import { subMonths } from 'date-fns';
 import { AnnotationManager } from '@/components/shared/annotation-manager';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useToast } from '@/hooks/use-toast';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
@@ -53,6 +54,7 @@ async function saveConvertNotes(firestore: Firestore, convertId: string, notes: 
 
 const ConsejoPage: React.FC = () => {
   const { user, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const { toast } = useToast();
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [newConverts, setNewConverts] = useState<ConvertWithNotes[]>([]);
@@ -420,6 +422,7 @@ const ConsejoPage: React.FC = () => {
                             Sin observaciones
                           </span>
                         )}
+                        {canWrite && (
                         <Button
                           size="sm"
                           variant="ghost"
@@ -428,6 +431,7 @@ const ConsejoPage: React.FC = () => {
                         >
                           <Edit2 className="h-3 w-3" />
                         </Button>
+                        )}
                       </div>
                     )}
                   </div>

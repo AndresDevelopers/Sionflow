@@ -25,6 +25,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { deleteUser, updateProfile } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
@@ -355,6 +356,10 @@ export default function SettingsPage() {
           // Load synced member
           setSyncedMemberId(userData.syncedMemberId || null);
           setSyncedMemberName(userData.syncedMemberName || null);
+
+          // Use Firestore photoURL as primary source (may come from synced member), fallback to Firebase Auth
+          const firestorePhotoURL = userData.photoURL || null;
+          setPreviewUrl(firestorePhotoURL || firebaseUser.photoURL || null);
         } else {
           form.reset({
             name: firebaseUser.displayName || '',
@@ -363,9 +368,8 @@ export default function SettingsPage() {
           originalBirthDateRef.current = null;
           setSyncedMemberId(null);
           setSyncedMemberName(null);
+          setPreviewUrl(firebaseUser.photoURL || null);
         }
-
-        setPreviewUrl(firebaseUser.photoURL || null);
         setUserRole(normalizedRole);
 
         const canView = canViewSettings(normalizedRole);
@@ -421,10 +425,11 @@ export default function SettingsPage() {
   const onProfileSubmit = async (values: FormValues) => {
     if (!firebaseUser) return;
     setIsSubmitting(true);
-    let finalPhotoURL = firebaseUser.photoURL || null;
+    let finalPhotoURL: string | null = null;
 
     try {
       if (selectedFile) {
+        // User uploaded a new photo
         const storageRef = ref(storage, `profile_pictures/users/${firebaseUser.uid}/${Date.now()}_${selectedFile.name}`);
         await uploadBytes(storageRef, selectedFile);
         finalPhotoURL = await getDownloadURL(storageRef);
@@ -433,12 +438,16 @@ export default function SettingsPage() {
           const oldImageRef = ref(storage, firebaseUser.photoURL);
           await deleteObject(oldImageRef).catch(err => logger.warn({ err, message: "Could not delete old profile picture" }));
         }
-      } else if (!previewUrl && firebaseUser.photoURL) {
-        if (firebaseUser.photoURL.startsWith('https://firebasestorage.googleapis.com')) {
+      } else if (!previewUrl) {
+        // User removed the photo
+        if (firebaseUser.photoURL && firebaseUser.photoURL.startsWith('https://firebasestorage.googleapis.com')) {
           const oldImageRef = ref(storage, firebaseUser.photoURL);
           await deleteObject(oldImageRef).catch(err => logger.warn({ err, message: "Image to be removed could not be deleted" }));
         }
         finalPhotoURL = null;
+      } else {
+        // Keep current photo (from Firebase Auth, Firestore, or synced member)
+        finalPhotoURL = previewUrl;
       }
 
       await updateProfile(firebaseUser, {
@@ -542,10 +551,20 @@ export default function SettingsPage() {
           // Pull photo from member if user doesn't have one
           if (mData.photoURL && !finalPhotoURL && !currentUserData.photoURL) {
             pullUpdates.photoURL = mData.photoURL;
+            finalPhotoURL = mData.photoURL;
+            setPreviewUrl(mData.photoURL);
           }
 
           if (Object.keys(pullUpdates).length > 0) {
             await setDoc(userDocRef, pullUpdates, { merge: true });
+          }
+
+          // If photo was pulled from member, update Firebase Auth too
+          if (finalPhotoURL && !firebaseUser.photoURL) {
+            await updateProfile(firebaseUser, {
+              displayName: values.name,
+              photoURL: finalPhotoURL,
+            });
           }
 
           logger.info({
@@ -954,11 +973,21 @@ export default function SettingsPage() {
                               {isSubmitting ? <Loader2 className="animate-spin" /> : <User className="h-10 w-10" />}
                             </AvatarFallback>
                           </Avatar>
-                          <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                            <Button type="button" variant="ghost" size="icon" className="h-full w-full text-white" onClick={() => !isSubmitting && fileInputRef.current?.click()}>
-                              <Camera className="h-8 w-8" />
-                            </Button>
-                          </div>
+                          {/* Loading overlay during upload */}
+                          {isSubmitting && (
+                            <div className="absolute inset-0 bg-black/60 rounded-full flex flex-col items-center justify-center gap-1 z-10">
+                              <Loader2 className="h-8 w-8 text-white animate-spin" />
+                              <span className="text-white text-[10px] font-medium">Subiendo…</span>
+                            </div>
+                          )}
+                          {/* Hover overlay (hidden during upload) */}
+                          {!isSubmitting && (
+                            <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button type="button" variant="ghost" size="icon" className="h-full w-full text-white" onClick={() => fileInputRef.current?.click()}>
+                                <Camera className="h-8 w-8" />
+                              </Button>
+                            </div>
+                          )}
                           {previewUrl && !isSubmitting && (
                             <Button
                               type="button"

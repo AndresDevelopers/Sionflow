@@ -26,6 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/use-toast';
 import { CheckCircle, PlusCircle, Trash2 } from 'lucide-react';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { doc, getDoc } from 'firebase/firestore';
 import { usersCollection } from '@/lib/collections';
 
@@ -75,6 +76,7 @@ export function AnnotationManager({
 }: AnnotationManagerProps) {
     const { toast } = useToast();
     const { userRole } = useAuth();
+    const { canWrite } = usePermission();
     const isSecretary = userRole === 'secretary';
     const [isDialogOpen, setDialogOpen] = useState(false);
     const [inputValue, setInputValue] = useState('');
@@ -298,7 +300,7 @@ export function AnnotationManager({
                                             Resuelta
                                         </Button>
                                     )}
-                                    {(isSecretary || (currentUserId && item.userId === currentUserId)) && (
+                                    {(canWrite && (isSecretary || (currentUserId && item.userId === currentUserId))) && (
                                         <Button
                                             variant="ghost"
                                             size="icon"

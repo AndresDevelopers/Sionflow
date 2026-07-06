@@ -44,10 +44,14 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { ArrowLeft, Edit, Save, Trash2 } from 'lucide-react';
 import { CompanionshipForm } from '../CompanionshipForm';
+import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 
 export default function ManageCompanionshipPage() {
   const router = useRouter();
   const params = useParams();
+  const { barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const { id } = params;
   const { toast } = useToast();
 
@@ -169,6 +173,7 @@ export default function ManageCompanionshipPage() {
               <CardTitle>Gestionar Compañerismo</CardTitle>
               <CardDescription>{companionship.companions.join(' y ')}</CardDescription>
             </div>
+             {canWrite && (
              <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setIsEditMode(true)}>
                     <Edit className="mr-2 h-4 w-4" />
@@ -197,6 +202,7 @@ export default function ManageCompanionshipPage() {
                     </AlertDialogContent>
                 </AlertDialog>
             </div>
+             )}
           </div>
         </CardHeader>
         <CardContent>
@@ -235,10 +241,12 @@ export default function ManageCompanionshipPage() {
           </div>
         </CardContent>
         <CardFooter className="flex justify-end">
+            {canWrite && (
             <Button onClick={handleSaveChanges} disabled={isSaving}>
                 <Save className="mr-2 h-4 w-4" />
                 {isSaving ? 'Guardando...' : 'Guardar Cambios'}
             </Button>
+            )}
         </CardFooter>
       </Card>
     </div>

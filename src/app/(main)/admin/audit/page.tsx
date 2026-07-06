@@ -77,6 +77,16 @@ const ACTION_META: Record<
     icon: Trash2,
     color: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
   },
+  "user.permission_changed": {
+    label: "Cambio de permiso",
+    icon: ShieldCheck,
+    color: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300",
+  },
+  "user.bulk_permission_changed": {
+    label: "Permisos masivos",
+    icon: ShieldAlert,
+    color: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  },
 };
 
 export default function AdminAuditPage() {

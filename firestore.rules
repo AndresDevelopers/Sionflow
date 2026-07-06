@@ -10,6 +10,14 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data.role;
     }
 
+    function currentUserPermission() {
+      return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data.permission;
+    }
+
+    function canWrite() {
+      return signedIn() && currentUserPermission() == 'all';
+    }
+
     function isSecretary() {
       return signedIn() && (currentUserRole() == 'secretary' || currentUserRole() == 'admin');
     }
@@ -31,43 +39,53 @@ service cloud.firestore {
     // This allows legacy data (without barrioOrg) to continue working 
     // while migration is in progress.
     match /c_miembros/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_anotaciones/{document} {
       allow read: if signedIn();
-      allow create: if isCreatingOwnAnnotation();
+      allow create: if isCreatingOwnAnnotation() && canWrite();
       allow update: if (isSecretary() || isAnnotationOwner())
+        && canWrite()
         && request.resource.data.userId == resource.data.userId;
-      allow delete: if isSecretary() || isAnnotationOwner();
+      allow delete: if (isSecretary() || isAnnotationOwner())
+        && canWrite();
     }
     
     match /c_conversos/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_conversos_info/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_futuros_miembros/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_ministracion/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_actividades/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_servicios/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_cumpleanos/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
 
     match /c_admin_audit/{document} {
@@ -77,48 +95,58 @@ service cloud.firestore {
     }
 
     match /c_bautismos/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_fs_capacitaciones/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_fs_pendientes/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_fs_anotaciones/{document} {
       allow read: if signedIn();
-      allow create: if isCreatingOwnAnnotation();
+      allow create: if isCreatingOwnAnnotation() && canWrite();
       allow update: if (isSecretary() || isAnnotationOwner())
+        && canWrite()
         && request.resource.data.userId == resource.data.userId;
-      allow delete: if isSecretary() || isAnnotationOwner();
+      allow delete: if (isSecretary() || isAnnotationOwner())
+        && canWrite();
     }
     
     match /c_obra_misional_asignaciones/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_obra_misional_investigadores/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_obra_misional_amigos_conversos/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_obra_misional_imagenes/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_reporte_anual/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_push_subscriptions/{document} {
       allow read: if signedIn();
-      allow write: if signedIn();
+      allow write: if canWrite();
     }
     
     match /c_users/{document} {
@@ -129,26 +157,29 @@ service cloud.firestore {
           isSecretary()
           || (
             document == request.auth.uid
-            && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role'])
+            && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'permission'])
           )
         );
     }
 
     match /c_ministracion_distritos/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
 
     match /c_ministracion_historial/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
 
     match /c_observaciones_salud/{document} {
-      allow read, write: if signedIn();
+      allow read: if signedIn();
+      allow write: if canWrite();
     }
 
     match /c_notifications/{document} {
       allow read: if signedIn();
-      allow write: if signedIn();
+      allow write: if canWrite();
     }
 
     // Reference data — public read

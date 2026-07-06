@@ -49,6 +49,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { EditAnnotationDialog } from './edit-annotation-dialog';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 
 interface AnnotationListProps {
   title: string;
@@ -78,6 +79,7 @@ export function AnnotationList({
   currentUserId,
 }: AnnotationListProps) {
   const { userRole } = useAuth();
+  const { canWrite } = usePermission();
   const isSecretary = userRole === 'secretary';
   const [open, setOpen] = useState(false);
   const [newAnnotation, setNewAnnotation] = useState('');
@@ -197,6 +199,7 @@ export function AnnotationList({
               <CardDescription>{description}</CardDescription>
             </div>
           </div>
+          {canWrite && (
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button>
@@ -226,6 +229,7 @@ export function AnnotationList({
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </CardHeader>
 
@@ -243,7 +247,7 @@ export function AnnotationList({
         ) : (
           <ul className="space-y-3">
             {annotations.map((item) => {
-              const canManage = isSecretary || (currentUserId && item.userId === currentUserId);
+              const canManage = canWrite && (isSecretary || (currentUserId && item.userId === currentUserId));
 
               return (
                 <li

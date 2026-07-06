@@ -13,6 +13,7 @@ import { FamilySelector } from '@/components/family-search/family-selector';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 
 import {
@@ -82,6 +83,7 @@ const annotationSchema = z.object({
 
 export default function FamilySearchPage() {
     const { user, loading: authLoading, barrioOrg } = useAuth();
+    const { canWrite } = usePermission();
     const { t } = useI18n();
     const [trainings, setTrainings] = useState<FamilySearchTraining[]>([]);
     const [annotations, setAnnotations] = useState<Annotation[]>([]);
@@ -281,7 +283,9 @@ export default function FamilySearchPage() {
                            </div>
                         </div>
                         <Dialog open={isTrainingOpen} onOpenChange={setTrainingOpen}>
+                            {canWrite && (
                             <DialogTrigger asChild><Button size="sm"><PlusCircle className="mr-2"/> Familia</Button></DialogTrigger>
+                            )}
                             <DialogContent className="w-full max-w-[90vw] sm:max-w-lg">
                                 <DialogHeader>
                                     <DialogTitle>Agregar Familia para Capacitación</DialogTitle>

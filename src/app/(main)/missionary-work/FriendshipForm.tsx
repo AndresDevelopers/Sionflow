@@ -10,6 +10,7 @@ import { newConvertFriendsCollection } from '@/lib/collections';
 import type { Convert, NewConvertFriendship } from '@/lib/types';
 import logger from '@/lib/logger';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 
 import {
   Dialog,
@@ -64,6 +65,7 @@ export function FriendshipForm({
   const isEditMode = !!friendship;
   const { toast } = useToast();
   const { barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const [isPending, startTransition] = useTransition();
 
   const form = useForm<FormValues>({

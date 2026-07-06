@@ -70,6 +70,7 @@ import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 
 import type { Member, Companionship, Family, HealthConcern } from '@/lib/types';
 
@@ -178,6 +179,7 @@ const renderPhoneWithAge = (member: Member, fallback: string = 'Sin teléfono') 
 export default function ObservationsPage() {
 
   const { user, loading: authLoading, barrioOrg, organizacion } = useAuth();
+  const { canWrite } = usePermission();
 
   const isElderesQuorum = organizacion.toLowerCase().includes('élder') || organizacion.toLowerCase().includes('elder');
 
@@ -1257,10 +1259,12 @@ export default function ObservationsPage() {
             <p className="max-w-3xl text-sm text-muted-foreground">
               Agrega manualmente a los hermanos o amigos que requieren visitas, ayuda específica o seguimiento por motivos de salud.
             </p>
+            {canWrite && (
             <Button onClick={() => handleOpenHealthDialog()} disabled={savingHealthConcern} size="sm">
               <Plus className="mr-2 h-4 w-4" />
               Agregar persona
             </Button>
+            )}
           </div>
           <div className="hidden md:block">
             <Table>
@@ -1340,6 +1344,7 @@ export default function ObservationsPage() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
+                          {canWrite && (
                           <div className="flex justify-end gap-2">
                             <Button
                               variant="outline"
@@ -1364,6 +1369,7 @@ export default function ObservationsPage() {
                               )}
                             </Button>
                           </div>
+                          )}
                         </TableCell>
                       </TableRow>
                     );
@@ -1433,6 +1439,7 @@ export default function ObservationsPage() {
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
+                        {canWrite && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -1442,6 +1449,8 @@ export default function ObservationsPage() {
                         >
                           <Pencil className="h-4 w-4" />
                         </Button>
+                        )}
+                        {canWrite && (
                         <Button
                           variant="outline"
                           size="sm"
@@ -1455,6 +1464,7 @@ export default function ObservationsPage() {
                             <Trash2 className="h-4 w-4" />
                           )}
                         </Button>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

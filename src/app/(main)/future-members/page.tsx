@@ -27,6 +27,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
+import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getFutureMembers } from '@/lib/dashboard-data';
@@ -34,6 +35,7 @@ import { buildMemberEditUrl } from '@/lib/navigation';
 
 export default function FutureMembersPage() {
   const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
   const [futureMembers, setFutureMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const { t } = useI18n();
@@ -116,11 +118,13 @@ export default function FutureMembersPage() {
                     {item.baptismDate ? format(item.baptismDate.toDate(), 'd LLLL yyyy', { locale: es }) : 'No especificada'}
                   </TableCell>
                    <TableCell className="text-right">
+                     {canWrite && (
                      <Button variant="ghost" size="icon" asChild>
                        <Link href={buildMemberEditUrl(item.id, '/future-members')}>
                          <Pencil className="h-4 w-4" />
                        </Link>
                      </Button>
+                     )}
                    </TableCell>
                 </TableRow>
               ))

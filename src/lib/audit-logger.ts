@@ -5,6 +5,8 @@ import logger from "./logger";
 export type AuditAction =
   | "user.role_changed"
   | "user.visibility_changed"
+  | "user.permission_changed"
+  | "user.bulk_permission_changed"
   | "member.status_changed"
   | "member.deleted"
   | "user.bulk_role_changed";

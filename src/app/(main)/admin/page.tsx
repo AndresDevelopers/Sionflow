@@ -80,6 +80,8 @@ const AUDIT_META: Record<AuditAction, { label: string; icon: typeof ScrollText; 
   "user.bulk_role_changed": { label: "Roles masivos", icon: ShieldAlert, color: "bg-amber-500/10 text-amber-700 dark:text-amber-300" },
   "member.status_changed": { label: "Estado miembro", icon: UserCog, color: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" },
   "member.deleted": { label: "Miembro eliminado", icon: Trash2, color: "bg-rose-500/10 text-rose-700 dark:text-rose-300" },
+  "user.permission_changed": { label: "Cambio de permiso", icon: ShieldCheck, color: "bg-indigo-500/10 text-indigo-700 dark:text-indigo-300" },
+  "user.bulk_permission_changed": { label: "Permisos masivos", icon: ShieldAlert, color: "bg-violet-500/10 text-violet-700 dark:text-violet-300" },
 };
 
 const ROLE_LABELS: Record<UserRole, string> = {
@@ -247,7 +249,7 @@ export default function AdminHomePage() {
         />
         <AdminStatCard
           icon={UserCog}
-          label="Miembros del quórum"
+          label="Miembros"
           value={stats?.totalMembers}
           isLoading={isLoading}
           description="En la base de datos"
@@ -457,8 +459,8 @@ function AdminStatCard({
   const content = (
     <Card className={href ? "transition-colors hover:bg-muted/40" : undefined}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{label}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <CardTitle className="text-sm font-medium min-w-0 truncate">{label}</CardTitle>
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
       </CardHeader>
       <CardContent>
         {isLoading ? (

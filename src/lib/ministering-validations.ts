@@ -1,5 +1,5 @@
 import { Companionship, Member, MinisteringDistrict } from './types';
-import { getDocs } from 'firebase/firestore';
+import { getDocs, query, where } from 'firebase/firestore';
 import { ministeringCollection, membersCollection } from './collections';
 
 export interface ValidationResult {
@@ -158,10 +158,11 @@ export function validateNoDuplicateFamilies(families: FamilyInput[]): {
  */
 export async function validateCompanionNotAlreadyAssigned(
   companion: string,
+  barrioOrg: string,
   excludeCompanionshipId?: string
 ): Promise<{ valid: boolean; assignedTo?: string }> {
   try {
-    const companionships = await getDocs(ministeringCollection);
+    const companionships = await getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)));
     const normalizedCompanion = companion.trim().toLowerCase();
 
     for (const doc of companionships.docs) {
@@ -197,10 +198,11 @@ export async function validateCompanionNotAlreadyAssigned(
  */
 export async function validateFamilyNotAlreadyAssigned(
   family: FamilyInput,
+  barrioOrg: string,
   excludeCompanionshipId?: string
 ): Promise<{ valid: boolean; assignedTo?: string }> {
   try {
-    const companionships = await getDocs(ministeringCollection);
+    const companionships = await getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)));
     const normalizedFamily = family.name.trim().toLowerCase();
 
     for (const doc of companionships.docs) {
@@ -268,6 +270,7 @@ export function validateNoOverlap(companions: string[], families: string[]): {
 export async function validateCompanionshipData(
   companions: string[],
   families: FamilyInput[],
+  barrioOrg: string,
   excludeCompanionshipId?: string
 ): Promise<ValidationResult> {
   const conflicts = {
@@ -302,6 +305,7 @@ export async function validateCompanionshipData(
   for (const companion of companions) {
     const companionCheck = await validateCompanionNotAlreadyAssigned(
       companion,
+      barrioOrg,
       excludeCompanionshipId
     );
     if (!companionCheck.valid) {
@@ -314,7 +318,7 @@ export async function validateCompanionshipData(
 
   // Validar que familias no estén en otros compañerismos
   for (const family of families) {
-    const familyCheck = await validateFamilyNotAlreadyAssigned(family, excludeCompanionshipId);
+    const familyCheck = await validateFamilyNotAlreadyAssigned(family, barrioOrg, excludeCompanionshipId);
     if (!familyCheck.valid) {
       conflicts.familyAlreadyAssigned.push({
         family: family.name,
