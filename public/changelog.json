@@ -1,6 +1,70 @@
 {
-  "current": "1.1.20",
+  "current": "1.1.24",
   "entries": [
+    {
+      "version": "1.1.24",
+      "date": "2026-07-06",
+      "changes": {
+        "es": [
+          "Actualización: Add user deletion and update related configs.",
+          "Actualización: Implement permission-based access control system.",
+          "Actualización: Add PWA icons, fix notification scoping."
+        ],
+        "en": [
+          "Update: Add user deletion and update related configs.",
+          "Update: Implement permission-based access control system.",
+          "Update: Add PWA icons, fix notification scoping."
+        ]
+      }
+    },
+    {
+      "version": "1.1.23",
+      "date": "2026-07-05",
+      "changes": {
+        "es": [
+          "Actualización: Actualizar manifest.json."
+        ],
+        "en": [
+          "Update: Actualizar manifest.json."
+        ]
+      }
+    },
+    {
+      "version": "1.1.22",
+      "date": "2026-07-04",
+      "changes": {
+        "es": [
+          "Actualización: Scope caches by barrioOrg.",
+          "Actualización: Add donation qr download.",
+          "Actualización: Add member sync and notification improvements.",
+          "Actualización: Add barrio-org data scoping and donation support."
+        ],
+        "en": [
+          "Update: Scope caches by barrioOrg.",
+          "Update: Add donation qr download.",
+          "Update: Add member sync and notification improvements.",
+          "Update: Add barrio-org data scoping and donation support."
+        ]
+      }
+    },
+    {
+      "version": "1.1.21",
+      "date": "2026-07-03",
+      "changes": {
+        "es": [
+          "Actualización: Add president role, optimize audit logs, fix PWA manifest.",
+          "Actualización: Send notifs to same barrio org.",
+          "Actualización: Implement white-labeling and data standardization.",
+          "Actualización: Initial commit: Quorumflow church management system."
+        ],
+        "en": [
+          "Update: Add president role, optimize audit logs, fix PWA manifest.",
+          "Update: Send notifs to same barrio org.",
+          "Update: Implement white-labeling and data standardization.",
+          "Update: Initial commit: Quorumflow church management system."
+        ]
+      }
+    },
     {
       "version": "1.1.20",
       "date": "2026-06-09",

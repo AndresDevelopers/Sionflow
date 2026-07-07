@@ -1,41 +1,31 @@
 import { NextResponse } from "next/server";
-import { getAppName, hasAppLogo, getAppLogo, getAppIcon } from "@/lib/app-config";
+import { getAppName, hasAppLogo } from "@/lib/app-config";
 
 const appName = getAppName();
 const shortName = appName.length > 12 ? appName.slice(0, 12) : appName;
-const appLogo = getAppLogo();
 const hasLogo = hasAppLogo();
-const appIcon = getAppIcon();
 
-function getIconType(src: string): string {
-  const path = src.split("?")[0];
-  if (path.endsWith(".png")) return "image/png";
-  if (path.endsWith(".svg")) return "image/svg+xml";
-  if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
-  if (path.endsWith(".webp")) return "image/webp";
-  if (path.endsWith(".ico")) return "image/x-icon";
-  return "image/svg+xml";
-}
-
-// Siempre incluir logo.svg como fallback confiable
-const FALLBACK_ICON = "/logo.svg";
+const LOCAL_ICON = "/api/icon";
 
 export async function GET() {
-  const primaryIcon = hasLogo ? appLogo : FALLBACK_ICON;
-
-  const iconType = getIconType(appIcon);
 
   const icons = [
     {
-      src: appIcon,
-      sizes: "512x512",
-      type: iconType,
+      src: LOCAL_ICON,
+      sizes: "192x192",
+      type: "image/png",
       purpose: "any",
     },
     {
-      src: appIcon,
+      src: LOCAL_ICON,
       sizes: "512x512",
-      type: iconType,
+      type: "image/png",
+      purpose: "any",
+    },
+    {
+      src: LOCAL_ICON,
+      sizes: "512x512",
+      type: "image/png",
       purpose: "maskable",
     },
   ];
@@ -53,13 +43,12 @@ export async function GET() {
     lang: "es",
     scope: "/",
     icons,
-    // Screenshots solo si hay un logo personalizado (el fallback no sirve como screenshot)
     screenshots: hasLogo
       ? [
           {
-            src: appLogo,
+            src: LOCAL_ICON,
             sizes: "540x720",
-            type: "image/svg+xml",
+            type: "image/png",
             form_factor: "narrow",
           },
         ]
@@ -70,21 +59,21 @@ export async function GET() {
         short_name: "Dashboard",
         description: "Panel principal",
         url: "/dashboard",
-        icons: [{ src: primaryIcon, sizes: "96x96" }],
+        icons: [{ src: LOCAL_ICON, sizes: "96x96" }],
       },
       {
         name: "Miembros",
         short_name: "Miembros",
         description: "Gestionar miembros del quórum",
         url: "/members",
-        icons: [{ src: primaryIcon, sizes: "96x96" }],
+        icons: [{ src: LOCAL_ICON, sizes: "96x96" }],
       },
       {
         name: "Consejo",
         short_name: "Consejo",
         description: "Ver elementos del consejo",
         url: "/council",
-        icons: [{ src: primaryIcon, sizes: "96x96" }],
+        icons: [{ src: LOCAL_ICON, sizes: "96x96" }],
       },
     ],
     prefer_related_applications: false,

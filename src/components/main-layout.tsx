@@ -339,7 +339,6 @@ export function MainLayout({ children }: { children: ReactNode }) {
         </ErrorBoundary>
         <PushForegroundListener />
         <ServiceWorkerRegistration />
-        <InstallPrompt />
       </SidebarInset>
     </>
   );
