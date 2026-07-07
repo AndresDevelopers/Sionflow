@@ -17,7 +17,7 @@
   "dependencies": {
     "@google-cloud/functions-framework": "^5.0.2",
     "@xmldom/xmldom": "^0.9.10",
-    "axios": "^1.15.2",
+    "axios": "^1.16.0",
     "date-fns": "^4.1.0",
     "docxtemplater": "^3.68.6",
     "firebase-admin": "^13.8.0",
