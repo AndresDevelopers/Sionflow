@@ -2,7 +2,7 @@
 
 ## Sistema de Notificaciones Programadas y Push
 
-El sistema de notificaciones de QuorumFlow usa Firebase Cloud Messaging (FCM), PWA y tareas programadas en producción. Las notificaciones automáticas se calculan y ejecutan siempre en horario de Ecuador (`America/Guayaquil`).
+El sistema de notificaciones de SionFlow usa Firebase Cloud Messaging (FCM), PWA y tareas programadas en producción. Las notificaciones automáticas se calculan y ejecutan siempre en horario de Ecuador (`America/Guayaquil`).
 
 ### Características Principales
 

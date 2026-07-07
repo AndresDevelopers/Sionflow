@@ -78,7 +78,7 @@ export function AnnotationList({
   onDeleteAnnotation,
   currentUserId,
 }: AnnotationListProps) {
-  const { userRole } = useAuth();
+  const { userRole, barrioOrg } = useAuth();
   const { canWrite } = usePermission();
   const isSecretary = userRole === 'secretary';
   const [open, setOpen] = useState(false);
@@ -139,6 +139,7 @@ export function AnnotationList({
         isResolved: false,
         createdAt: serverTimestamp(),
         userId: currentUserId,
+        barrioOrg,
       });
       setNewAnnotation('');
       setOpen(false);

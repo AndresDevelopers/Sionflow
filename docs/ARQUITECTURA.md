@@ -1,269 +1,106 @@
 # Arquitectura del Sistema
 
 ## Stack Tecnológico
-- **Frontend**: Next.js 15 con TypeScript
-- **Backend**: Firebase Functions (Node.js 20)
+- **Frontend**: Next.js 16 (App Router, webpack)
+- **Lenguaje**: TypeScript 6.0
+- **UI**: React 19, Tailwind CSS 3.4, Radix UI, shadcn/ui
+- **Backend**: Firebase Cloud Functions (Node.js 22)
 - **Base de Datos**: Firestore (NoSQL)
-- **Autenticación**: Firebase Authentication
+- **Autenticación**: Firebase Auth (client + admin SDK)
 - **Almacenamiento**: Firebase Storage
-- **Hosting**: Firebase Hosting / Vercel
-- **CI/CD**: GitHub Actions
-- **Monitoreo**: Sentry
-- **Reconocimiento de Voz**: Web Speech API (nativo del navegador)
+- **IA**: DeepSeek API (`deepseek-v4-flash`) + Google Genkit
+- **PWA**: `@ducanh2912/next-pwa` (offline, notificaciones push)
+- **Gráficos**: Recharts
+- **Formularios**: react-hook-form + zod
+- **Exportación**: docxtemplater + docx
+- **Package manager**: pnpm (workspace monorepo)
+- **Deploy**: Vercel + Firebase
+- **Notificaciones**: Web Push API + Firebase Cloud Messaging
 
 ## Estructura del Proyecto
 ```
-├── src/
-│   ├── app/            # Rutas de la aplicación (Next.js App Router)
-│   ├── components/     # Componentes reutilizables
-│   │   ├── shared/     # Componentes compartidos (voice-annotations, etc.)
-│   │   ├── dashboard/  # Componentes específicos del dashboard
-│   │   └── ui/         # Componentes UI primitivos
-│   ├── contexts/       # Contextos de React
-│   ├── lib/            # Utilidades y configuraciones
-│   │   ├── types.ts    # Definiciones de TypeScript
-│   │   └── collections.ts # Referencias a colecciones de Firestore
-│   └── hooks/          # Hooks personalizados
-├── public/             # Archivos estáticos
-├── functions/          # Código de Cloud Functions
-│   ├── src/
-│   │   ├── services/   # Lógica de negocio
-│   │   ├── types/      # Tipos de TypeScript
-│   │   └── index.ts    # Punto de entrada
-└── docs/               # Documentación
+src/
+├── app/
+│   ├── (auth)/                  # login, register, forgot-password
+│   ├── (main)/                  # Rutas protegidas (15 módulos)
+│   │   ├── admin/               # Panel de administración
+│   │   ├── birthdays/           # Cumpleaños
+│   │   ├── church-chat/         # Chat con IA
+│   │   ├── converts/            # Conversos recientes
+│   │   ├── council/             # Consejo
+│   │   ├── donate/              # Donaciones
+│   │   ├── family-search/       # FamilySearch
+│   │   ├── future-members/      # Futuros miembros
+│   │   ├── members/             # Miembros
+│   │   ├── ministering/         # Ministración
+│   │   ├── missionary-work/     # Obra misional
+│   │   ├── observations/        # Observaciones de salud
+│   │   ├── profile/             # Perfil de usuario
+│   │   ├── reports/             # Reportes y actividades
+│   │   ├── service/             # Servicio
+│   │   └── settings/            # Ajustes
+│   ├── api/                     # API routes + cron endpoints
+│   └── manifest/                # PWA manifest
+├── components/
+│   ├── ui/                      # shadcn/ui
+│   ├── dashboard/               # Widgets del dashboard
+│   ├── members/                 # Componentes de miembros
+│   └── shared/                  # Voice annotations, sync status, etc.
+├── contexts/                    # auth-context, i18n-context
+├── hooks/                       # use-members, use-permissions, etc.
+├── lib/                         # firebase, collections, roles, deepseek, push, types
+├── ai/flows/                    # Flujos Genkit (dashboard summary, suggestions)
+└── locales/                     # es.json, en.json
+
+functions/                       # Firebase Cloud Functions
+├── src/index.ts                 # Reportes anuales, notificaciones, imágenes
+└── src/modules/                 # notification-dispatcher, image-module
+
+worker/                          # Service Worker bridge para FCM
+scripts/                         # FCM config, changelog, setup-hooks, migración
+public/                          # PWA assets, service worker, changelog.json
 ```
 
 ## Patrones de Diseño
-- **Arquitectura por Características**: Organización del código por funcionalidad
-- **Repository Pattern**: Para el acceso a datos
-- **Factory Pattern**: Para la creación de objetos complejos
-- **Observer Pattern**: Para manejo de eventos
-- **Inyección de Dependencias**: Para un código más testeable y mantenible
+- **Arquitectura por funcionalidad**: Organización del código por módulo de negocio
+- **Renderizado cliente**: Toda la app usa `"use client"`, datos leídos directamente de Firestore
+- **Aislamiento multi-tenant**: Datos filtrados por `barrioOrg` (barrio + organización) en cada consulta
+- **RBAC**: Control de acceso basado en roles con permisos `read` y `all`
 
 ## Flujo de Datos
-1. **Frontend**: Componentes React que consumen la API
-2. **Caché Local**: Sistema de caché en localStorage para optimización
-3. **API**: Firebase Functions que actúan como capa intermedia
-4. **Base de Datos**: Firestore para almacenamiento persistente
-5. **Autenticación**: Firebase Auth para gestión de usuarios
-6. **Almacenamiento**: Firebase Storage para archivos multimedia
+1. **Frontend**: Componentes React que leen/escriben Firestore directamente
+2. **Auth**: Firebase Auth para identidad, Firestore para roles y permisos
+3. **API Routes**: Endpoints server-side para operaciones seguras (push, reportes, API externa)
+4. **Cloud Functions**: Tareas programadas (notificaciones de cumpleaños, reportes anuales)
+5. **IA**: DeepSeek API llamada desde el frontend para resúmenes, sugerencias y chat
 
-### Sistema de Caché
-El sistema implementa una estrategia de caché híbrida:
-- **Cache-first**: Carga inicial desde caché local si está disponible
-- **Background sync**: Actualización automática en segundo plano
-- **Invalidación inteligente**: Limpieza automática después de mutaciones
-- **Cross-tab sync**: Sincronización entre múltiples pestañas del navegador
+## Funcionalidades Clave
 
-## Funcionalidades Avanzadas
+### Sistema de Sincronización de Ministración
+Mantiene consistencia bidireccional entre compañerismos y maestros ministrantes:
+- Sincronización automática al modificar/eliminar compañerismos
+- Procesamiento por lotes eficiente (hasta 500 operaciones)
+- Prevención de duplicados
 
-### Sistema de Migración de Asignaciones Ministeriales
-Herramienta automatizada para sincronizar maestros ministrantes con compañerismos:
+### IA y Genkit
+- **Resumen del dashboard**: Análisis del estado actual del quórum vía DeepSeek
+- **Sugerencias**: Recomendaciones de actividades y servicio basadas en datos
+- **Chat Iglesia**: Chat conversacional con contexto eclesiástico
+- **Genkit**: Tooling de desarrollo para prototipar flujos de IA
 
-#### Características:
-- **Procesamiento por lotes**: Procesa miembros en grupos paralelos (configurable, default: 10)
-- **Seguimiento de progreso**: Callback opcional para actualizar UI durante la migración
-- **Modo de prueba (dry-run)**: Permite simular la migración sin hacer cambios reales
-- **Manejo robusto de errores**: Continúa procesando incluso si algunos miembros fallan
-- **Reporte detallado**: Estadísticas completas con miembros procesados, exitosos y fallidos
+### Notificaciones Push
+- Web Push API + Firebase Cloud Messaging
+- Vercel cron diario a las 13:00 para cumpleaños
+- Notificaciones en primer plano y fondo
 
-#### Flujo de Trabajo:
-1. Obtiene todos los miembros de Firestore
-2. Filtra miembros con maestros ministrantes asignados
-3. Procesa en lotes paralelos para mejor rendimiento
-4. Sincroniza cada asignación mediante `syncMinisteringAssignments()`
-5. Genera reporte con estadísticas y errores
-
-#### Estructura del Sistema:
-- **Script**: `src/lib/migrate-ministering.ts`
-- **Página UI**: `src/app/(main)/ministering/migrate/page.tsx`
-- **Función principal**: `migrateExistingMinisteringAssignments(options)`
-
-#### Opciones de Configuración:
-```typescript
-interface MigrationOptions {
-  batchSize?: number;        // Tamaño del lote (default: 10)
-  dryRun?: boolean;          // Modo de prueba (default: false)
-  onProgress?: (current: number, total: number) => void;  // Callback de progreso
-}
-```
-
-#### Resultado de la Migración:
-```typescript
-interface MigrationResult {
-  success: boolean;          // true si no hubo errores
-  totalMembers: number;      // Total de miembros en la base de datos
-  processedMembers: number;  // Miembros con maestros asignados
-  syncedMembers: number;     // Miembros sincronizados exitosamente
-  failedMembers: Array<{     // Miembros que fallaron
-    id: string;
-    name: string;
-    error: string;
-  }>;
-  duration: number;          // Tiempo de ejecución en ms
-}
-```
-
-#### Uso Programático:
-```typescript
-import { migrateExistingMinisteringAssignments } from '@/lib/migrate-ministering';
-
-// Uso básico
-const result = await migrateExistingMinisteringAssignments();
-
-// Con opciones avanzadas
-const result = await migrateExistingMinisteringAssignments({
-  batchSize: 20,
-  dryRun: true,
-  onProgress: (current, total) => {
-    console.log(`Progreso: ${current}/${total}`);
-  }
-});
-```
-
-#### Consideraciones de Rendimiento:
-- **Procesamiento paralelo**: ~10x más rápido que procesamiento secuencial
-- **Optimización de lotes**: Ajustar `batchSize` según capacidad del servidor
-- **Tiempo estimado**: ~6 segundos para 100 miembros (con batchSize=10)
-
-### Sistema de Sincronización Inversa (Ministración → Miembros)
-Mantiene la consistencia bidireccional entre compañerismos y maestros ministrantes:
-
-#### Versiones Disponibles:
-- **Versión estable**: `ministering-reverse-sync.ts` (producción)
-- **Versión refactorizada**: `ministering-reverse-sync-refactored.ts` (mejorada, lista para uso)
-
-#### Características:
-- **Sincronización automática**: Actualiza miembros cuando se modifican compañerismos
-- **Procesamiento por lotes**: Usa `writeBatch` para operaciones eficientes (límite: 500 operaciones)
-- **Búsqueda por apellido**: Identifica familias mediante el formato "Familia [Apellido]"
-- **Manejo de cambios complejos**: Soporta adición, eliminación y modificación de asignaciones
-- **Procesamiento paralelo**: (versión refactorizada) Procesa familias en paralelo para mejor rendimiento
-- **Caché inteligente**: (versión refactorizada) Evita consultas duplicadas a Firestore
-- **Logging detallado**: (versión refactorizada) Registro completo de operaciones y errores
-
-#### Funciones Principales:
-
-**`removeMinisteringTeachersFromFamilies()`**
-- Elimina maestros ministrantes cuando se borra un compañerismo
-- Busca miembros por apellido de familia
-- Actualiza solo miembros afectados
-
-**`updateMinisteringTeachersOnCompanionshipChange()`**
-- Sincroniza cambios cuando se edita un compañerismo
-- Maneja tres escenarios:
-  1. Familias removidas → elimina maestros
-  2. Familias agregadas → añade maestros
-  3. Familias existentes con compañeros cambiados → actualiza maestros
-
-#### Estructura del Sistema:
-- **Módulo estable**: `src/lib/ministering-reverse-sync.ts`
-- **Módulo refactorizado**: `src/lib/ministering-reverse-sync-refactored.ts`
-- **Usado por**: `CompanionshipForm.tsx`, páginas de ministración
-- **Integración**: Se ejecuta automáticamente en operaciones CRUD de compañerismos
-
-#### Mejoras en Versión Refactorizada:
-- **Arquitectura modular**: Separación clara entre tipos, helpers y API pública
-- **Validación de entrada**: Verifica datos antes de procesar
-- **Manejo robusto de errores**: Retorna resultados detallados con miembros fallidos
-- **Optimización de consultas**: Caché de miembros para evitar consultas repetidas
-- **Procesamiento paralelo**: Usa `Promise.all()` para procesar familias simultáneamente
-- **Comparación inteligente**: Solo actualiza miembros con cambios reales
-- **Soporte multiidioma**: Detecta prefijos "Familia" y "Family"
-
-#### Flujo de Sincronización:
-```typescript
-// Al eliminar compañerismo
-await removeMinisteringTeachersFromFamilies(
-  ['Juan Pérez', 'Pedro López'],  // Compañeros
-  ['Familia García', 'Familia Rodríguez']  // Familias
-);
-
-// Al editar compañerismo
-await updateMinisteringTeachersOnCompanionshipChange(
-  ['Juan Pérez', 'Pedro López'],      // Compañeros antiguos
-  ['Juan Pérez', 'Carlos Martínez'],  // Compañeros nuevos
-  ['Familia García'],                  // Familias antiguas
-  ['Familia García', 'Familia Silva']  // Familias nuevas
-);
-```
-
-#### Consideraciones Técnicas:
-- **Límite de batch**: 500 operaciones por lote (límite de Firestore)
-- **Búsqueda eficiente**: Usa índices de Firestore en campo `lastName`
-- **Prevención de duplicados**: Usa `Set` para evitar maestros repetidos
-- **Logging detallado**: Registra cada cambio para auditoría
-- **Caché de consultas**: (refactorizada) Evita consultas duplicadas a la misma familia
-- **Procesamiento paralelo**: (refactorizada) Mejora rendimiento en operaciones masivas
-- **Resultado estructurado**: (refactorizada) Retorna `SyncResult` con estadísticas completas
-
-#### Resultado de Sincronización (Versión Refactorizada):
-```typescript
-interface SyncResult {
-  success: boolean;          // true si no hubo errores
-  updatedCount: number;      // Número de miembros actualizados
-  failedMembers: Array<{     // Miembros que fallaron
-    id: string;
-    name: string;
-    error: string;
-  }>;
-}
-```
-
-### Sistema de Caché Inteligente
-Implementación de caché local para optimizar el rendimiento y la experiencia del usuario:
-
-#### Características:
-- **Persistencia local**: Almacenamiento en localStorage del navegador
-- **Sincronización automática**: Actualización periódica cada 5 minutos
-- **Invalidación consistente**: Limpieza automática tras operaciones CRUD
-- **Comunicación entre pestañas**: Eventos personalizados y storage events
-- **Fallback robusto**: Degradación elegante cuando el servidor no está disponible
-
-#### Estrategia de Caché:
-1. **Carga inicial**: Intenta cargar desde caché, luego actualiza desde servidor
-2. **Operaciones CRUD**: Invalida caché inmediatamente y fuerza actualización
-3. **Visibilidad de página**: Refresca datos al volver a la pestaña activa
-4. **Auto-refresh**: Actualización automática cada 5 minutos en páginas visibles
-
-#### Gestión de Versiones:
-- **Timestamp**: Control de antigüedad de los datos
-- **Version key**: Identificador único para cada actualización
-- **Cross-tab events**: Propagación de cambios entre ventanas
-
-### Sistema de Anotaciones por Voz
-El componente `VoiceAnnotations` implementa reconocimiento de voz usando la Web Speech API:
-
-#### Características:
-- **Auto-inicio**: El reconocimiento se inicia automáticamente al abrir el diálogo
-- **Idioma**: Configurado para español (es-ES)
-- **Feedback visual**: Indicador de estado de grabación con animación
-- **Fallback**: Entrada manual de texto como alternativa
-- **Gestión de errores**: Manejo robusto de errores de la API de voz
-
-#### Flujo de Trabajo:
-1. Usuario abre diálogo de nueva anotación
-2. Sistema inicia automáticamente el reconocimiento de voz
-3. Usuario habla y el texto se transcribe en tiempo real
-4. Usuario puede alternar entre voz y texto manual
-5. Anotación se guarda en Firestore con metadatos de origen
-
-#### Estructura del Componente:
-- **Ubicación**: `src/components/shared/voice-annotations.tsx`
-- **Exportación**: Disponible desde `src/components/shared/index.ts`
-- **Importación**: `import { VoiceAnnotations } from '@/components/shared'`
-
-#### Compatibilidad:
-- **Navegadores soportados**: Chrome, Edge, Safari (con webkit)
-- **Detección automática**: Verifica disponibilidad de la API antes de usar
-- **Degradación elegante**: Funciona solo con texto si la voz no está disponible
+### PWA
+- Instalable en dispositivos móviles y escritorio
+- Funciona offline con Service Worker personalizado
+- Sincronización al reconectar
 
 ## Decisiones de Diseño Clave
-- **PWA**: Aplicación Web Progresiva para experiencia móvil
-- **Mobile-First**: Diseño responsivo con enfoque en móviles
-- **Seguridad**: Validación en frontend y backend
-- **Rendimiento**: Carga bajo demanda y code-splitting
-- **Procesamiento por lotes**: Operaciones masivas optimizadas con paralelización
-- **Accesibilidad**: Reconocimiento de voz para facilitar la entrada de datos
-- **Experiencia de Usuario**: Auto-inicio del reconocimiento de voz al abrir diálogos
-- **Herramientas de migración**: Scripts automatizados para sincronización de datos
+- **PWA**: Experiencia nativa sin App Store
+- **Mobile-First**: Diseño responsivo optimizado para teléfonos
+- **White-label**: Nombre, logo e icono configurables por variables de entorno
+- **Multi-organización**: Aislamiento de datos por barrio + organización
+- **IA integrada**: DeepSeek como asistente para la presidencia

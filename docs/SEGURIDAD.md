@@ -4,103 +4,58 @@
 
 ### Firebase Authentication
 - Autenticación con email/contraseña
-- Proveedores OAuth (Google, Facebook)
-- Autenticación anónima para características limitadas
+- Firebase Admin SDK para verificación server-side de tokens
+- Sin proveedores OAuth externos
 
-### Niveles de Acceso
-1. **Usuario en espera (`user`)**: Cuenta autenticada sin privilegios operativos. Solo puede ver la página de acceso restringido hasta que la presidencia asigne un rol ministerial.
-2. **Consejero del quórum (`counselor`)**: Acceso operativo para gestionar ministraciones, registrar seguimiento y consultar reportes de su área. No puede modificar permisos ni configuraciones globales.
-3. **Presidente del quórum (`president`)**: Acceso completo a los indicadores y reportes estratégicos. Puede coordinar tareas con el secretario y los consejeros, pero no administra roles de usuario.
-4. **Secretario del quórum (`secretary`)**: Control total del sistema. Es el único rol con permisos para abrir la sección de Gestión de Roles de Usuarios, asignar o revocar privilegios y modificar configuraciones críticas.
+### Roles y Permisos
+
+| Rol | Permiso | Acceso |
+|---|---|---|
+| `secretary` | Todo | Control total: admin, ajustes, gestión de roles, reportes |
+| `president` | Todo | Módulos operativos + panel de admin |
+| `counselor` | Todo | Seguimiento de familias y asignaciones |
+| `other` | Lectura | Solo lectura de datos |
+| `user` | Lectura | Bloqueado hasta asignación de rol de liderazgo |
+
+- **Aislamiento multi-tenant**: cada usuario pertenece a un `barrioOrg`. Las consultas se filtran automáticamente por barrio + organización.
+- **Visibilidad de páginas**: el menú lateral se puede configurar por usuario desde el panel de admin.
+- Las cuentas con rol `user` ven la página de acceso restringido hasta que un líder les asigne un rol.
 
 ## Protección de Datos
 
 ### En Tránsito
-- TLS 1.2+ para todas las comunicaciones
-- HSTS habilitado
-- CORS configurado estrictamente
+- TLS 1.3 para todas las comunicaciones
+- Firebase Auth con tokens firmados criptográficamente
+- CORS configurado para orígenes autorizados
 
 ### En Reposo
-- Cifrado AES-256 para datos sensibles
-- Hash con sal para contraseñas (Firebase Auth)
-- Claves de API rotadas regularmente
-
-## Reglas de Seguridad
-
-### Firestore
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    // Reglas específicas por colección
-    match /usuarios/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    match /eventos/{eventId} {
-      allow read: if hasLeadershipAccess();
-      allow create, update, delete: if isSecretary();
-    }
-
-    // Funciones auxiliares
-    function hasLeadershipAccess() {
-      return request.auth != null &&
-        (request.auth.token.role in ['secretary', 'president', 'counselor']);
-    }
-
-    function isSecretary() {
-      return request.auth.token.role == 'secretary';
-    }
-  }
-}
-```
-
-### Storage
-```javascript
-rules_version = '2';
-service firebase.storage {
-  match /b/{bucket}/o {
-    match /{allPaths=**} {
-      allow read: if request.auth != null;
-      allow write: if isSecretary();
-    }
-  }
-}
-```
+- Firestore con cifrado nativo de Firebase
+- Firebase Storage con cifrado server-side
+- Claves de API en variables de entorno (nunca en código)
 
 ## Prácticas Seguras
 
-### Desarrollo Seguro
-- Revisión de código obligatoria
-- No exponer claves en el código
-- Uso de variables de entorno para datos sensibles
-- Validación de entrada en frontend y backend
-- Las notificaciones push se generan desde Cloud Functions verificadas; los tokens se almacenan por usuario y se eliminan cuando se invalidan
+### Desarrollo
+- Variables de entorno para todos los datos sensibles
+- Validación de entrada con zod en frontend y API routes
+- Sin hardcoding de secretos ni URLs de Firebase
 
-### Funcionalidades de Voz
-- **Permisos del navegador**: Solicitud explícita de acceso al micrófono
-- **Procesamiento local**: El reconocimiento de voz se procesa en el navegador (no se envía audio a servidores externos)
-- **Limpieza de recursos**: Detención automática del reconocimiento al cerrar diálogos
-- **Fallback seguro**: Funcionalidad completa disponible sin acceso al micrófono
-- **Sin almacenamiento de audio**: Solo se almacena el texto transcrito, nunca el audio original
+### Voz y Multimedia
+- Reconocimiento de voz procesado localmente en el navegador (Web Speech API)
+- Sin almacenamiento de audio original — solo texto transcrito
+- Permiso explícito del navegador requerido para acceder al micrófono
 
-### Contraseñas
-- Longitud mínima: 12 caracteres
-- Requiere mayúsculas, minúsculas, números y caracteres especiales
-- Bloqueo después de 5 intentos fallidos
-
-### Auditoría y Monitoreo
-- Registro de eventos de seguridad
-- Alertas para actividades sospechosas
-- Revisiones de seguridad trimestrales
+### Notificaciones Push
+- Tokens FCM almacenados por usuario en `c_push_subscriptions`
+- Las notificaciones se generan desde Cloud Functions verificadas
+- Los tokens se eliminan al invalidarse
 
 ## Respuesta a Incidentes
 
 ### Reporte de Vulnerabilidades
-1. Reportar a security@iglesiaelderes.com
+1. Reportar a través de GitHub Security Advisories
 2. Se responderá en un plazo máximo de 48 horas
-3. Se emitirá un acuse de recibo
-4. Se mantendrá informado al reportante
+3. Seguimiento del principio de divulgación responsable
 
 ### Proceso de Mitigación
 1. Contención del incidente
@@ -108,21 +63,9 @@ service firebase.storage {
 3. Corrección de la vulnerabilidad
 4. Pruebas de seguridad
 5. Despliegue de la solución
-6. Comunicación a los afectados
+6. Comunicación a los afectados (si aplica)
 
-## Cumplimiento
-
-### RGPD
-- Derecho al olvido implementado
-- Consentimiento explícito para datos personales
-- Nombreado de Oficial de Protección de Datos
-
-### Otras Regulaciones
-- COPPA (para menores de 13 años)
-- CCPA (para residentes de California)
-- LGPD (para usuarios brasileños)
-
-## Auditorías Externas
-- Pruebas de penetración anuales
-- Revisión de código por terceros
-- Certificaciones de seguridad
+## Auditoría
+- Logs de auditoría en Firestore para acciones críticas
+- Registro de cambios de rol y permisos
+- Revisiones de acceso periódicas

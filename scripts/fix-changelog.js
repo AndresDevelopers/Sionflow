@@ -202,7 +202,7 @@ function bumpPatch(version) {
 }
 
 async function main() {
-  console.log('\n🔧 QuorumFlow – Changelog Fix Tool');
+  console.log('\n🔧 SionFlow – Changelog Fix Tool');
   console.log('═'.repeat(50));
 
   const changelog = readJSON(CHANGELOG_FILE);

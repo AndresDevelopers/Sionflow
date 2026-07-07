@@ -1,6 +1,6 @@
-# API Externa de QuorumFlow — Documentación
+# API Externa de SionFlow — Documentación
 
-Esta API permite a una aplicación web externa leer datos de **ministración**, **actividades** y **servicios** de QuorumFlow, respetando el aislamiento multi-tenant por barrio + organización.
+Esta API permite a una aplicación web externa leer datos de **ministración**, **actividades** y **servicios** de SionFlow, respetando el aislamiento multi-tenant por barrio + organización.
 
 ---
 
@@ -69,9 +69,9 @@ En producción los datos se cachean por 1 hora con `unstable_cache`. Esto proteg
 
 ---
 
-## Qué necesita QuorumFlow para que la API funcione
+## Qué necesita SionFlow para que la API funcione
 
-### 1. Variables de entorno en QuorumFlow
+### 1. Variables de entorno en SionFlow
 
 | Variable | Archivo | Obligatoria | Nota |
 |---|---|---|---|
@@ -134,46 +134,44 @@ El índice para `c_ministracion_distritos` (`barrioOrg ASC`, `name ASC`) puede n
 
 ## Qué necesita la web externa
 
-> La web externa puede estar hecha con cualquier stack: **Supabase, Laravel, Django, Express, Next.js, etc.** No importa qué base de datos o backend use. Lo único que necesita de Firebase es **el cliente de autenticación** para obtener el ID token que autoriza las llamadas a la API de QuorumFlow.
+> La web externa puede estar hecha con cualquier stack: **Supabase, Laravel, Django, Express, Next.js, etc.** No importa qué base de datos o backend use. Lo único que necesita de Firebase es **el cliente de autenticación** para obtener el ID token que autoriza las llamadas a la API de SionFlow.
 
 ### 1. Instalar Firebase Auth SDK
 
 Aunque la web externa use Supabase u otra base de datos, necesita el SDK de Firebase **solo para autenticación**:
 
 ```bash
-npm install firebase
-# o
 pnpm add firebase
 ```
 
 ### 2. Configuración de Firebase
 
-Inicializar Firebase con las variables del proyecto QuorumFlow:
+Inicializar Firebase con las variables del proyecto SionFlow:
 
 ```js
 import { initializeApp } from 'firebase/app';
 import { getAuth, signInWithEmailAndPassword } from 'firebase/auth';
 
 const firebaseConfig = {
-  apiKey: '...',            // NEXT_PUBLIC_FIREBASE_API_KEY de QuorumFlow
-  authDomain: '...',        // NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN de QuorumFlow
-  projectId: '...',         // NEXT_PUBLIC_FIREBASE_PROJECT_ID de QuorumFlow
+  apiKey: '...',            // NEXT_PUBLIC_FIREBASE_API_KEY de SionFlow
+  authDomain: '...',        // NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN de SionFlow
+  projectId: '...',         // NEXT_PUBLIC_FIREBASE_PROJECT_ID de SionFlow
 };
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 ```
 
-> Este `initializeApp` **no reemplaza** la inicialización de Supabase ni interfiere con ella. La web externa sigue usando Supabase para todo lo demás. Firebase se usa exclusivamente para obtener el token de autenticación que QuorumFlow exige.
+> Este `initializeApp` **no reemplaza** la inicialización de Supabase ni interfiere con ella. La web externa sigue usando Supabase para todo lo demás. Firebase se usa exclusivamente para obtener el token de autenticación que SionFlow exige.
 
 ### 3. Credenciales de usuario
 
-Debe tener email + contraseña de un usuario registrado en `c_users` de QuorumFlow con `role`, `barrio` y `organizacion`. Puede guardar estas credenciales en su propia base de datos (Supabase, PostgreSQL, etc.) o en variables de entorno.
+Debe tener email + contraseña de un usuario registrado en `c_users` de SionFlow con `role`, `barrio` y `organizacion`. Puede guardar estas credenciales en su propia base de datos (Supabase, PostgreSQL, etc.) o en variables de entorno.
 
 ```js
 // Ejemplo: credenciales guardadas en .env de la web externa
-const email = process.env.QUORUMFLOW_EMAIL;
-const password = process.env.QUORUMFLOW_PASSWORD;
+const email = process.env.SIONFLOW_EMAIL;
+const password = process.env.SIONFLOW_PASSWORD;
 
 await signInWithEmailAndPassword(auth, email, password);
 const token = await auth.currentUser.getIdToken();
@@ -187,8 +185,8 @@ Firebase rota los tokens cada hora. La web externa debe obtener un token fresco 
 async function fetchData(endpoint, year) {
   const token = await auth.currentUser.getIdToken();
   const url = year
-    ? `https://<quorumflow-domain>/api/external/${endpoint}?year=${year}`
-    : `https://<quorumflow-domain>/api/external/${endpoint}`;
+    ? `https://<sionflow-domain>/api/external/${endpoint}?year=${year}`
+    : `https://<sionflow-domain>/api/external/${endpoint}`;
 
   const res = await fetch(url, {
     headers: { Authorization: `Bearer ${token}` },
@@ -211,10 +209,10 @@ const activities = await fetchData('activities', 2026);
 const services = await fetchData('services', 2026);
 ```
 
-### 5. URL base de QuorumFlow
+### 5. URL base de SionFlow
 
 ```
-https://<quorumflow-domain>/api/external
+https://<sionflow-domain>/api/external
 ```
 
 ---
@@ -369,7 +367,7 @@ Authorization: Bearer <id-token>
 
 ```
 ┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
-│  Web externa     │────▶│  Firebase Auth    │────▶│  QuorumFlow API │
+│  Web externa     │────▶│  Firebase Auth    │────▶│  SionFlow API   │
 │                 │     │  (verify token)   │     │  (route.ts)     │
 │ signIn +        │     │                   │     │                 │
 │ getIdToken()    │     │ authAdmin         │     │ leer c_users    │
@@ -382,7 +380,7 @@ Authorization: Bearer <id-token>
 └─────────────────┘     └──────────────────┘     └─────────────────┘
 ```
 
-1. La web externa inicia sesión con Firebase Auth usando credenciales del usuario registrado en QuorumFlow
+1. La web externa inicia sesión con Firebase Auth usando credenciales del usuario registrado en SionFlow
 2. Obtiene el ID token con `getIdToken()`
 3. Llama al endpoint con `Authorization: Bearer <token>`
 4. La API verifica el token con Firebase Admin SDK

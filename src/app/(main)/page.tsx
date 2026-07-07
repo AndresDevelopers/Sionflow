@@ -64,10 +64,11 @@ function StatCardSkeleton() {
 }
 
 // Moved from server actions to be called on the client
-async function getAnnotations(source: 'dashboard'): Promise<Annotation[]> {
+async function getAnnotations(source: 'dashboard', barrioOrg?: string): Promise<Annotation[]> {
     try {
         const q = query(
             annotationsCollection,
+            where('barrioOrg', '==', barrioOrg),
             where('source', '==', source),
             where('isResolved', '==', false)
         );
@@ -221,10 +222,10 @@ function DashboardPage() {
   const fetchAnnotations = useCallback(async () => {
     if (authLoading || !user) return; // Wait for authentication
     setLoadingAnnotations(true);
-    const result = await getAnnotations('dashboard');
+    const result = await getAnnotations('dashboard', barrioOrg);
     setAnnotations(result);
     setLoadingAnnotations(false);
-  }, [authLoading, user]);
+  }, [authLoading, user, barrioOrg]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -541,8 +542,8 @@ function DashboardPage() {
 
        <div className="grid gap-4">
           <VoiceAnnotations
-              title="Anotaciones del Quórum"
-              description="Añade notas rápidas o recordatorios para el quórum. Marca las que necesiten seguimiento en el consejo."
+              title="Anotaciones"
+              description="Añade notas rápidas o recordatorios. Marca las que necesiten seguimiento en el consejo."
               source="dashboard"
               annotations={annotations}
               isLoading={loadingAnnotations}

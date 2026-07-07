@@ -26,7 +26,14 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
-import { deleteUser, updateProfile } from 'firebase/auth';
+import {
+  deleteUser,
+  updateProfile,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
+  verifyBeforeUpdateEmail,
+} from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter } from 'next/navigation';
 import logger from '@/lib/logger';
@@ -50,7 +57,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { AlertCircle, CalendarIcon, User, Camera, Loader2, X, Link2, Search } from 'lucide-react';
+import { AlertCircle, CalendarIcon, User, Camera, Loader2, X, Link2, Search, Lock, Mail, KeyRound } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -84,6 +91,28 @@ const profileSchema = z.object({
 
 type FormValues = z.infer<typeof profileSchema>;
 
+const passwordSchema = z.object({
+  currentPassword: z.string().min(1, { message: "Ingresa tu contraseña actual." }),
+  newPassword: z
+    .string()
+    .min(6, { message: "Mínimo 6 caracteres." })
+    .regex(/[A-Za-z]/, { message: "Debe incluir al menos una letra." })
+    .regex(/\d/, { message: "Debe incluir al menos un número." }),
+  confirmPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmPassword, {
+  message: "Las contraseñas no coinciden.",
+  path: ["confirmPassword"],
+});
+
+type PasswordValues = z.infer<typeof passwordSchema>;
+
+const emailSchema = z.object({
+  newEmail: z.string().email({ message: "Correo inválido." }),
+  currentPassword: z.string().min(1, { message: "Confirma tu contraseña." }),
+});
+
+type EmailValues = z.infer<typeof emailSchema>;
+
 const MAX_FILE_SIZE = 20 * 1024 * 1024; // 20MB
 
 
@@ -98,6 +127,8 @@ export default function SettingsPage() {
   const [isProfileLoading, setIsProfileLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isMainPageSaving, setIsMainPageSaving] = useState(false);
+  const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+  const [isEmailSaving, setIsEmailSaving] = useState(false);
 
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(true); // Notificaciones in-app activas por defecto
   const [pushNotificationsEnabled, setPushNotificationsEnabled] = useState(false); // Notificaciones push desactivadas por defecto
@@ -136,6 +167,7 @@ export default function SettingsPage() {
   const [userRole, setUserRole] = useState<UserRole>('user');
   const [mainPage, setMainPage] = useState<string>('/');
   const [visiblePages, setVisiblePages] = useState<string[]>([]);
+  const [canManageSettings, setCanManageSettings] = useState(false);
 
   // Synced member state
   const [syncedMemberId, setSyncedMemberId] = useState<string | null>(null);
@@ -275,6 +307,23 @@ export default function SettingsPage() {
     },
   });
 
+  const passwordForm = useForm<PasswordValues>({
+    resolver: zodResolver(passwordSchema),
+    defaultValues: {
+      currentPassword: '',
+      newPassword: '',
+      confirmPassword: '',
+    },
+  });
+
+  const emailForm = useForm<EmailValues>({
+    resolver: zodResolver(emailSchema),
+    defaultValues: {
+      newEmail: '',
+      currentPassword: '',
+    },
+  });
+
   // Keep synced member name and birthDate up-to-date
   useEffect(() => {
     if (!syncedMemberId) return;
@@ -381,6 +430,7 @@ export default function SettingsPage() {
       } catch (error) {
         logger.error({ error, message: 'Error loading settings profile data' });
         setHasSettingsAccess(false);
+        setCanManageSettings(false);
         toast({
           title: t('settings.toast.profileLoadErrorTitle'),
           description: t('settings.toast.profileLoadErrorDescription'),
@@ -631,6 +681,85 @@ export default function SettingsPage() {
       });
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const onChangePassword = async (values: PasswordValues) => {
+    if (!firebaseUser || !firebaseUser.email) return;
+    setIsPasswordSaving(true);
+    try {
+      const credential = EmailAuthProvider.credential(firebaseUser.email, values.currentPassword);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      await updatePassword(firebaseUser, values.newPassword);
+      toast({
+        title: t('settings.security.passwordUpdatedTitle'),
+        description: t('settings.security.passwordUpdatedDescription'),
+      });
+      passwordForm.reset();
+    } catch (error: any) {
+      logger.error({ error, message: "Error changing password" });
+      let description = t('settings.security.errorUnexpected');
+      const code = error?.code as string | undefined;
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+        description = t('settings.security.errorWrongPassword');
+      } else if (code === 'auth/requires-recent-login') {
+        description = t('settings.security.errorRequiresRecentLogin');
+      } else if (code === 'auth/weak-password') {
+        description = t('settings.security.errorWeakPassword');
+      } else if (code === 'auth/network-request-failed') {
+        description = t('settings.security.errorNetwork');
+      }
+      toast({
+        title: t('settings.security.passwordUpdatedTitle'),
+        description,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsPasswordSaving(false);
+    }
+  };
+
+  const onChangeEmail = async (values: EmailValues) => {
+    if (!firebaseUser || !firebaseUser.email) return;
+    if (values.newEmail.toLowerCase() === firebaseUser.email.toLowerCase()) {
+      emailForm.setError('newEmail', {
+        type: 'manual',
+        message: t('settings.security.emailSameAsCurrent'),
+      });
+      return;
+    }
+    setIsEmailSaving(true);
+    try {
+      const credential = EmailAuthProvider.credential(firebaseUser.email!, values.currentPassword);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      await verifyBeforeUpdateEmail(firebaseUser, values.newEmail);
+      toast({
+        title: t('settings.security.emailVerificationSentTitle'),
+        description: t('settings.security.emailVerificationSentDescription'),
+      });
+      emailForm.reset();
+    } catch (error: any) {
+      logger.error({ error, message: "Error changing email" });
+      let description = t('settings.security.errorUnexpected');
+      const code = error?.code as string | undefined;
+      if (code === 'auth/wrong-password' || code === 'auth/invalid-credential' || code === 'auth/invalid-login-credentials') {
+        description = t('settings.security.errorInvalidCredential');
+      } else if (code === 'auth/requires-recent-login') {
+        description = t('settings.security.errorRequiresRecentLogin');
+      } else if (code === 'auth/email-already-in-use') {
+        description = t('settings.security.errorEmailInUse');
+      } else if (code === 'auth/invalid-email') {
+        description = t('settings.security.errorInvalidEmail');
+      } else if (code === 'auth/network-request-failed') {
+        description = t('settings.security.errorNetwork');
+      }
+      toast({
+        title: t('settings.security.errorUnexpected'),
+        description,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsEmailSaving(false);
     }
   };
 
@@ -949,6 +1078,126 @@ export default function SettingsPage() {
         </p>
       </header>
       <div className="grid gap-4 md:gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1.1fr)]">
+        <Card className="xl:col-span-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              {t('settings.security.title')}
+            </CardTitle>
+            <CardDescription>
+              {t('settings.security.description')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="grid gap-6 md:grid-cols-2">
+            {/* ── Change Password ── */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">{t('settings.security.changePassword')}</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.security.changePasswordDescription')}
+              </p>
+              <Form {...passwordForm}>
+                <form onSubmit={passwordForm.handleSubmit(onChangePassword)} className="space-y-3">
+                  <FormField
+                    control={passwordForm.control}
+                    name="currentPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings.security.currentPasswordLabel')}</FormLabel>
+                        <FormControl>
+                          <Input type="password" autoComplete="current-password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={passwordForm.control}
+                    name="newPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings.security.newPasswordLabel')}</FormLabel>
+                        <FormControl>
+                          <Input type="password" autoComplete="new-password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={passwordForm.control}
+                    name="confirmPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings.security.confirmPasswordLabel')}</FormLabel>
+                        <FormControl>
+                          <Input type="password" autoComplete="new-password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={isPasswordSaving} className="w-full">
+                    {isPasswordSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isPasswordSaving ? t('settings.security.saving') : t('settings.security.updatePasswordButton')}
+                  </Button>
+                </form>
+              </Form>
+            </div>
+
+            {/* ── Change Email ── */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-semibold">{t('settings.security.changeEmail')}</h3>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {t('settings.security.changeEmailDescription')}
+              </p>
+              <Form {...emailForm}>
+                <form onSubmit={emailForm.handleSubmit(onChangeEmail)} className="space-y-3">
+                  <FormField
+                    control={emailForm.control}
+                    name="newEmail"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings.security.newEmailLabel')}</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="email"
+                            autoComplete="email"
+                            placeholder={firebaseUser?.email ?? 'tu@correo.com'}
+                            {...field}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={emailForm.control}
+                    name="currentPassword"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('settings.security.currentPasswordForEmailLabel')}</FormLabel>
+                        <FormControl>
+                          <Input type="password" autoComplete="current-password" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <Button type="submit" disabled={isEmailSaving} className="w-full">
+                    {isEmailSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {isEmailSaving ? t('settings.security.saving') : t('settings.security.updateEmailButton')}
+                  </Button>
+                </form>
+              </Form>
+            </div>
+          </CardContent>
+        </Card>
         <Card>
           <CardHeader>
             <CardTitle>{t('Profile')}</CardTitle>
@@ -1189,6 +1438,7 @@ export default function SettingsPage() {
             </form>
           </Form>
         </Card>
+        {canManageSettings && (<>
         <Card className="h-full">
           <CardHeader>
             <CardTitle>Página Principal</CardTitle>
@@ -1226,6 +1476,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        </>)}
+        {canManageSettings && (<>
         <Card className="h-full">
           <CardHeader>
             <CardTitle>{t('Appearance')}</CardTitle>
@@ -1355,6 +1607,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        </>)}
+        {canManageSettings && (<>
         <Card className="xl:col-span-full">
           <CardHeader>
             <CardTitle>{t('Notifications')}</CardTitle>
@@ -1464,6 +1718,8 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+        </>)}
+        {canManageSettings && (<>
         <Card className="border-destructive xl:col-span-full">
           <CardHeader>
             <CardTitle className="text-destructive">Zona de Peligro</CardTitle>
@@ -1494,7 +1750,9 @@ export default function SettingsPage() {
             </AlertDialog>
           </CardContent>
         </Card>
+        </>)}
       </div>
     </section>
   );
 }
+

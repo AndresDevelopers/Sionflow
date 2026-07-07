@@ -231,7 +231,7 @@ async function callDeepSeek(commits) {
 // ─── Main ───────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('\n📋 QuorumFlow – Changelog Generator');
+  console.log('\n📋 SionFlow – Changelog Generator');
   console.log('─'.repeat(40));
 
   const commits = getCommitsForToday();

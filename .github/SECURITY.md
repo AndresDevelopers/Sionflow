@@ -5,7 +5,7 @@
 Agradecemos los reportes de seguridad de la comunidad. Por favor, sigue estas pautas para reportar vulnerabilidades de seguridad:
 
 1. **No** reportes vulnerabilidades a través de issues públicos o discusiones
-2. Envía un correo a [guachoboy@protonmail.com](mailto:guachoboy@protonmail.com) con el asunto "[SEGURIDAD] Descripción breve"
+2. Usa el sistema de [Security Advisories de GitHub](https://github.com/AndresDevelopers/SionFlow/security/advisories/new)
 3. Incluye una descripción detallada de la vulnerabilidad
 4. Proporciona pasos para reproducir el problema
 5. Si es posible, incluye código de prueba o capturas de pantalla
@@ -28,21 +28,14 @@ Actualmente no hay vulnerabilidades de seguridad conocidas. Si descubres alguna,
 4. Se publica una actualización de seguridad
 5. Se notifica a los usuarios afectados
 
-## 📅 Historial de Seguridad
-
-Se mantendrá un registro de todas las vulnerabilidades reportadas y solucionadas.
-
-## 🌟 Recompensas
-
-Actualmente no ofrecemos un programa de recompensas por errores, pero agradecemos enormemente todas las contribuciones que ayuden a mantener segura nuestra plataforma.
-
 ## 📜 Política de Divulgación Responsable
 
 Seguimos los principios de divulgación responsable. Por favor, permite un tiempo razonable para corregir la vulnerabilidad antes de hacerla pública.
 
 ## 🛡️ Medidas de Seguridad Adicionales
 
-- Revisión de código obligatoria
-- Escaneo automático de dependencias
-- Auditorías de seguridad periódicas
-- Actualizaciones de seguridad programadas
+- Autenticación con Firebase Auth (tokens firmados criptográficamente)
+- Aislamiento multi-tenant por barrio + organización
+- Control de acceso basado en roles
+- Variables de entorno para todos los secretos
+- Logs de auditoría en Firestore

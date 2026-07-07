@@ -2,7 +2,7 @@
 
 > **Actualizado:** 2025-09-28
 
-Este documento ofrece una visión auditada del grado de cumplimiento de las reglas personalizadas solicitadas para QuorumFlow. Se estructura en pilares temáticos. Cada regla se clasifica con uno de los siguientes estados:
+Este documento ofrece una visión auditada del grado de cumplimiento de las reglas personalizadas solicitadas para SionFlow. Se estructura en pilares temáticos. Cada regla se clasifica con uno de los siguientes estados:
 
 - ✅ **Cumplido**: Implementado y verificado.
 - ⚠️ **Parcial**: Existen avances, pero aún queda trabajo para cumplir al 100%.
@@ -68,7 +68,7 @@ Este documento ofrece una visión auditada del grado de cumplimiento de las regl
 | E2E Tests | ❌ | Ausentes. | Integrar Playwright/Cypress con escenarios mobile. |
 | Contract Tests | ❌ | Sin contratos formales entre frontend y funciones. | Definir esquemas compartidos. |
 | Testing Mobile (orientación, gestures, PWA) | ❌ | No hay documentación ni automatización. | Crear plan en `docs/PRUEBAS.md` con checklist mobile. |
-| Static Analysis | ⚠️ | `npm run lint` depende de migración a ESLint CLI. | Completar migración sugerida por Next.js y documentar reglas. |
+| Static Analysis | ⚠️ | `pnpm lint` depende de migración a ESLint CLI. | Completar migración sugerida por Next.js y documentar reglas. |
 | Dependency Analysis | ⚠️ | No se registran escaneos de vulnerabilidades automáticos. | Añadir `npm audit` o herramientas SCA al pipeline. |
 
 ## 7. CI/CD y Observabilidad

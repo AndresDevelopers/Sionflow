@@ -1,100 +1,52 @@
-# Configuración de Build y Dependencias
+# Configuración de Build
 
-Este documento describe la configuración opcional de Sentry y los módulos pre-aprobados en el build.
+## Stack de Build
 
-## Sentry Opcional
+- **Next.js 16** con webpack (no Turbopack)
+- **TypeScript 6.0** con `ignoreBuildErrors: true` (los errores de tipo no bloquean el build)
+- **Source maps**: deshabilitados en desarrollo para evitar conflictos
 
-A partir de esta versión, Sentry es completamente **opcional** en el build. Esto permite reducir el tamaño del bundle y las dependencias cuando no se necesita monitoreo de errores.
+## PWA
 
-### Cómo activar/desactivar Sentry
+La PWA se configura con `@ducanh2912/next-pwa`:
 
-Configura la variable de entorno `SENTRY_ENABLED` en tu `.env.local`:
+- Service worker en `public/sw.js`
+- Custom worker bridge en `worker/` para Firebase Cloud Messaging
+- Deshabilitada en desarrollo (`NODE_ENV === 'development'`)
+- Assets estáticos en `public/`
 
-```env
-# Para desactivar Sentry (default es true)
-SENTRY_ENABLED=false
-```
+## Firebase Cloud Messaging
 
-Si estableces `SENTRY_ENABLED=false`:
-- El módulo `@sentry/nextjs` no será cargado en el build
-- No habrá overhead de Sentry en el bundle
-- Los archivos de configuración de Sentry (`sentry.client.config.ts`, `sentry.edge.config.ts`) existirán pero serán ignorados
+El script `scripts/update-fcm-config.js` se ejecuta antes de cada build (`prebuild`) para inyectar la configuración de Firebase en el service worker.
 
-### Requisitos para Sentry (cuando está habilitado)
+## Dependencias pre-aprobadas
 
-Si `SENTRY_ENABLED` no está establecido o es `true`, necesitas proporcionar:
+En `pnpm-workspace.yaml` se declaran `onlyBuiltDependencies` para módulos que requieren compilación nativa:
 
-```env
-NEXT_PUBLIC_SENTRY_DSN=https://your-dsn@o0.ingest.sentry.io/
-SENTRY_AUTH_TOKEN=your-sentry-auth-token
-SENTRY_ORG=your-org-slug
-SENTRY_PROJECT=your-project-slug
-```
+- `@firebase/util`
+- `esbuild`
+- `protobufjs`
+- `sharp`
 
-Si alguno de estos valores es inválido o no se proporciona, Sentry será automáticamente deshabilitado.
+## Imágenes
 
-## Módulos Pre-aprobados en el Build
+Configuración de `next.config.ts`:
 
-Los siguientes módulos están pre-aprobados para descargar sus componentes nativos durante el build:
+- `unoptimized: true` — las imágenes se sirven sin optimización de Next.js
+- Remote patterns permitidos: `placehold.co`, `picsum.photos`, `firebasestorage.googleapis.com`
 
-- `@firebase/util` - Utilidades de Firebase
-- `@sentry/cli` - CLI de Sentry
-- `esbuild` - Bundler de JavaScript
-- `protobufjs` - Compilación de Protocol Buffers
-- `sharp` - Procesamiento de imágenes
+## Variables de Entorno
 
-Esta configuración se encuentra en `functions/pnpm-workspace.yaml` bajo `ignoredBuiltDependencies`.
+Las variables con prefijo `NEXT_PUBLIC_` se exponen al cliente. Las demás solo están disponibles en el servidor.
 
-## Cambios Realizados
+Ver `.env.example` para la lista completa de variables requeridas.
 
-### 1. `next.config.ts`
-- Sentry ahora es importado dinámicamente
-- Se verifica si `SENTRY_ENABLED` está deshabilitado
-- El módulo `withSentryConfig` solo se aplica si Sentry está disponible y configurado
+## Comandos
 
-### 2. `src/app/error.tsx`
-- Import condicional de Sentry
-- Las excepciones solo se capturan si Sentry está disponible
-
-### 3. `src/app/global-error.tsx`
-- Import condicional de Sentry
-- Manejo seguro de excepciones globales cuando Sentry no está disponible
-
-### 4. `src/lib/sentry-replay-lazy.ts`
-- Import condicional de `getCurrentHub` de Sentry
-- La carga de Session Replay es graceful cuando Sentry no está disponible
-
-### 5. `functions/pnpm-workspace.yaml`
-- Agregados módulos pre-aprobados a `ignoredBuiltDependencies`
-
-### 6. `.env.example`
-- Agregada la variable `SENTRY_ENABLED`
-- Documentado cómo desactivar Sentry
-
-## Impacto en el Build
-
-- **Con Sentry deshabilitado**: Reducción del tamaño del bundle (~40-60KB gzipped)
-- **Dependencias removidas**: @sentry/nextjs, @sentry/replay y sus subdependencias
-- **Mejor tiempo de build**: Menos modules para transpila y bundlear
-
-## Ejemplo de Uso
-
-Para builds sin Sentry (desarrollo local o ambientes sin monitoreo):
-
-```bash
-# En tu .env.local
-SENTRY_ENABLED=false
-npm run build
-```
-
-Para builds con Sentry (producción con monitoreo):
-
-```bash
-# En tu .env.local
-SENTRY_ENABLED=true
-NEXT_PUBLIC_SENTRY_DSN=your-dsn
-SENTRY_AUTH_TOKEN=your-token
-SENTRY_ORG=your-org
-SENTRY_PROJECT=your-project
-npm run build
-```
+| Comando | Descripción |
+|---|---|
+| `pnpm build` | Build de producción (incluye `update-fcm-config`) |
+| `pnpm dev` | Desarrollo en puerto 9001 con webpack |
+| `pnpm start` | Servidor de producción |
+| `pnpm typecheck` | Verificación de tipos |
+| `pnpm lint` | ESLint |

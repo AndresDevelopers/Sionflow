@@ -17,7 +17,7 @@ Este módulo agrega una página de chat enfocada **solo** en contenido oficial d
 - Renderizado básico de formato de respuesta para listas y énfasis markdown (`-`, `*`, `**`).
 - Soporte opcional para subir imagen como contexto.
 - Si se envía imagen, el texto se vuelve opcional.
-- Fallback de modelo automático (`DEEPSEEK_CHAT_MODEL` y luego `deepseek-chat`) para mejorar disponibilidad.
+- Fallback de modelo automático (`DEEPSEEK_CHAT_MODEL` y luego `deepseek-v4-flash`) para mejorar disponibilidad.
 - Restricción temática por *system prompt*:
   - Manuales y textos oficiales de la Iglesia.
   - Evangelio de Jesucristo y Escrituras (Antiguo/Nuevo Testamento) según interpretación oficial de la Iglesia.
