@@ -62,8 +62,8 @@ async function getConvertsWithInfo(barrioOrg: string): Promise<ConvertWithInfo[]
   ] = await Promise.all([
     getDocs(query(convertsCollection, orderBy('baptismDate', 'desc'))),
     getDocs(query(membersCollection, orderBy('baptismDate', 'desc'))),
-    getDocs(query(newConvertFriendsCollection)),
-    getDocs(query(ministeringCollection))
+    getDocs(query(newConvertFriendsCollection, where('barrioOrg', '==', barrioOrg))),
+    getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)))
   ]);
 
   // Filter by barrioOrg client-side (data may be mixed during migration)
