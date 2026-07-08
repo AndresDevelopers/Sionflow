@@ -1,6 +1,6 @@
 'use client';
 
-import { getDocs, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { getDocs, doc, getDoc, updateDoc, query, where } from 'firebase/firestore';
 import { ministeringCollection } from '@/lib/collections';
 import type { Companionship, Family } from '@/lib/types';
 import { useEffect, useState, useRef } from 'react';
@@ -42,7 +42,7 @@ export function UrgentNeedsClient() {
 
   const fetchData = async () => {
     setLoading(true);
-    const snapshot = await getDocs(ministeringCollection);
+    const snapshot = await getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)));
     const families: FamilyWithCompanions[] = [];
     const urgent: UrgentFamily[] = [];
 

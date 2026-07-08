@@ -338,6 +338,8 @@ export default function ServicePage() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -455,6 +457,77 @@ export default function ServicePage() {
               )}
             </TableBody>
           </Table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-lg border p-3 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              ))
+            ) : services.length === 0 ? (
+              <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                No hay servicios registrados.
+              </div>
+            ) : (
+              services.map((item) => (
+                <div key={item.id} className="rounded-lg border p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {format(item.date.toDate(), "d MMM, yyyy", { locale: es })}
+                        {item.time ? `, ${item.time}` : ''}
+                      </p>
+                      {item.description && (
+                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.description}</p>
+                      )}
+                    </div>
+                    {item.imageUrls && item.imageUrls.length > 0 && (
+                      <span className="text-xs text-muted-foreground shrink-0 flex items-center gap-1">
+                        <ImageIcon className="h-3 w-3" />
+                        {item.imageUrls.length}
+                      </span>
+                    )}
+                  </div>
+                  {canWrite && (
+                  <div className="flex items-center gap-1 pt-1 border-t">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                      <Link href={`/service/${item.id}/edit`}><Pencil className="h-4 w-4" /></Link>
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleTransferToActivity(item)} title="Transferir a Actividades">
+                      <ArrowRightLeft className="h-4 w-4 text-blue-500" />
+                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Esta acción no se puede deshacer. Esto eliminará permanentemente el servicio: <strong>{item.title}</strong>.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleDelete(item.id, item.title)} className="bg-destructive hover:bg-destructive/90">
+                            Eliminar
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
     </div>

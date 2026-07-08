@@ -73,6 +73,7 @@ type ChatStoreDocument = {
 };
 
 const MAX_SESSIONS = 25;
+const MAX_MESSAGES_PER_SESSION = 50;
 const SPEECH_LANGUAGE = 'es-ES';
 
 
@@ -135,7 +136,16 @@ const makeSession = (): ChatSession => ({
   messages: [makeInitialAssistantMessage()],
 });
 
-const toBoundedSessions = (sessions: ChatSession[]): ChatSession[] => sessions.slice(0, MAX_SESSIONS);
+const boundSessionMessages = (session: ChatSession): ChatSession => {
+  if (session.messages.length <= MAX_MESSAGES_PER_SESSION) return session;
+  return {
+    ...session,
+    messages: session.messages.slice(-MAX_MESSAGES_PER_SESSION),
+  };
+};
+
+const toBoundedSessions = (sessions: ChatSession[]): ChatSession[] =>
+  sessions.slice(0, MAX_SESSIONS).map(boundSessionMessages);
 
 const getStorageKey = (userId?: string) => `church-chat-sessions-v1-${userId ?? 'guest'}`;
 
@@ -566,6 +576,9 @@ export default function ChurchChatPage() {
           <Button className="w-full" onClick={handleNewChat}>
             <Plus className="mr-2 h-4 w-4" /> Nuevo chat
           </Button>
+          <p className="text-xs text-muted-foreground text-center">
+            {sessions.length} de {MAX_SESSIONS} conversaciones
+          </p>
           <ScrollArea className="h-[420px] rounded-md border p-2">
             <div className="space-y-2">
               {sessions.map((session) => (
@@ -681,6 +694,10 @@ export default function ChurchChatPage() {
               )}
             </div>
           </div>
+
+          <p className="text-xs text-muted-foreground text-center">
+            {activeSession?.messages.length ?? 0} de {MAX_MESSAGES_PER_SESSION} mensajes en esta sesión
+          </p>
 
           <div className="flex gap-2">
             <Input

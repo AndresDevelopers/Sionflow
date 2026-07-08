@@ -513,11 +513,11 @@ function DashboardPage() {
                     </div>
                     
                     {/* Ordinance checkboxes */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
                       {ALL_TEMPLE_ORDINANCES.map((ordinance) => {
                         const isChecked = memberOrdinances.includes(ordinance as TempleOrdinance);
                         return (
-                          <div key={ordinance} className="flex items-center space-x-2">
+                          <div key={ordinance} className="flex items-center space-x-2 min-w-0">
                             <Checkbox
                               id={`${member.id}-${ordinance}`}
                               checked={isChecked}
@@ -525,7 +525,7 @@ function DashboardPage() {
                             />
                             <label
                               htmlFor={`${member.id}-${ordinance}`}
-                              className={`text-sm cursor-pointer ${isChecked ? 'text-green-600 line-through' : 'text-gray-700'}`}
+                              className={`text-sm cursor-pointer truncate ${isChecked ? 'text-green-600 line-through' : 'text-gray-700'}`}
                             >
                               {TempleOrdinanceLabels[ordinance]}
                             </label>

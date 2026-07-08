@@ -1,5 +1,5 @@
 
-import { getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
+import { getDocs, query, where, limit, Timestamp, orderBy } from 'firebase/firestore';
 import {
   convertsCollection,
   futureMembersCollection,
@@ -175,7 +175,12 @@ export async function getDashboardData(barrioOrg: string) {
 }
 
 export async function getMembersByStatus(barrioOrg: string) {
-  const membersSnapshot = await getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg)));
+  const membersSnapshot = await getDocs(query(
+    membersCollection,
+    where('barrioOrg', '==', barrioOrg),
+    // Limit to a reasonable max for stats; beyond this, counts are approximate
+    limit(500)
+  ));
   const members = membersSnapshot.docs
     .map(doc => {
       const memberData = doc.data() as Record<string, any>;

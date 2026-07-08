@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { useRouter } from "next/navigation";
-import { doc, setDoc, getDocs, query, where, writeBatch } from "firebase/firestore";
+import { doc, setDoc, getDocs, query, where, orderBy, limit, writeBatch } from "firebase/firestore";
 import { notificationsCollection } from "@/lib/collections";
 import {
   Popover,
@@ -54,26 +54,33 @@ export function NotificationBell() {
     if (!user) return;
     setLoading(true);
     try {
+      const barrioOrgKey = barrio && organizacion ? `${barrio}|${organizacion}` : null;
+
+      // Query principal: últimas 30 notificaciones del usuario para su barrioOrg
       const q = query(
         notificationsCollection,
-        where("userId", "==", user.uid)
+        where("userId", "==", user.uid),
+        ...(barrioOrgKey ? [where("barrioOrg", "==", barrioOrgKey)] : []),
+        orderBy("createdAt", "desc"),
+        limit(30)
       );
       const snapshot = await getDocs(q);
       const userNotifications = snapshot.docs.map(
         (doc) => ({ id: doc.id, ...doc.data() } as AppNotification)
       );
-      // Filtrar solo notificaciones del barrio y organización del usuario.
-      // Si el usuario tiene scope definido, nunca mostrar notificaciones sin scope o de otro scope.
-      const scopedNotifications = userNotifications.filter((n) => {
-        const [nBarrio, nOrg] = n.barrioOrg ? n.barrioOrg.split("|") : [];
-        if (barrio && organizacion) {
-          return nBarrio === barrio && nOrg === organizacion;
-        }
-        return !n.barrioOrg;
-      });
-      const deduplicated = deduplicateNotifications(scopedNotifications);
+
+      const deduplicated = deduplicateNotifications(userNotifications);
       setNotifications(deduplicated);
-      setHasUnread(deduplicated.some(n => !n.isRead));
+
+      // Query ligera separada: solo contar no leídas, limitando lecturas
+      const unreadQuery = query(
+        notificationsCollection,
+        where("userId", "==", user.uid),
+        ...(barrioOrgKey ? [where("barrioOrg", "==", barrioOrgKey)] : []),
+        where("isRead", "==", false)
+      );
+      const unreadSnapshot = await getDocs(unreadQuery);
+      setHasUnread(unreadSnapshot.size > 0);
     } catch (error) {
       console.error("Error fetching notifications:", error);
     }

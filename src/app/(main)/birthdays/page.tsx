@@ -288,6 +288,8 @@ export default function BirthdaysPage() {
           </div>
         </CardHeader>
         <CardContent>
+          {/* Desktop Table */}
+          <div className="hidden md:block overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -300,6 +302,79 @@ export default function BirthdaysPage() {
               {tableContent}
             </TableBody>
           </Table>
+          </div>
+
+          {/* Mobile Cards */}
+          <div className="md:hidden space-y-3">
+            {loading ? (
+              Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
+                  <Skeleton className="h-10 w-10 rounded-full shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              ))
+            ) : birthdays.length === 0 ? (
+              <div className="h-24 flex items-center justify-center text-muted-foreground text-sm">
+                {t('birthdays.noData')}
+              </div>
+            ) : (
+              birthdays.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 rounded-lg border p-3">
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarImage src={item.photoURL} data-ai-hint="person avatar" />
+                    <AvatarFallback>{item.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {format(item.nextBirthday, "d 'de' LLLL", { locale: es })}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-0.5 shrink-0">
+                    {canWrite && (
+                    <>
+                    {item.isMember ? (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                        <Link href={item.memberId ? buildMemberEditUrl(item.memberId, '/birthdays') : `/members?search=${encodeURIComponent(item.name)}`} title={t('birthdays.editMember')}><Pencil className="h-4 w-4" /></Link>
+                      </Button>
+                    ) : (
+                      <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                        <Link href={`/birthdays/${item.id}/edit`}><Pencil className="h-4 w-4" /></Link>
+                      </Button>
+                    )}
+                    {(item.isMember === false || item.isMember === undefined) && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="Eliminar cumpleaños">
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>{t('birthdays.deleteDialogTitle')}</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {t('birthdays.deleteDialogDescription').replace('{name}', item.name)}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{t('birthdays.cancel')}</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(item)} className="bg-destructive hover:bg-destructive/90">
+                              {t('birthdays.delete')}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                    </>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </CardContent>
       </Card>
 

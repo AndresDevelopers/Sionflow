@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Users, X, Upload, Loader2 } from 'lucide-react';
-import { addDoc, doc, Timestamp, updateDoc, getDocs, query, orderBy } from 'firebase/firestore';
+import { addDoc, doc, Timestamp, updateDoc, getDocs, query, orderBy, where } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { birthdaysCollection, storage, membersCollection } from '@/lib/collections';
 import type { Member } from '@/lib/types';
@@ -135,7 +135,7 @@ export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: B
   useEffect(() => {
     if (isOpen && !isEditMode) {
       setLoadingMembers(true);
-      getDocs(query(membersCollection, orderBy('firstName')))
+      getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg), orderBy('firstName')))
         .then(snapshot => {
           const membersData = snapshot.docs
             .map(doc => {

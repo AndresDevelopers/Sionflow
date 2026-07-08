@@ -664,6 +664,7 @@ export default function CouncilPage() {
           <div>
             <h3 className="mb-2 font-semibold">En los Próximos 7 Días</h3>
             {loading ? <Skeleton className="h-24 w-full" /> : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -695,11 +696,13 @@ export default function CouncilPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             )}
           </div>
           <div>
             <h3 className="mb-2 font-semibold">Servicios Futuros</h3>
             {loading ? <Skeleton className="h-24 w-full" /> : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -724,6 +727,7 @@ export default function CouncilPage() {
                   )}
                 </TableBody>
               </Table>
+              </div>
             )}
           </div>
         </CardContent>
@@ -974,6 +978,7 @@ export default function CouncilPage() {
         </CardHeader>
         <CardContent>
           {loading ? <Skeleton className="h-24 w-full" /> : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1000,6 +1005,7 @@ export default function CouncilPage() {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>

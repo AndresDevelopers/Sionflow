@@ -13,6 +13,7 @@ const bodySchema = z.object({
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEEPSEEK_CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? 'deepseek-v4-flash';
+const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 800;
 const FALLBACK_MODELS = ['deepseek-chat'];
 
 const systemPrompt = `Eres un asistente especializado exclusivamente en temas de La Iglesia de Jesucristo de los Santos de los Últimos Días.
@@ -38,6 +39,16 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(raw);
 
   if (!parsed.success) {
+    const maxInputChars = 3000;
+    const messageIssue = parsed.error.issues.find(
+      (issue) => issue.path[0] === 'message' && issue.code === 'too_big'
+    );
+    if (messageIssue) {
+      return NextResponse.json(
+        { error: `El mensaje excede el límite de ${maxInputChars} caracteres.` },
+        { status: 400 }
+      );
+    }
     return NextResponse.json({ error: 'Solicitud inválida.' }, { status: 400 });
   }
 
@@ -92,6 +103,7 @@ export async function POST(request: Request) {
           model,
           messages,
           temperature: 0.3,
+          max_tokens: DEEPSEEK_MAX_TOKENS,
         }),
       });
 

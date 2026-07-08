@@ -111,18 +111,14 @@ export default function AdminHomePage() {
     const load = async () => {
       try {
         const [usersSnap, membersSnap, activitiesSnap, convertsSnap, futureSnap, birthdaysSnap, servicesSnap] = await Promise.all([
-          getDocs(usersCollection),
-          getDocs(membersCollection),
-          getDocs(activitiesCollection),
-          getDocs(convertsCollection),
-          getDocs(futureMembersCollection),
-          getDocs(birthdaysCollection),
-          getDocs(servicesCollection),
+          getDocs(query(usersCollection, where('barrioOrg', '==', barrioOrg))),
+          getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg))),
+          getDocs(query(activitiesCollection, where('barrioOrg', '==', barrioOrg))),
+          getDocs(query(convertsCollection, where('barrioOrg', '==', barrioOrg))),
+          getDocs(query(futureMembersCollection, where('barrioOrg', '==', barrioOrg))),
+          getDocs(query(birthdaysCollection, where('barrioOrg', '==', barrioOrg))),
+          getDocs(query(servicesCollection, where('barrioOrg', '==', barrioOrg))),
         ]);
-
-        // Helper to filter strictly by barrioOrg
-        const matchesBarrio = (docBarrioOrg?: string) =>
-          docBarrioOrg === barrioOrg;
 
         const usersByRole: Record<UserRole, number> = {
           user: 0,
@@ -135,7 +131,6 @@ export default function AdminHomePage() {
         let totalUsers = 0;
         usersSnap.forEach((d) => {
           const data = d.data();
-          if (!matchesBarrio(data.barrioOrg as string | undefined)) return;
           totalUsers++;
           const r = normalizeRole(data.role);
           usersByRole[r] = (usersByRole[r] || 0) + 1;
@@ -146,7 +141,6 @@ export default function AdminHomePage() {
         let totalMembers = 0;
         membersSnap.forEach((d) => {
           const data = d.data();
-          if (!matchesBarrio(data.barrioOrg as string | undefined)) return;
           totalMembers++;
           const createdAt = data.createdAt as Timestamp | undefined;
           if (createdAt && typeof createdAt.toMillis === "function") {
@@ -154,26 +148,11 @@ export default function AdminHomePage() {
           }
         });
 
-        let totalActivities = 0;
-        activitiesSnap.forEach((d) => {
-          if (matchesBarrio(d.data().barrioOrg as string | undefined)) totalActivities++;
-        });
-        let totalConverts = 0;
-        convertsSnap.forEach((d) => {
-          if (matchesBarrio(d.data().barrioOrg as string | undefined)) totalConverts++;
-        });
-        let totalFuture = 0;
-        futureSnap.forEach((d) => {
-          if (matchesBarrio(d.data().barrioOrg as string | undefined)) totalFuture++;
-        });
-        let totalBirthdays = 0;
-        birthdaysSnap.forEach((d) => {
-          if (matchesBarrio(d.data().barrioOrg as string | undefined)) totalBirthdays++;
-        });
-        let totalServices = 0;
-        servicesSnap.forEach((d) => {
-          if (matchesBarrio(d.data().barrioOrg as string | undefined)) totalServices++;
-        });
+        const totalActivities = activitiesSnap.size;
+        const totalConverts = convertsSnap.size;
+        const totalFuture = futureSnap.size;
+        const totalBirthdays = birthdaysSnap.size;
+        const totalServices = servicesSnap.size;
 
         setStats({
           totalUsers,

@@ -497,7 +497,7 @@ export default function ReportsPage() {
                 </CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <div className="w-40">
                 <Select value={String(selectedYear)} onValueChange={handleYearChange} disabled={availableYears === null}>
                   <SelectTrigger aria-label="Filtrar por año">

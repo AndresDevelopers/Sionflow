@@ -296,13 +296,54 @@ export const NotificationCreators = {
 };
 
 /**
- * Get all user IDs from the system
- * @returns Promise<string[]> - Array of all user IDs
+ * Get all user IDs from the system, optionally filtered by barrioOrg.
+ *
+ * When barrioOrg is provided, filters server-side to avoid downloading all users
+ * (used by createNotificationsForAll and createNewConvertCouncilNotificationsForAll
+ * which are called per-barrio from UI actions like council updates).
+ *
+ * When barrioOrg is NOT provided, fetches ALL users across all barrios.
+ * This is intentional for batch/cron jobs (e.g., sendDeceasedMembersOrdinanceNotifications
+ * which runs weekly via Cloud Functions and needs global scope).
+ *
+ * For production with many users, consider paginating with startAfter() + limit()
+ * when barrioOrg is not provided and user count exceeds ~500.
+ *
+ * @param barrioOrg - Optional barrioOrg scope to filter users
+ * @param opts - Optional pagination options
+ * @param opts.limit - Max users to return (default: no limit)
+ * @param opts.startAfter - Cursor for pagination
+ * @returns Promise<string[]> - Array of user IDs
  */
-export async function getAllUserIds(): Promise<string[]> {
+export async function getAllUserIds(
+  barrioOrg?: string | null,
+  opts?: { limit?: number; startAfter?: string }
+): Promise<string[]> {
   try {
-    const usersSnapshot = await getDocs(usersCollection);
-    return usersSnapshot.docs.map(doc => doc.id);
+    const firestore = await import('firebase/firestore');
+
+    let q: any;
+    if (barrioOrg) {
+      // Server-side filter by barrioOrg for per-barrio operations
+      q = firestore.query(
+        usersCollection,
+        firestore.where('barrioOrg', '==', barrioOrg)
+      );
+    } else {
+      // Global scan — used by batch jobs (cron, deceased members notifications).
+      // Intentional: these jobs need all users across all barrios.
+      // Consider paginating with opts.limit + opts.startAfter if user count grows beyond ~500.
+      q = firestore.query(usersCollection);
+    }
+
+    if (opts?.limit && opts.limit > 0) {
+      q = firestore.query(q, firestore.limit(opts.limit));
+    }
+    // Note: startAfter pagination requires a document snapshot, not a string ID.
+    // For now, this is a hook for future use; callers can pass the last doc snapshot.
+
+    const snapshot = await firestore.getDocs(q);
+    return snapshot.docs.map((doc: any) => doc.id);
   } catch (error) {
     console.error('Error fetching all user IDs:', error);
     return [];
@@ -337,7 +378,7 @@ export async function createNotificationsForAll(
   notificationParams: Omit<CreateNotificationParams, 'userId'>,
   barrioOrg?: string | null
 ): Promise<string[]> {
-  const userIds = await getAllUserIds();
+  const userIds = await getAllUserIds(barrioOrg);
 
   // Filter users to only include those with notifications enabled and matching barrioOrg
   const usersWithNotificationsEnabled: string[] = [];
@@ -360,7 +401,8 @@ export async function createNotificationsForAll(
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
         if (userData) {
-          // Filter by barrioOrg if provided
+          // When barrioOrg was provided, user IDs are already scoped server-side.
+          // Still check barrioOrg match as defense in depth for edge cases.
           if (barrioOrg) {
             const userBarrioOrg = userData.barrioOrg || `${userData.barrio || 'Libertad'}|${userData.organizacion || 'Quórum de Élderes'}`;
             if (userBarrioOrg !== barrioOrg) continue;
@@ -457,7 +499,7 @@ export async function createNewConvertCouncilNotificationsForAll(
   action: string = 'actualizado',
   barrioOrg?: string | null
 ): Promise<string[]> {
-  const userIds = await getAllUserIds();
+  const userIds = await getAllUserIds(barrioOrg);
 
   // Filter users to only include those with in-app notifications enabled and matching barrioOrg
   const usersWithInAppEnabled: string[] = [];
@@ -480,7 +522,8 @@ export async function createNewConvertCouncilNotificationsForAll(
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
         if (userData) {
-          // Filter by barrioOrg if provided
+          // When barrioOrg was provided, user IDs are already scoped server-side.
+          // Still check barrioOrg match as defense in depth for edge cases.
           if (barrioOrg) {
             const userBarrioOrg = userData.barrioOrg || `${userData.barrio || 'Libertad'}|${userData.organizacion || 'Quórum de Élderes'}`;
             if (userBarrioOrg !== barrioOrg) continue;

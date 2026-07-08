@@ -61,7 +61,11 @@ function coerceToTimestamp(value: unknown): Timestamp | null | undefined {
   return undefined;
 }
 
-async function fetchMembers(status?: MemberStatus, barrioOrg?: string): Promise<Member[]> {
+async function fetchMembers(
+  status?: MemberStatus,
+  barrioOrg?: string,
+  opts?: { limit?: number }
+): Promise<Member[]> {
   const db = firestoreAdmin;
   const membersCollection = db.collection('c_miembros');
 
@@ -75,7 +79,13 @@ async function fetchMembers(status?: MemberStatus, barrioOrg?: string): Promise<
     query = query.where('status', '==', status);
   }
 
-  const snapshot = await query.orderBy('lastName').get();
+  query = query.orderBy('lastName');
+
+  if (opts?.limit && opts.limit > 0) {
+    query = query.limit(opts.limit);
+  }
+
+  const snapshot = await query.get();
 
   const members: Member[] = [];
   snapshot.forEach((doc: any) => {
@@ -94,17 +104,17 @@ async function fetchMembers(status?: MemberStatus, barrioOrg?: string): Promise<
 }
 
 // Cache key must include barrioOrg so different wards/orgs don't share cached data
-function getMembersCached(status?: MemberStatus, barrioOrg?: string) {
+function getMembersCached(status?: MemberStatus, barrioOrg?: string, limit?: number) {
   const cacheKey = barrioOrg
-    ? `members-${barrioOrg}-${status || 'all'}`
-    : `members-${status || 'all'}`;
+    ? `members-${barrioOrg}-${status || 'all'}-${limit || 'nolimit'}`
+    : `members-${status || 'all'}-${limit || 'nolimit'}`;
   // Include base 'members' tag for revalidateTag compatibility, plus scoped tag for granular invalidation
   const tags = barrioOrg
     ? ['members', `members-${barrioOrg}`]
     : ['members'];
 
   return unstable_cache(
-    () => fetchMembers(status, barrioOrg),
+    () => fetchMembers(status, barrioOrg, { limit }),
     [cacheKey],
     {
       revalidate: 3600, // 1 hour
@@ -117,11 +127,13 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const status = searchParams.get('status') as MemberStatus | null;
   const barrioOrg = searchParams.get('barrioOrg') || undefined;
+  const limitParam = searchParams.get('limit');
+  const limit = limitParam ? parseInt(limitParam, 10) || undefined : undefined;
 
   try {
     // In development, always fetch fresh data without cache
     if (process.env.NODE_ENV !== 'production') {
-      const members = await fetchMembers(status || undefined, barrioOrg);
+      const members = await fetchMembers(status || undefined, barrioOrg, { limit });
       const response = NextResponse.json(members);
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       response.headers.set('Pragma', 'no-cache');
@@ -130,7 +142,7 @@ export async function GET(request: Request) {
     }
 
     // Use cached version only in production
-    const members = await getMembersCached(status || undefined, barrioOrg);
+    const members = await getMembersCached(status || undefined, barrioOrg, limit);
     return NextResponse.json(members);
   } catch (error) {
     console.error('❌ Detailed error in /api/members:', {
