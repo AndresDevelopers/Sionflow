@@ -6,19 +6,19 @@
       "date": "2026-07-08",
       "changes": {
         "es": [
+          "Actualización: Fix Firestore filtering and add max tokens env config.",
+          "Actualización: Auto-update changelog [skip ci].",
           "Actualización: Various app improvements and bug fixes.",
           "Actualización: Auto-update changelog [skip ci].",
           "Actualización: Add responsive UI, donation note fix bugs.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Improve date handling and form UI.",
           "Actualización: Auto-update changelog [skip ci]."
         ],
         "en": [
+          "Update: Fix Firestore filtering and add max tokens env config.",
+          "Update: Auto-update changelog [skip ci].",
           "Update: Various app improvements and bug fixes.",
           "Update: Auto-update changelog [skip ci].",
           "Update: Add responsive UI, donation note fix bugs.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Improve date handling and form UI.",
           "Update: Auto-update changelog [skip ci]."
         ]
       }
