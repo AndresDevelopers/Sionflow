@@ -6,19 +6,19 @@
       "date": "2026-07-08",
       "changes": {
         "es": [
+          "Actualización: Add responsive UI, donation note fix bugs.",
+          "Actualización: Auto-update changelog [skip ci].",
           "Actualización: Improve date handling and form UI.",
           "Actualización: Auto-update changelog [skip ci].",
           "Actualización: Add sealed parent ordinances, update member form and Firestore.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Add member status tracking, push, and UI improvements.",
           "Actualización: Auto-update changelog [skip ci]."
         ],
         "en": [
+          "Update: Add responsive UI, donation note fix bugs.",
+          "Update: Auto-update changelog [skip ci].",
           "Update: Improve date handling and form UI.",
           "Update: Auto-update changelog [skip ci].",
           "Update: Add sealed parent ordinances, update member form and Firestore.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Add member status tracking, push, and UI improvements.",
           "Update: Auto-update changelog [skip ci]."
         ]
       }
