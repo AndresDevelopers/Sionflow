@@ -9,6 +9,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useI18n } from "@/contexts/i18n-context";
 
@@ -56,8 +57,12 @@ export function DisclaimerPopup({ persistent = false }: DisclaimerPopupProps) {
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("disclaimer.title")}</AlertDialogTitle>
-          <AlertDialogDescription>
-            {t("disclaimer.description")}
+          <AlertDialogDescription className="space-y-3">
+            <p>{t("disclaimer.description")}</p>
+            <p className="flex items-start gap-2 text-amber-600 dark:text-amber-400">
+              <Eye className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t("disclaimer.observation")}</span>
+            </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

@@ -480,5 +480,6 @@
   "settings.security.updateEmailButton": "Actualizar correo",
   "disclaimer.title": "Aplicación No Oficial",
   "disclaimer.description": "Esta aplicación NO es oficial de La Iglesia de Jesucristo de los Santos de los Últimos Días. Está diseñada exclusivamente para uso de líderes del Quórum de Élderes y la Sociedad de Socorro como herramienta de apoyo en sus llamamientos.",
+  "disclaimer.observation": "Toda la información mostrada aquí es ingresada manualmente por el secretario. Esta app no se conecta con los sistemas oficiales de la Iglesia, por lo que los datos dependen completamente del registro local.",
   "disclaimer.dismiss": "Entendido"
 }

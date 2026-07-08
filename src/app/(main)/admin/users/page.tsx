@@ -125,6 +125,7 @@ export default function AdminUsersPage() {
   const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<UserData | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [savedVisibilityUids, setSavedVisibilityUids] = useState<Set<string>>(new Set());
 
   const defaultVisiblePages = useMemo(
     () => navigationItems.map((item) => item.href),
@@ -189,19 +190,30 @@ export default function AdminUsersPage() {
     setFiltered(list);
   }, [users, search, roleFilter]);
 
+  const getDefaultVisiblePages = (role: UserRole): string[] => {
+    if (role === "user") return [];
+    return defaultVisiblePages;
+  };
+
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
     setIsSaving(userId);
     try {
       const normalized = normalizeRole(newRole);
       const defaultPerm = getDefaultPermission(normalized);
+      const defaultPages = getDefaultVisiblePages(normalized);
       const target = users.find((u) => u.uid === userId);
       await updateDoc(doc(usersCollection, userId), {
         role: normalized,
         permission: defaultPerm,
+        visiblePages: defaultPages,
         updatedAt: Timestamp.now(),
       });
       setUsers((prev) =>
-        prev.map((u) => (u.uid === userId ? { ...u, role: normalized, permission: defaultPerm } : u))
+        prev.map((u) =>
+          u.uid === userId
+            ? { ...u, role: normalized, permission: defaultPerm, visiblePages: defaultPages }
+            : u
+        )
       );
       if (firebaseUser) {
         await logAdminAction({
@@ -302,21 +314,43 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleVisibilityToggle = (
+  const handleVisibilityToggle = async (
     userId: string,
     href: string,
     checked: boolean
   ) => {
+    const user = users.find((u) => u.uid === userId);
+    if (!user || user.role === "user") return;
+
+    const current = user.visiblePages ?? [];
+    const next = checked
+      ? Array.from(new Set([...current, href]))
+      : current.filter((h) => h !== href);
+
     setUsers((prev) =>
-      prev.map((u) => {
-        if (u.uid !== userId) return u;
-        const current = u.visiblePages ?? [];
-        const next = checked
-          ? Array.from(new Set([...current, href]))
-          : current.filter((h) => h !== href);
-        return { ...u, visiblePages: next };
-      })
+      prev.map((u) => (u.uid === userId ? { ...u, visiblePages: next } : u))
     );
+
+    try {
+      await updateDoc(doc(usersCollection, userId), {
+        visiblePages: next,
+        updatedAt: Timestamp.now(),
+      });
+      setSavedVisibilityUids((prev) => {
+        const nextSet = new Set(prev);
+        nextSet.add(userId);
+        return nextSet;
+      });
+      setTimeout(() => {
+        setSavedVisibilityUids((prev) => {
+          const nextSet = new Set(prev);
+          nextSet.delete(userId);
+          return nextSet;
+        });
+      }, 1500);
+    } catch (err) {
+      logger.error({ error: err, message: "Error updating visibility" });
+    }
   };
 
   const handleBulkRole = async () => {
@@ -324,17 +358,23 @@ export default function AdminUsersPage() {
     setIsBulkSaving(true);
     try {
       const defaultPerm = getDefaultPermission(bulkRole);
+      const defaultPages = getDefaultVisiblePages(bulkRole);
       const promises = Array.from(selectedUids).map((uid) =>
         updateDoc(doc(usersCollection, uid), {
           role: bulkRole,
           permission: defaultPerm,
+          visiblePages: defaultPages,
           updatedAt: Timestamp.now(),
         })
       );
       await Promise.all(promises);
       const targetUids = Array.from(selectedUids);
       setUsers((prev) =>
-        prev.map((u) => (selectedUids.has(u.uid) ? { ...u, role: bulkRole, permission: defaultPerm } : u))
+        prev.map((u) =>
+          selectedUids.has(u.uid)
+            ? { ...u, role: bulkRole, permission: defaultPerm, visiblePages: defaultPages }
+            : u
+        )
       );
       if (firebaseUser) {
         await logAdminAction({
@@ -667,7 +707,7 @@ export default function AdminUsersPage() {
                             onValueChange={(v) =>
                               handlePermissionChange(user.uid, v as UserPermission)
                             }
-                            disabled={isSaving === user.uid}
+                            disabled={isSaving === user.uid || user.role === "user"}
                           >
                             <SelectTrigger className="h-9 w-full">
                               <SelectValue />
@@ -683,8 +723,13 @@ export default function AdminUsersPage() {
                         </TableCell>
                         <TableCell>
                           <details className="text-xs">
-                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                              {user.visiblePages.length} páginas
+                            <summary className="cursor-pointer text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5">
+                              <span>{user.visiblePages.length} páginas</span>
+                              {savedVisibilityUids.has(user.uid) && (
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in">
+                                  ✓ Guardado
+                                </span>
+                              )}
                             </summary>
                             <div className="mt-2 flex flex-col gap-1.5">
                               {navigationItems
@@ -692,7 +737,9 @@ export default function AdminUsersPage() {
                                 .map((item) => (
                                 <label
                                   key={item.href}
-                                  className="flex items-center gap-2 rounded border px-2 py-1"
+                                  className={`flex items-center gap-2 rounded border px-2 py-1 ${
+                                    user.role === "user" ? "opacity-50" : ""
+                                  }`}
                                 >
                                   <Checkbox
                                     checked={user.visiblePages.includes(item.href)}
@@ -703,6 +750,7 @@ export default function AdminUsersPage() {
                                         v === true
                                       )
                                     }
+                                    disabled={user.role === "user"}
                                   />
                                   <span>{item.label}</span>
                                 </label>
@@ -718,6 +766,7 @@ export default function AdminUsersPage() {
                                       defaultVisiblePages
                                     )
                                   }
+                                  disabled={user.role === "user"}
                                 >
                                   Todo
                                 </Button>
@@ -726,6 +775,7 @@ export default function AdminUsersPage() {
                                   variant="outline"
                                   className="h-7 text-xs"
                                   onClick={() => updateUserVisibility(user.uid, [])}
+                                  disabled={user.role === "user"}
                                 >
                                   Ninguno
                                 </Button>
@@ -857,7 +907,7 @@ export default function AdminUsersPage() {
                               onValueChange={(v) =>
                                 handlePermissionChange(user.uid, v as UserPermission)
                               }
-                              disabled={isSaving === user.uid}
+                              disabled={isSaving === user.uid || user.role === "user"}
                             >
                               <SelectTrigger className="h-9 w-full">
                                 <SelectValue />
@@ -877,8 +927,13 @@ export default function AdminUsersPage() {
                         <div>
                           <Label className="text-xs text-muted-foreground">Visibilidad</Label>
                           <details className="mt-1 text-xs">
-                            <summary className="cursor-pointer text-primary hover:underline">
-                              {user.visiblePages.length} páginas visibles
+                            <summary className="cursor-pointer text-primary hover:underline inline-flex items-center gap-1.5">
+                              <span>{user.visiblePages.length} páginas visibles</span>
+                              {savedVisibilityUids.has(user.uid) && (
+                                <span className="text-emerald-600 dark:text-emerald-400 font-medium animate-in fade-in">
+                                  ✓ Guardado
+                                </span>
+                              )}
                             </summary>
                             <div className="mt-2 flex flex-col gap-1.5">
                               {navigationItems
@@ -886,7 +941,9 @@ export default function AdminUsersPage() {
                                 .map((item) => (
                                 <label
                                   key={item.href}
-                                  className="flex items-center gap-2 rounded border px-2 py-1"
+                                  className={`flex items-center gap-2 rounded border px-2 py-1 ${
+                                    user.role === "user" ? "opacity-50" : ""
+                                  }`}
                                 >
                                   <Checkbox
                                     checked={user.visiblePages.includes(item.href)}
@@ -897,6 +954,7 @@ export default function AdminUsersPage() {
                                         v === true
                                       )
                                     }
+                                    disabled={user.role === "user"}
                                   />
                                   <span>{item.label}</span>
                                 </label>
@@ -912,6 +970,7 @@ export default function AdminUsersPage() {
                                       defaultVisiblePages
                                     )
                                   }
+                                  disabled={user.role === "user"}
                                 >
                                   Todo
                                 </Button>
@@ -920,6 +979,7 @@ export default function AdminUsersPage() {
                                   variant="outline"
                                   className="h-7 text-xs"
                                   onClick={() => updateUserVisibility(user.uid, [])}
+                                  disabled={user.role === "user"}
                                 >
                                   Ninguno
                                 </Button>

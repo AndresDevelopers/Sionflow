@@ -411,5 +411,6 @@
   "settings.security.updateEmailButton": "Update email",
   "disclaimer.title": "Unofficial App",
   "disclaimer.description": "This application is NOT an official app of The Church of Jesus Christ of Latter-day Saints. It is designed exclusively for use by Elders Quorum and Relief Society leaders as a support tool in their callings.",
+  "disclaimer.observation": "All information shown here is entered manually by the secretary. This app does not connect to the Church's official systems, so all data depends entirely on local record-keeping.",
   "disclaimer.dismiss": "I Understand"
 }
