@@ -1,6 +1,18 @@
 {
-  "current": "1.1.25",
+  "current": "1.1.26",
   "entries": [
+    {
+      "version": "1.1.26",
+      "date": "2026-07-08",
+      "changes": {
+        "es": [
+          "Actualización: Add disclaimer, update branding, clean up scripts."
+        ],
+        "en": [
+          "Update: Add disclaimer, update branding, clean up scripts."
+        ]
+      }
+    },
     {
       "version": "1.1.25",
       "date": "2026-07-07",
