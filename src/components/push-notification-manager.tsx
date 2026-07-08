@@ -26,6 +26,8 @@ import {
   getCurrentPushSubscriptionTarget,
   saveCurrentPushSubscription,
 } from '@/lib/push-subscription';
+import { doc, setDoc } from 'firebase/firestore';
+import { usersCollection } from '@/lib/collections';
 
 export function PushNotificationManager() {
   const { user } = useAuth();
@@ -108,6 +110,13 @@ export function PushNotificationManager() {
 
       await saveCurrentPushSubscription(user.uid, fcmToken);
 
+      // Sincronizar pushNotificationsEnabled en c_users para que las Cloud Functions
+      // puedan determinar la elegibilidad de push del usuario.
+      const userDocRef = doc(usersCollection, user.uid);
+      await setDoc(userDocRef, {
+        pushNotificationsEnabled: true
+      }, { merge: true });
+
       setIsSubscribed(true);
       toast({
         title: "Notificaciones Activadas",
@@ -149,6 +158,12 @@ export function PushNotificationManager() {
       await deleteNotificationToken();
 
       await clearCurrentPushSubscription(user.uid);
+
+      // Desactivar pushNotificationsEnabled en c_users
+      const userDocRef = doc(usersCollection, user.uid);
+      await setDoc(userDocRef, {
+        pushNotificationsEnabled: false
+      }, { merge: true });
 
       setIsSubscribed(false);
       toast({

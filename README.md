@@ -10,8 +10,8 @@ Aplicación web moderna (PWA) diseñada para las presidencias del Quórum de Él
 
 | Módulo | Qué hace |
 |---|---|
-| **Dashboard** | KPIs del quórum, resumen generado por IA, actividades próximas, cumpleaños, miembros fallecidos con obra vicaria pendiente |
-| **Miembros** | CRUD de élderes, estados (activo/menos activo/inactivo/fallecido), ordenanzas, asignaciones ministeriales |
+| **Dashboard** | KPIs, resumen generado por IA, actividades próximas, cumpleaños, miembros fallecidos con obra vicaria pendiente |
+| **Miembros** | CRUD de miembros, incluyendo estados (activo/menos activo/inactivo/fallecido), ordenanzas, asignaciones ministeriales |
 | **Observaciones** | Preocupaciones de salud con helpers asignados |
 | **Conversos** | Seguimiento de conversos recientes (ventana de 24 meses), acciones del consejo |
 | **Futuros Miembros** | Fechas de bautismo programadas, marcar como bautizado, fotos de bautismo |
@@ -113,7 +113,6 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=tu_vapid_key
 
 ```bash
 pnpm dev          # Next.js en puerto 9001
-pnpm genkit:dev   # Google Genkit UI para flujos de IA
 ```
 
 ---
@@ -127,8 +126,6 @@ pnpm genkit:dev   # Google Genkit UI para flujos de IA
 | `pnpm start` | Servidor de producción |
 | `pnpm lint` | ESLint |
 | `pnpm typecheck` | Verificación de tipos (tsc --noEmit) |
-| `pnpm genkit:dev` | Genkit dev UI |
-| `pnpm genkit:watch` | Genkit con hot reload |
 | `pnpm test:roles` | Tests del sistema de roles |
 | `pnpm changelog` | Generar changelog |
 | `pnpm setup-hooks` | Configurar git hooks |
@@ -190,7 +187,7 @@ La app integra **DeepSeek** (`deepseek-v4-flash`) para:
 - **Sugerencias de actividades y servicio**: recomendaciones basadas en datos del quórum
 - **Chat Iglesia**: chat conversacional con contexto eclesiástico
 
-**Google Genkit** se usa como tooling de desarrollo para prototipar y depurar flujos de IA localmente (`pnpm genkit:dev`).
+Los flujos de IA usan DeepSeek como proveedor a través de `@/lib/deepseek`.
 
 ---
 
