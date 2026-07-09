@@ -27,7 +27,7 @@ export async function GET() {
   const manifest = {
     name: appName,
     short_name: shortName,
-    description: "Sistema completo de gestión para la presidencia del quórum.",
+    description: "Sistema de gestión integral para presidencias del Quorum de Elderes y Sociedad de Socorro.",
     start_url: "/",
     display: "standalone",
     orientation: "portrait-primary",
@@ -48,7 +48,7 @@ export async function GET() {
       {
         name: "Miembros",
         short_name: "Miembros",
-        description: "Gestionar miembros del quórum",
+        description: "Gestionar miembros del quórum y sociedad de socorro",
         url: "/members",
         icons: [{ src: LOCAL_ICON, sizes: "96x96" }],
       },

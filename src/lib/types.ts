@@ -240,7 +240,11 @@ export type TempleOrdinance =
     | 'endowment'
     | 'sealed_to_father'
     | 'sealed_to_mother'
-    | 'sealed_to_spouse';
+    | 'sealed_to_spouse'
+    | 'sealed_spouse'
+    | 'elder_ordination'
+    | 'high_priest_ordination'
+    | 'aronico_ordination';
 
 export const TempleOrdinanceLabels: Record<TempleOrdinance, string> = {
     baptism: 'Bautismo',
@@ -249,7 +253,11 @@ export const TempleOrdinanceLabels: Record<TempleOrdinance, string> = {
     endowment: 'Investidura',
     sealed_to_father: 'Sellamiento al padre',
     sealed_to_mother: 'Sellamiento a la madre',
-    sealed_to_spouse: 'Sellamiento al cónyuge'
+    sealed_to_spouse: 'Sellamiento al cónyuge',
+    sealed_spouse: 'Sellado(a) al cónyuge',
+    elder_ordination: 'Ordenado élder',
+    high_priest_ordination: 'Ordenado sumo sacerdote',
+    aronico_ordination: 'Ordenado Aarónico'
 };
 
 export type Member = {

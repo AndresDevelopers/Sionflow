@@ -87,6 +87,11 @@ const ACTION_META: Record<
     icon: ShieldAlert,
     color: "bg-violet-500/10 text-violet-700 dark:text-violet-300",
   },
+  "user.deleted": {
+    label: "Usuario eliminado",
+    icon: Trash2,
+    color: "bg-rose-500/10 text-rose-700 dark:text-rose-300",
+  },
 };
 
 export default function AdminAuditPage() {

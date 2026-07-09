@@ -204,14 +204,14 @@ export function AnnotationManager({
     return (
         <>
             <section>
-                <div className="flex justify-between items-center mb-4">
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
                     <div>
                         <h2 className="text-xl font-semibold">{title}</h2>
                         <p className="text-sm text-muted-foreground">{description}</p>
                     </div>
                     <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
                         <DialogTrigger asChild>
-                            <Button size="sm">
+                            <Button size="sm" className="w-full sm:w-auto">
                                 <PlusCircle className="mr-2 h-4 w-4" />
                                 {buttonText}
                             </Button>
@@ -262,9 +262,9 @@ export function AnnotationManager({
                         {items.map((item) => (
                             <li
                                 key={item.id}
-                                className="flex items-center justify-between gap-3 p-3 border rounded-md"
+                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 border rounded-md"
                             >
-                                <div className="flex items-center gap-3 flex-1">
+                                <div className="flex items-center gap-3 flex-1 min-w-0">
                                     {showCheckbox && onToggle && (
                                         <Checkbox
                                             id={item.id}
@@ -273,7 +273,7 @@ export function AnnotationManager({
                                             disabled={isPending}
                                         />
                                     )}
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <Label
                                             htmlFor={item.id}
                                             className={item.isCompleted ? 'line-through text-muted-foreground' : ''}
@@ -287,7 +287,7 @@ export function AnnotationManager({
                                         )}
                                     </div>
                                 </div>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 sm:shrink-0">
                                     {showResolveButton && onResolve && (
                                         <Button
                                             variant="outline"

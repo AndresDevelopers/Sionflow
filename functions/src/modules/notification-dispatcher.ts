@@ -157,6 +157,20 @@ function sanitizeDocIdPart(input: string): string {
   return input.replace(/\//g, "_").trim();
 }
 
+/**
+ * Sanitiza un string para usarlo como FCM analyticsLabel.
+ * FCM solo acepta: [a-zA-Z0-9-_.~%]
+ * Reemplaza caracteres inválidos (espacios, pipes, tildes, etc.) por guiones.
+ */
+function sanitizeAnalyticsLabel(label: string): string {
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // quita tildes
+    .replace(/[^a-zA-Z0-9\-_.~%]/g, "-") // reemplaza caracteres inválidos
+    .replace(/-{2,}/g, "-") // colapsa múltiples guiones
+    .replace(/^-|-$/g, ""); // quita guiones al inicio/final
+}
+
 class FcmRepository {
   private readonly collection: FirestoreNamespace.CollectionReference;
 
@@ -296,7 +310,7 @@ class FcmRepository {
               },
             },
             fcmOptions: {
-              analyticsLabel: payload.tag ?? "app-notification",
+              analyticsLabel: sanitizeAnalyticsLabel(payload.tag ?? "app-notification"),
             },
           },
           // ── Web (PWA) ─────────────────────────────────────────────────────

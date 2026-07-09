@@ -359,7 +359,7 @@ const ConsejoPage: React.FC = () => {
                   />
                 )}
                 <div className="flex flex-col flex-1">
-                  <div className="flex justify-between items-start">
+                  <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-2">
                     <div>
                       <span className="font-bold text-base mb-0.5 block">
                         {convert.name}
@@ -368,7 +368,7 @@ const ConsejoPage: React.FC = () => {
                         Bautismo: {convert.baptismDate?.toDate().toLocaleDateString('es-ES')}
                       </span>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100" asChild>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-gray-500 hover:text-gray-700 hover:bg-gray-100 shrink-0" asChild>
                       <Link href={convert.id.startsWith('member_')
                         ? `/members/${convert.id.substring(7)}`
                         : convert.memberId

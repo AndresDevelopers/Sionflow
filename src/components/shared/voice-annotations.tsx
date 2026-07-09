@@ -206,7 +206,7 @@ export function VoiceAnnotations({
     <>
       <Card>
         <CardHeader>
-          <div className="flex flex-wrap justify-between items-start gap-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
             <div className="flex items-start gap-3 min-w-0">
               <NotebookPen className="h-8 w-8 text-primary shrink-0" />
               <div className="min-w-0">
@@ -217,7 +217,7 @@ export function VoiceAnnotations({
             {canWrite && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button className="shrink-0">
+                <Button className="shrink-0 w-full sm:w-auto">
                   <PlusCircle className="mr-2 h-4 w-4" />
                   Anotacion
                 </Button>
@@ -265,7 +265,7 @@ export function VoiceAnnotations({
               {annotations.map((item) => (
                 <li
                   key={item.id}
-                  className="flex flex-wrap items-center justify-between rounded-md border p-3 gap-2"
+                  className="flex flex-col sm:flex-row sm:items-start sm:justify-between rounded-md border p-3 gap-3"
                 >
                   <div className="flex items-start gap-3 min-w-0 flex-1">
                     {!showCouncilView && (
@@ -292,7 +292,7 @@ export function VoiceAnnotations({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center justify-end gap-1 sm:shrink-0">
                     {showCouncilView && onResolveAnnotation && (
                       <Button
                         variant="outline"

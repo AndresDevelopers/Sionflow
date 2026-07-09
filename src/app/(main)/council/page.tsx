@@ -893,7 +893,7 @@ export default function CouncilPage() {
                 {councilConverts.map((item) => (
                   <Card key={item.id} className={item.councilCompleted ? 'bg-green-500/10' : ''}>
                     <CardContent className="pt-4 space-y-4">
-                      <div className="flex justify-between items-start">
+                      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
                         <div className="flex items-center gap-3">
                           {item.photoURL ? (
                             <Image
@@ -909,13 +909,13 @@ export default function CouncilPage() {
                             </div>
                           )}
                           <div>
-                            <p className="font-bold text-foreground">{item.firstName} {item.lastName}</p>
+                            <p className="font-bold text-foreground break-words">{item.firstName} {item.lastName}</p>
                             <p className="text-sm text-muted-foreground">
                               Bautismo: {item.baptismDate ? format(item.baptismDate.toDate(), 'd LLL yyyy', { locale: es }) : 'N/A'}
                             </p>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center justify-end gap-2 sm:shrink-0">
                           <Button variant="ghost" size="icon" asChild>
                             <Link href={`/members/${item.id}`}>
                               <Eye className="h-4 w-4" />

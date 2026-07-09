@@ -59,3 +59,28 @@ export function getAppStoragePrefix(): string {
 export function getAppNotificationTag(): string {
   return `${getAppStoragePrefix()}-notification`;
 }
+
+/** Descripción de la app para SEO, OG y metadata. */
+export function getAppDescription(): string {
+  if (typeof window !== "undefined") {
+    return (
+      (process.env as Record<string, string>).NEXT_PUBLIC_APP_DESCRIPTION ||
+      "Sistema de gestión para presidencias de Quorum de Elderes y Sociedad de Socorro. Administración de miembros, conversos, ministerio, obra misional, informes y consejo con IA integrada."
+    );
+  }
+  return (
+    process.env.NEXT_PUBLIC_APP_DESCRIPTION ||
+    "Sistema de gestión para presidencias de Quorum de Elderes y Sociedad de Socorro. Administración de miembros, conversos, ministerio, obra misional, informes y consejo con IA integrada."
+  );
+}
+
+/** URL canónica del sitio para SEO, sitemaps y OG. */
+export function getSiteUrl(): string {
+  if (typeof window !== "undefined") {
+    return (
+      (process.env as Record<string, string>).NEXT_PUBLIC_SITE_URL ||
+      "https://sionflow.dev"
+    );
+  }
+  return process.env.NEXT_PUBLIC_SITE_URL || "https://sionflow.dev";
+}
