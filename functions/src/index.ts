@@ -2394,23 +2394,44 @@ export const weeklyNotifications = functions.pubsub
             }
         }
 
-        // ── Conversos ────────────────────────────────────────────────────────
+        // ── Conversos (derivados de c_miembros.baptismDate, últimos 24 meses) ─
         const convertsTrace = buildNotificationTrace("weeklyNotifications", "converts");
         {
-            const [convertsSnap, friendsSnap] = await Promise.all([
-                firestore.collection("c_conversos").get(),
+            const cutoff = new Date();
+            cutoff.setMonth(cutoff.getMonth() - 24);
+            const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
+
+            const [membersSnap, friendsSnap, convertInfoSnap] = await Promise.all([
+                firestore.collection("c_miembros")
+                    .where("baptismDate", ">=", cutoffTs)
+                    .get(),
                 firestore.collection("c_obra_misional_amigos_conversos").get(),
+                firestore.collection("c_conversos_info").get(),
             ]);
 
             const assignedFriendConvertIds = new Set<string>();
-            friendsSnap.forEach((doc) => {
-                const f = doc.data() as { convertId?: string; friends?: string[] };
+            friendsSnap.forEach((docSnap) => {
+                const f = docSnap.data() as { convertId?: string; friends?: string[] };
                 if (f.convertId && Array.isArray(f.friends) && f.friends.length > 0) {
                     assignedFriendConvertIds.add(f.convertId);
                 }
             });
 
-            // Group convert stats by barrioOrg
+            const convertInfoById = new Map<string, {
+                calling?: string;
+                recommendationActive?: boolean;
+                selfRelianceCourse?: boolean;
+                notes?: string;
+            }>();
+            convertInfoSnap.forEach((docSnap) => {
+                convertInfoById.set(docSnap.id, docSnap.data() as {
+                    calling?: string;
+                    recommendationActive?: boolean;
+                    selfRelianceCourse?: boolean;
+                    notes?: string;
+                });
+            });
+
             interface ConvertStats {
                 total: number;
                 conObservacion: number;
@@ -2432,21 +2453,36 @@ export const weeklyNotifications = functions.pubsub
                 return convertStatsByBarrioOrg.get(key)!;
             };
 
-            convertsSnap.forEach((doc) => {
-                const c = doc.data() as {
-                    observation?: string; ministeringTeachers?: string[];
-                    hasCalling?: boolean; hasRecommendation?: boolean;
-                    hasSelfReliance?: boolean; barrioOrg?: string;
+            membersSnap.forEach((docSnap) => {
+                const m = docSnap.data() as {
+                    status?: string;
+                    baptismDate?: admin.firestore.Timestamp;
+                    ministeringTeachers?: string[];
+                    barrioOrg?: string;
+                    inactiveObservation?: string;
                 };
-                const key = c.barrioOrg || "unknown";
+                const status = String(m.status || "").toLowerCase();
+                if (["deceased", "fallecido", "fallecida"].includes(status)) return;
+                if (!m.baptismDate?.toDate || m.baptismDate.toDate() <= cutoff) return;
+
+                const convertId = `member_${docSnap.id}`;
+                const info = convertInfoById.get(convertId);
+                const key = m.barrioOrg || "unknown";
                 const s = getConvStats(key);
                 s.total++;
-                if (c.observation?.trim()) s.conObservacion++;
-                if (!assignedFriendConvertIds.has(doc.id)) s.sinAmigo++;
-                if (!Array.isArray(c.ministeringTeachers) || c.ministeringTeachers.length === 0) s.sinMinistrantesMaestros++;
-                if (c.hasCalling === false) s.sinLlamamiento++;
-                if (c.hasRecommendation === false) s.sinRecomendacion++;
-                if (c.hasSelfReliance === false) s.sinAutosuficiencia++;
+                if (info?.notes?.trim() || m.inactiveObservation?.trim()) s.conObservacion++;
+                if (
+                    !assignedFriendConvertIds.has(convertId) &&
+                    !assignedFriendConvertIds.has(docSnap.id)
+                ) {
+                    s.sinAmigo++;
+                }
+                if (!Array.isArray(m.ministeringTeachers) || m.ministeringTeachers.length === 0) {
+                    s.sinMinistrantesMaestros++;
+                }
+                if (!info?.calling?.trim()) s.sinLlamamiento++;
+                if (info?.recommendationActive !== true) s.sinRecomendacion++;
+                if (info?.selfRelianceCourse !== true) s.sinAutosuficiencia++;
             });
 
             for (const [barrioOrg, s] of convertStatsByBarrioOrg.entries()) {
@@ -2514,10 +2550,14 @@ export const weeklyNotifications = functions.pubsub
         // ── Obra Misional ─────────────────────────────────────────────────────
         const missionaryWorkTrace = buildNotificationTrace("weeklyNotifications", "missionaryWork");
         {
-            const [assignmentsSnap, investigatorsSnap, convertsThisWeek] = await Promise.all([
+            const mwCutoff = new Date();
+            mwCutoff.setMonth(mwCutoff.getMonth() - 24);
+            const mwCutoffTs = admin.firestore.Timestamp.fromDate(mwCutoff);
+
+            const [assignmentsSnap, investigatorsSnap, recentConvertMembersSnap] = await Promise.all([
                 firestore.collection("c_obra_misional_asignaciones").where("isCompleted", "==", false).get(),
                 firestore.collection("c_obra_misional_investigadores").where("status", "==", "active").get(),
-                firestore.collection("c_conversos").get(),
+                firestore.collection("c_miembros").where("baptismDate", ">=", mwCutoffTs).get(),
             ]);
 
             interface MwStats {
@@ -2543,8 +2583,15 @@ export const weeklyNotifications = functions.pubsub
                 const key = data.barrioOrg || "unknown";
                 getMwStats(key).activeInvestigators++;
             });
-            convertsThisWeek.forEach((doc) => {
-                const data = doc.data() as { barrioOrg?: string };
+            recentConvertMembersSnap.forEach((doc) => {
+                const data = doc.data() as {
+                    barrioOrg?: string;
+                    status?: string;
+                    baptismDate?: admin.firestore.Timestamp;
+                };
+                const status = String(data.status || "").toLowerCase();
+                if (["deceased", "fallecido", "fallecida"].includes(status)) return;
+                if (!data.baptismDate?.toDate || data.baptismDate.toDate() <= mwCutoff) return;
                 const key = data.barrioOrg || "unknown";
                 getMwStats(key).totalConverts++;
             });

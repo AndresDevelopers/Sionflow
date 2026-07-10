@@ -1,80 +1,37 @@
-
 'use client';
 
-import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
-import { convertsCollection } from '@/lib/collections';
-import type { Convert } from '@/lib/types';
-import { ConvertForm } from '../../ConvertForm';
-import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/contexts/auth-context';
+import { useEffect } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import { parseMemberIdFromConvertId } from '@/lib/converts-from-members';
+import { buildMemberEditUrl } from '@/lib/navigation';
 import { useI18n } from '@/contexts/i18n-context';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Skeleton } from '@/components/ui/skeleton';
 
+/**
+ * Edición de converso = editar el miembro (fecha de bautismo y datos del miembro).
+ */
 export default function EditConvertPage() {
   const params = useParams();
-  const { user, loading: authLoading } = useAuth();
+  const router = useRouter();
   const { t } = useI18n();
-  const { id } = params;
-  const [convert, setConvert] = useState<Convert | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const convertId = Array.isArray(id) ? id[0] : id;
+  const rawId = Array.isArray(params.id) ? params.id[0] : params.id;
 
   useEffect(() => {
-    if (!convertId || !user) return;
+    if (!rawId) {
+      router.replace('/converts');
+      return;
+    }
+    const memberId = parseMemberIdFromConvertId(rawId) || rawId;
+    router.replace(buildMemberEditUrl(memberId, '/converts'));
+  }, [rawId, router]);
 
-    const fetchConvert = async () => {
-      setLoading(true);
-      try {
-        const docRef = doc(convertsCollection, convertId);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          setConvert({ id: docSnap.id, ...docSnap.data() } as Convert);
-        } else {
-          setError('Converso no encontrado.');
-        }
-      } catch (err) {
-        setError('Error al cargar los datos del converso.');
-        console.error(err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchConvert();
-  }, [convertId, user]);
-
-  if (loading || authLoading) {
-    return (
-      <Dialog open={true}>
-          <DialogContent>
-            <DialogHeader>
-                <DialogTitle className="sr-only">{t('common.loadingShort')}</DialogTitle>
-            </DialogHeader>
-            <div className="max-w-2xl mx-auto space-y-4">
-                <Skeleton className="h-10 w-1/3" />
-                <Skeleton className="h-8 w-1/2" />
-                <div className="space-y-6 p-6 border rounded-lg">
-                <Skeleton className="h-24 w-24 rounded-full mx-auto" />
-                <Skeleton className="h-12 w-full" />
-                <Skeleton className="h-12 w-full" />
-                <div className="flex justify-end gap-2">
-                    <Skeleton className="h-10 w-24" />
-                    <Skeleton className="h-10 w-24" />
-                </div>
-                </div>
-            </div>
-          </DialogContent>
-      </Dialog>
-    );
-  }
-
-  if (error) {
-    return <div className="text-center text-destructive">{error}</div>;
-  }
-
-  return convert ? <ConvertForm convert={convert} /> : null;
+  return (
+    <div className="space-y-3 p-6">
+      <p className="text-sm text-muted-foreground">
+        {t('converts.redirectToMembers') || 'Redirigiendo a la ficha del miembro…'}
+      </p>
+      <Skeleton className="h-10 w-1/3" />
+      <Skeleton className="h-24 w-full" />
+    </div>
+  );
 }

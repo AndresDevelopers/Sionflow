@@ -4,8 +4,8 @@ import { useEffect, useState, useTransition, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getDocs, query, orderBy, Timestamp, where, doc, setDoc, getDoc } from 'firebase/firestore';
-import { baptismsCollection, futureMembersCollection, convertsCollection, annualReportsCollection, membersCollection } from '@/lib/collections';
-import type { Baptism, Convert, AnnualReportAnswers, Member } from '@/lib/types';
+import { baptismsCollection, futureMembersCollection, annualReportsCollection, membersCollection } from '@/lib/collections';
+import type { Baptism, AnnualReportAnswers, Member } from '@/lib/types';
 import { normalizeMemberStatus } from '@/lib/members-data';
 import {
   Card,
@@ -122,13 +122,6 @@ async function getAvailableReportYears(barrioOrg?: string): Promise<number[]> {
         return d ? getYear(d.toDate()) : undefined;
       }
     ),
-    safeGetYears('converts', () =>
-      getDocs(query(convertsCollection, where('barrioOrg', '==', barrioOrg))),
-      (data) => {
-        const bd = data.baptismDate as Timestamp | undefined;
-        return bd ? getYear(bd.toDate()) : undefined;
-      }
-    ),
     safeGetYears('futureMembers', () =>
       getDocs(query(futureMembersCollection, where('barrioOrg', '==', barrioOrg))),
       (data) => {
@@ -205,33 +198,7 @@ async function getBaptismsForYear(year: number, barrioOrg?: string): Promise<Bap
     logger.error({ error: err, message: 'Error fetching future members in getBaptismsForYear' });
   }
 
-  // 2. Obtener de nuevos conversos
-  let fromConverts: Baptism[] = [];
-  try {
-    const convertsConstraints: any[] = [
-      where('baptismDate', '>=', startTimestamp),
-      where('baptismDate', '<=', endTimestamp)
-    ];
-    if (barrioOrg) convertsConstraints.unshift(where('barrioOrg', '==', barrioOrg));
-    const convertsQuery = query(convertsCollection, ...convertsConstraints);
-    const convertsSnapshot = await getDocs(convertsQuery);
-    fromConverts = convertsSnapshot.docs.map(doc => {
-      const data = doc.data() as Convert & { baptismPhotos?: string[] };
-      return {
-        id: doc.id,
-        name: data.name,
-        date: data.baptismDate,
-        source: 'Nuevo Converso',
-        photoURL: data.photoURL,
-        baptismPhotos: data.baptismPhotos || [],
-        memberId: data.memberId || findMemberId(data.name)
-      } as Baptism
-    });
-  } catch (err) {
-    logger.error({ error: err, message: 'Error fetching converts in getBaptismsForYear' });
-  }
-
-  // 3. Obtener bautismos manuales
+  // 2. Bautismos manuales / de c_bautismos
   let fromManual: Baptism[] = [];
   try {
     const baptismsConstraints: any[] = [
@@ -275,14 +242,13 @@ async function getBaptismsForYear(year: number, barrioOrg?: string): Promise<Bap
       memberId: data.id
     } as Baptism));
 
-  const allBaptisms = [...fromFutureMembers, ...fromConverts, ...fromManual, ...fromMembers]
+  const allBaptisms = [...fromFutureMembers, ...fromManual, ...fromMembers]
     .filter((b) => b.date);
 
   const sourcePriority: Record<string, number> = {
     Manual: 1,
-    'Nuevo Converso': 2,
-    'Futuro Miembro': 3,
-    Automático: 4,
+    'Futuro Miembro': 2,
+    Automático: 3,
   };
 
   const baptismMap = new Map<string, Baptism>();

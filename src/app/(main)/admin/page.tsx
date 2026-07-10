@@ -36,13 +36,14 @@ import {
   usersCollection,
   membersCollection,
   activitiesCollection,
-  convertsCollection,
   futureMembersCollection,
   birthdaysCollection,
   servicesCollection,
   adminAuditCollection,
 } from "@/lib/collections";
 import { normalizeRole, type UserRole } from "@/lib/roles";
+import { isRecentConvertMember } from "@/lib/converts-from-members";
+import { normalizeMemberStatus } from "@/lib/members-data";
 import { useAuth } from "@/contexts/auth-context";
 import { getAppName } from "@/lib/app-config";
 import logger from "@/lib/logger";
@@ -112,7 +113,6 @@ export default function AdminHomePage() {
           membersCountSnap,
           membersRecentSnap,
           activitiesCountSnap,
-          convertsCountSnap,
           futureCountSnap,
           birthdaysCountSnap,
           servicesCountSnap,
@@ -121,7 +121,6 @@ export default function AdminHomePage() {
           getCountFromServer(query(membersCollection, where('barrioOrg', '==', barrioOrg))),
           getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg), fbLimit(500))),
           getCountFromServer(query(activitiesCollection, where('barrioOrg', '==', barrioOrg))),
-          getCountFromServer(query(convertsCollection, where('barrioOrg', '==', barrioOrg))),
           getCountFromServer(query(futureMembersCollection, where('barrioOrg', '==', barrioOrg))),
           getCountFromServer(query(birthdaysCollection, where('barrioOrg', '==', barrioOrg))),
           getCountFromServer(query(servicesCollection, where('barrioOrg', '==', barrioOrg))),
@@ -145,6 +144,7 @@ export default function AdminHomePage() {
 
         const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
         let recentMembers = 0;
+        let totalConverts = 0;
         const totalMembers = membersCountSnap.data().count;
         membersRecentSnap.forEach((d) => {
           const data = d.data();
@@ -152,10 +152,17 @@ export default function AdminHomePage() {
           if (createdAt && typeof createdAt.toMillis === "function") {
             if (createdAt.toMillis() >= sevenDaysAgo) recentMembers += 1;
           }
+          if (
+            isRecentConvertMember({
+              baptismDate: data.baptismDate,
+              status: normalizeMemberStatus(data.status),
+            })
+          ) {
+            totalConverts += 1;
+          }
         });
 
         const totalActivities = activitiesCountSnap.data().count;
-        const totalConverts = convertsCountSnap.data().count;
         const totalFuture = futureCountSnap.data().count;
         const totalBirthdays = birthdaysCountSnap.data().count;
         const totalServices = servicesCountSnap.data().count;

@@ -57,6 +57,7 @@ import type {
 } from '@/lib/types';
 import { membersCollection } from '@/lib/collections';
 import { getMembersForSelector, normalizeMemberStatus } from '@/lib/members-data';
+import { membersToRecentConverts, parseMemberIdFromConvertId } from '@/lib/converts-from-members';
 import {
   useEffect,
   useState,
@@ -115,7 +116,6 @@ import {
   missionaryAssignmentsCollection,
   investigatorsCollection,
   newConvertFriendsCollection,
-  convertsCollection,
   missionaryImagesCollection,
   annotationsCollection,
   storage,
@@ -124,7 +124,7 @@ import { z } from 'zod';
 import logger from '@/lib/logger';
 import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
-import { subHours, subMonths } from 'date-fns';
+import { subHours } from 'date-fns';
 import { FriendshipForm } from './FriendshipForm';
 import { analyzeImage } from '@/ai/flows/analyze-image-flow';
 import { VoiceAnnotations } from '@/components/shared/voice-annotations';
@@ -201,63 +201,19 @@ async function getNewConvertFriendships(barrioOrg?: string): Promise<NewConvertF
 
 
 async function getNewConvertsWithoutFriends(barrioOrg?: string): Promise<Convert[]> {
-  const twentyFourMonthsAgo = subMonths(new Date(), 24);
-  const twentyFourMonthsAgoTimestamp = Timestamp.fromDate(twentyFourMonthsAgo);
-
-  // Obtener conversos de la colección c_conversos
-  const convertsConstraints: any[] = [orderBy('baptismDate', 'desc')];
-  if (barrioOrg) convertsConstraints.unshift(where('barrioOrg', '==', barrioOrg));
-  const convertsSnapshot = await getDocs(query(convertsCollection, ...convertsConstraints));
-  const convertsFromCollection = convertsSnapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() } as Convert))
-    .filter(convert =>
-        convert.baptismDate &&
-        convert.baptismDate.toDate &&
-        convert.baptismDate.toDate() > twentyFourMonthsAgo
-    );
-
-  // Obtener miembros bautizados hace 2 años
-  const membersConstraints: any[] = [orderBy('baptismDate', 'desc')];
-  if (barrioOrg) membersConstraints.unshift(where('barrioOrg', '==', barrioOrg));
-  const membersSnapshot = await getDocs(query(membersCollection, ...membersConstraints));
-  const membersAsConverts = membersSnapshot.docs
-    .map(doc => {
-      const memberData = doc.data() as Member;
-      if (normalizeMemberStatus(memberData.status) === 'deceased') {
-        return null;
-      }
-      if (memberData.baptismDate && memberData.baptismDate.toDate) {
-        const baptismDate = memberData.baptismDate.toDate();
-        if (baptismDate > twentyFourMonthsAgo) {
-          return {
-            id: `member_${doc.id}`,
-            name: `${memberData.firstName} ${memberData.lastName}`,
-            baptismDate: memberData.baptismDate,
-            photoURL: memberData.photoURL,
-            councilCompleted: memberData.councilCompleted || false,
-            councilCompletedAt: memberData.councilCompletedAt || null,
-            observation: 'Bautizado como miembro',
-            missionaryReference: 'Registro de miembros'
-          } as Convert;
-        }
-      }
-      return null;
-    })
-    .filter(Boolean) as Convert[];
-
-  // Combinar y ordenar por fecha de bautismo (más reciente primero)
-  const allConverts = [...convertsFromCollection, ...membersAsConverts]
-    .sort((a, b) => b.baptismDate.toDate().getTime() - a.baptismDate.toDate().getTime());
-
-  // Eliminar duplicados basados en nombre y fecha de bautismo
-  const uniqueConverts = allConverts.filter((convert, index, self) =>
-    index === self.findIndex(c =>
-      c.name === convert.name &&
-      c.baptismDate.toDate().getTime() === convert.baptismDate.toDate().getTime()
-    )
-  );
-
-  return uniqueConverts;
+  // Conversos recientes = solo miembros con baptismDate en los últimos 24 meses
+  const constraints: any[] = [];
+  if (barrioOrg) constraints.push(where('barrioOrg', '==', barrioOrg));
+  const membersSnapshot = await getDocs(query(membersCollection, ...constraints));
+  const members = membersSnapshot.docs.map((d) => {
+    const data = d.data() as Member;
+    return {
+      ...data,
+      id: d.id,
+      status: normalizeMemberStatus(data.status),
+    } as Member;
+  });
+  return membersToRecentConverts(members);
 }
 
 async function getMissionaryImages(barrioOrg?: string): Promise<MissionaryImage[]> {
@@ -537,10 +493,17 @@ function InvestigatorsTab({
           linkedAt: serverTimestamp(),
         });
 
-        const convertRef = doc(convertsCollection, validated.data.convertId);
-        await updateDoc(convertRef, {
+        // convertId es member_${id}; guardar referencia misional en el miembro
+        const memberId =
+          parseMemberIdFromConvertId(validated.data.convertId) || validated.data.convertId;
+        if (memberId) {
+          await updateDoc(doc(membersCollection, memberId), {
             missionaryReference: selectedInvestigator.assignedMissionaries,
-        });
+            updatedAt: serverTimestamp(),
+          }).catch((err) => {
+            logger.warn({ error: err, message: 'No se pudo actualizar missionaryReference en miembro' });
+          });
+        }
 
         toast({
           title: t('missionaryWork.success'),

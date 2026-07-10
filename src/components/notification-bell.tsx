@@ -138,7 +138,12 @@ export function NotificationBell() {
 
     switch (notification.contextType) {
       case 'convert':
-        return notification.contextId ? `/converts/${notification.contextId}` : null;
+        // Conversos se editan en el miembro (id canónico: member_${id} o memberId)
+        if (!notification.contextId) return '/converts';
+        if (notification.contextId.startsWith('member_')) {
+          return `/members/${notification.contextId.slice('member_'.length)}`;
+        }
+        return `/members/${notification.contextId}`;
       case 'activity':
         return '/reports';
       case 'service':

@@ -695,16 +695,20 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
       // Verificar si es un bautismo de los últimos 2 años
       const twoYearsAgo = new Date();
       twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-      const isRecentBaptism = values.baptismDate &&
-        values.baptismDate >= twoYearsAgo;
+      const isRecentBaptism = !!(values.baptismDate && values.baptismDate >= twoYearsAgo);
 
       // Verificar si hay cambios en la fecha de bautismo
       const previousBaptismDate = member?.baptismDate?.toDate ? member.baptismDate.toDate() :
         member?.baptismDate instanceof Date ? member.baptismDate : null;
-      const previousBaptismYear = previousBaptismDate?.getFullYear();
-      const newBaptismYear = values.baptismDate?.getFullYear();
-      const baptismYearChanged = previousBaptismYear !== newBaptismYear;
-      const baptismDateRemoved = member?.baptismDate && !values.baptismDate;
+      const previousWasRecent = !!(previousBaptismDate && previousBaptismDate >= twoYearsAgo);
+      const previousBaptismTime = previousBaptismDate?.getTime() ?? null;
+      const newBaptismTime = values.baptismDate?.getTime() ?? null;
+      const baptismDateChanged = previousBaptismTime !== newBaptismTime;
+      const baptismDateRemoved = !!member?.baptismDate && !values.baptismDate;
+      const fullMemberName = `${values.firstName.trim()} ${values.lastName.trim()}`;
+      const previousMemberName = member
+        ? `${member.firstName?.trim() || ''} ${member.lastName?.trim() || ''}`.trim()
+        : '';
 
       // Preparar datos del miembro para actualizar (datos serializables)
       console.log('💾 Preparing member data for update:', {
@@ -746,63 +750,26 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         }
       });
 
-      // Si es un bautismo reciente, crear registro en conversos y bautismos
-      let convertDocRef = null;
-      let updateDocDynamic = null;
+      // Conversos recientes = solo baptismDate del miembro (sin c_conversos).
+      // Limpiar registros legacy en c_conversos / bautismos automáticos si cambió o se quitó la fecha.
+      const shouldCleanupLegacyConvertRecords =
+        baptismDateRemoved ||
+        (previousWasRecent && !isRecentBaptism) ||
+        (previousWasRecent && isRecentBaptism && baptismDateChanged) ||
+        (previousMemberName && previousMemberName !== fullMemberName && previousWasRecent);
 
-      if (isRecentBaptism && values.baptismDate) {
-        const convertData: any = {
-          name: `${values.firstName.trim()} ${values.lastName.trim()}`,
-          baptismDate: Timestamp.fromDate(values.baptismDate),
-          councilCompleted: false,
-          observation: 'Registrado automáticamente desde Miembros',
-          barrioOrg: barrioOrg || '',
-          createdAt: Timestamp.now(),
-          createdBy: user.uid,
-          memberId: member?.id || '', // Se actualizará después para nuevos miembros
-        };
-
-        // Only add photoURL if it exists
-        if (photoURL) {
-          convertData.photoURL = photoURL;
-        }
-
-        const baptismData: any = {
-          name: `${values.firstName.trim()} ${values.lastName.trim()}`,
-          date: Timestamp.fromDate(values.baptismDate),
-          source: 'Automático',
-          barrioOrg: barrioOrg || '',
-          baptismPhotos: baptismPhotoURLs,
-          createdAt: Timestamp.now(),
-        };
-
-        // Only add photoURL if it exists
-        if (photoURL) {
-          baptismData.photoURL = photoURL;
-        }
-
-        // Importar dinámicamente para evitar dependencias circulares
-        const { addDoc, collection, query, where, getDocs, deleteDoc, doc, updateDoc: updateDocImported } = await import('firebase/firestore');
-        const { firestore } = await import('@/lib/firebase');
-
-        updateDocDynamic = updateDocImported;
-
-        // Si es una actualización y la fecha de bautismo cambió, eliminar el registro anterior
-        if (member && (baptismYearChanged || baptismDateRemoved)) {
-          const baptismQuery = query(
-            collection(firestore, 'c_bautismos'),
-            where('name', '==', `${values.firstName.trim()} ${values.lastName.trim()}`),
-            where('source', '==', 'Automático')
-          );
-          const existingBaptisms = await getDocs(baptismQuery);
-          existingBaptisms.forEach(async (baptismDoc) => {
-            await deleteDoc(doc(firestore, 'c_bautismos', baptismDoc.id));
+      if (shouldCleanupLegacyConvertRecords && barrioOrg) {
+        const { cleanupConvertAndBaptismRecords } = await import('@/lib/member-service');
+        const namesToClean = new Set(
+          [fullMemberName, previousMemberName].filter((n) => n && n.trim())
+        );
+        for (const name of namesToClean) {
+          await cleanupConvertAndBaptismRecords({
+            memberId: member?.id,
+            memberName: name,
+            barrioOrg,
           });
         }
-
-        // Crear nuevo registro si hay fecha de bautismo en los últimos 2 años
-        convertDocRef = await addDoc(collection(firestore, 'c_conversos'), convertData);
-        await addDoc(collection(firestore, 'c_bautismos'), baptismData);
       }
 
       if (member) {
@@ -942,11 +909,6 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         }
 
         const newMemberId = await createMember(newMember as any, barrioOrg);
-
-        // Actualizar el registro de converso con el memberId si existe
-        if (convertDocRef && updateDocDynamic) {
-          await updateDocDynamic(convertDocRef, { memberId: newMemberId });
-        }
 
         // Sync ministering assignments for new member if teachers assigned
         const currentTeachers = values.ministeringTeachers || [];

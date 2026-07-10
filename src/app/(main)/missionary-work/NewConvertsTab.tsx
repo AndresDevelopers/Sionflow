@@ -1,12 +1,12 @@
-import { useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Loader2, RefreshCw, UserPlus, Edit, Trash2 } from 'lucide-react';
+import { Loader2, RefreshCw, UserPlus, Trash2 } from 'lucide-react';
 import { useI18n } from '@/contexts/i18n-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Timestamp } from 'firebase/firestore';
+import { MemberPhoto } from '@/components/members/member-photo';
 
 interface Member {
   id: string;
@@ -149,10 +149,22 @@ export function NewConvertsTab({
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {newConverts.map((convert) => (
+                {newConverts.map((convert) => {
+                  const displayName =
+                    convert.name ||
+                    [convert.firstName, convert.lastName].filter(Boolean).join(' ').trim() ||
+                    t('newConverts.nameUnavailable');
+                  const photoURL =
+                    typeof convert.photoURL === 'string' && convert.photoURL.trim()
+                      ? convert.photoURL.trim()
+                      : undefined;
+                  return (
                   <TableRow key={convert.id}>
                     <TableCell>
-                      {convert.name || [convert.firstName, convert.lastName].filter(Boolean).join(' ').trim() || t('newConverts.nameUnavailable')}
+                      <div className="flex items-center gap-3">
+                        <MemberPhoto photoURL={photoURL} name={displayName} size={32} />
+                        <span>{displayName}</span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       {formatDate(convert.baptismDate)}
@@ -169,7 +181,8 @@ export function NewConvertsTab({
                        </Button>
                     </TableCell>
                   </TableRow>
-                ))}
+                  );
+                })}
               </TableBody>
             </Table>
           </TabsContent>

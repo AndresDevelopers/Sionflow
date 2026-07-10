@@ -3,7 +3,7 @@
  * Separa la lógica de negocio de los componentes UI
  */
 
-import { Timestamp, addDoc, collection, query, where, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { Timestamp, collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { firestore } from './firebase';
 import { uploadMemberPhoto, uploadBaptismPhotos } from './members-data';
 import { syncMinisteringAssignments } from './ministering-sync';
@@ -119,62 +119,18 @@ async function deletePhotoFromStorage(photoURL: string): Promise<void> {
 }
 
 /**
- * Crea registros automáticos de converso y bautismo para bautismos recientes
+ * @deprecated Los conversos recientes se derivan solo de c_miembros.baptismDate.
+ * No se crean registros en c_conversos. Se mantiene por compatibilidad de imports.
  */
 export async function createConvertRecords(
-  formData: MemberFormData,
-  photoURL: string | null,
-  baptismPhotoURLs: string[],
-  userId: string,
-  barrioOrg: string,
-  memberId?: string
+  _formData: MemberFormData,
+  _photoURL: string | null,
+  _baptismPhotoURLs: string[],
+  _userId: string,
+  _barrioOrg: string,
+  _memberId?: string
 ): Promise<string | null> {
-  if (!formData.baptismDate) return null;
-
-  // Verificar si es un bautismo de los últimos 2 años
-  const twoYearsAgo = new Date();
-  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
-  
-  if (formData.baptismDate < twoYearsAgo) {
-    return null;
-  }
-
-  const fullName = `${formData.firstName.trim()} ${formData.lastName.trim()}`;
-
-  const convertData: any = {
-    name: fullName,
-    baptismDate: Timestamp.fromDate(formData.baptismDate),
-    councilCompleted: false,
-    observation: 'Registrado automáticamente desde Miembros',
-    createdAt: Timestamp.now(),
-    createdBy: userId,
-    barrioOrg,
-    memberId: memberId || '',
-  };
-
-  // Only add photoURL if it exists
-  if (photoURL) {
-    convertData.photoURL = photoURL;
-  }
-
-  const baptismData: any = {
-    name: fullName,
-    date: Timestamp.fromDate(formData.baptismDate),
-    source: 'Automático' as const,
-    baptismPhotos: baptismPhotoURLs,
-    barrioOrg,
-    createdAt: Timestamp.now(),
-  };
-
-  // Only add photoURL if it exists
-  if (photoURL) {
-    baptismData.photoURL = photoURL;
-  }
-
-  const convertDocRef = await addDoc(collection(firestore, 'c_conversos'), convertData);
-  await addDoc(collection(firestore, 'c_bautismos'), baptismData);
-
-  return convertDocRef.id;
+  return null;
 }
 
 /**
@@ -201,6 +157,85 @@ export async function cleanupBaptismRecords(
       deleteDoc(doc(firestore, 'c_bautismos', baptismDoc.id))
     )
   );
+}
+
+/**
+ * Elimina registros de converso y bautismos automáticos ligados a un miembro.
+ * Se usa cuando se quita o cambia la fecha de bautismo para que Conversos
+ * refleje automáticamente lo que hay en el miembro.
+ */
+export async function cleanupConvertAndBaptismRecords(options: {
+  memberId?: string;
+  memberName: string;
+  barrioOrg: string;
+}): Promise<void> {
+  const { memberId, memberName, barrioOrg } = options;
+  const convertDocsToDelete = new Map<string, true>();
+
+  if (memberId) {
+    const byMemberId = await getDocs(
+      query(
+        collection(firestore, 'c_conversos'),
+        where('barrioOrg', '==', barrioOrg),
+        where('memberId', '==', memberId)
+      )
+    );
+    byMemberId.docs.forEach((d) => convertDocsToDelete.set(d.id, true));
+  }
+
+  // También por nombre: registros automáticos antiguos pueden no tener memberId
+  if (memberName.trim()) {
+    const byName = await getDocs(
+      query(
+        collection(firestore, 'c_conversos'),
+        where('barrioOrg', '==', barrioOrg),
+        where('name', '==', memberName.trim())
+      )
+    );
+    byName.docs.forEach((d) => {
+      const data = d.data();
+      const isAuto =
+        data.observation === 'Registrado automáticamente desde Miembros' ||
+        data.missionaryReference === 'Registro de miembros' ||
+        (memberId && data.memberId === memberId) ||
+        !data.memberId ||
+        data.memberId === '';
+      if (isAuto) {
+        convertDocsToDelete.set(d.id, true);
+      }
+    });
+  }
+
+  await Promise.all(
+    [...convertDocsToDelete.keys()].map((id) =>
+      deleteDoc(doc(firestore, 'c_conversos', id))
+    )
+  );
+
+  if (memberName.trim()) {
+    const baptismQuery = query(
+      collection(firestore, 'c_bautismos'),
+      where('barrioOrg', '==', barrioOrg),
+      where('name', '==', memberName.trim()),
+      where('source', '==', 'Automático')
+    );
+    const existingBaptisms = await getDocs(baptismQuery);
+    await Promise.all(
+      existingBaptisms.docs.map((baptismDoc) =>
+        deleteDoc(doc(firestore, 'c_bautismos', baptismDoc.id))
+      )
+    );
+  }
+}
+
+/**
+ * Indica si un miembro con esa fecha de bautismo debe figurar como converso reciente (últimos 24 meses).
+ */
+export function isRecentConvertBaptism(baptismDate?: Date | null): boolean {
+  if (!baptismDate) return false;
+  const twoYearsAgo = new Date();
+  twoYearsAgo.setFullYear(twoYearsAgo.getFullYear() - 2);
+  return baptismDate >= twoYearsAgo;
 }
 
 /**

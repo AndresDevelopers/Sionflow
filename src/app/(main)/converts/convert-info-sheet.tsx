@@ -12,11 +12,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlusCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { MemberSelector } from '@/components/members/member-selector';
+import { MemberPhoto } from '@/components/members/member-photo';
 import type { Convert, Member, NewConvertFriendship, Ordinance } from '@/lib/types';
 import { useI18n } from '@/contexts/i18n-context';
+import { getMemberPhotoURL } from '@/lib/converts-from-members';
 
 // Extended convert type with additional info
 export type ConvertWithInfo = Convert & {
@@ -207,10 +208,14 @@ export function ConvertInfoSheet({
       >
         <SheetHeader className="pb-4">
           <div className="flex items-center gap-3">
-            <Avatar className="h-12 w-12">
-              <AvatarImage src={convert.photoURL} />
-              <AvatarFallback>{convert.name.charAt(0)}</AvatarFallback>
-            </Avatar>
+            <MemberPhoto
+              photoURL={
+                getMemberPhotoURL(convert.memberData) ||
+                getMemberPhotoURL(convert)
+              }
+              name={convert.name}
+              size={48}
+            />
             <div className="text-left">
               <SheetTitle className="text-lg">{convert.name}</SheetTitle>
               <SheetDescription>

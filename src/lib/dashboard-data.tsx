@@ -1,7 +1,6 @@
 
 import { getDocs, query, where, limit, Timestamp, orderBy } from 'firebase/firestore';
 import {
-  convertsCollection,
   futureMembersCollection,
   ministeringCollection,
   activitiesCollection,
@@ -9,10 +8,11 @@ import {
   membersCollection,
   annotationsCollection
 } from '@/lib/collections';
-import type { Convert, Companionship, Activity, Service, Member } from '@/lib/types';
+import type { Companionship, Activity, Service, Member } from '@/lib/types';
 import { normalizeMemberStatus } from '@/lib/members-data';
 import { buildActivityOverview } from '@/lib/activity-overview';
-import { subMonths, addDays, format, isAfter, isBefore } from 'date-fns';
+import { membersToRecentConverts } from '@/lib/converts-from-members';
+import { addDays, format, isAfter, isBefore } from 'date-fns';
 import { getDateFnsLocale } from "@/lib/i18n-date";
 
 function mapMember(docId: string, memberData: Record<string, any>): Member {
@@ -52,15 +52,12 @@ export async function getFutureMembers(barrioOrg: string): Promise<Member[]> {
  * Avoids re-fetching c_miembros 3–5 times per home visit.
  */
 export async function getDashboardData(barrioOrg: string) {
-  const twentyFourMonthsAgo = subMonths(new Date(), 24);
-  const twentyFourMonthsAgoTs = Timestamp.fromDate(twentyFourMonthsAgo);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const sevenDaysFromNow = addDays(today, 7);
   const fourteenDaysFromNow = addDays(today, 14);
 
   const [
-    convertsSnapshot,
     membersSnapshot,
     ministeringSnapshot,
     councilAnnotationsSnapshot,
@@ -68,12 +65,6 @@ export async function getDashboardData(barrioOrg: string) {
     upcomingBaptismsSnapshot,
     activitiesSnapshot,
   ] = await Promise.all([
-    getDocs(query(
-      convertsCollection,
-      where('barrioOrg', '==', barrioOrg),
-      where('baptismDate', '>=', twentyFourMonthsAgoTs),
-      orderBy('baptismDate', 'desc')
-    )),
     // Single members load for converts-from-members, future, less_active, status cards
     getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg), limit(500))),
     getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg))),
@@ -106,38 +97,8 @@ export async function getDashboardData(barrioOrg: string) {
   const members = membersSnapshot.docs.map(doc => mapMember(doc.id, doc.data()));
   const membersAlive = members.filter(m => m.status !== 'deceased');
 
-  // 1. Converts (collection + members baptized in last 24 months)
-  const convertsFromCollection = convertsSnapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() } as Convert));
-
-  const membersAsConverts = members
-    .filter(m => {
-      if (m.status === 'deceased') return false;
-      if (!m.baptismDate?.toDate) return false;
-      return m.baptismDate.toDate() > twentyFourMonthsAgo;
-    })
-    .map(m => ({
-      id: `member_${m.id}`,
-      name: `${m.firstName} ${m.lastName}`,
-      baptismDate: m.baptismDate!,
-      photoURL: m.photoURL,
-      councilCompleted: m.councilCompleted || false,
-      councilCompletedAt: m.councilCompletedAt || null,
-      observation: 'Bautizado como miembro',
-      missionaryReference: 'Registro de miembros'
-    } as Convert));
-
-  const allConverts = [...convertsFromCollection, ...membersAsConverts]
-    .sort((a, b) => b.baptismDate.toDate().getTime() - a.baptismDate.toDate().getTime());
-
-  const uniqueConverts = allConverts.filter((convert, index, self) =>
-    index === self.findIndex(c =>
-      c.name === convert.name &&
-      c.baptismDate.toDate().getTime() === convert.baptismDate.toDate().getTime()
-    )
-  );
-
-  const convertsCount = uniqueConverts.length;
+  // 1. Conversos recientes = solo miembros con baptismDate en los últimos 24 meses
+  const convertsCount = membersToRecentConverts(membersAlive).length;
 
   // 2. Future members from same members array
   const futureMembersCount = deriveFutureMembers(members).length;
@@ -154,8 +115,8 @@ export async function getDashboardData(barrioOrg: string) {
     service.councilNotified === false || service.councilNotified === undefined
   ).length;
 
-  const pendingCouncilConverts = convertsFromCollection
-    .filter(c => !c.councilCompleted && c.baptismDate && c.baptismDate.toDate() > twentyFourMonthsAgo)
+  const pendingCouncilConverts = membersToRecentConverts(membersAlive)
+    .filter((c) => !c.councilCompleted)
     .length;
 
   const upcomingBaptismsCount = upcomingBaptismsSnapshot.size;

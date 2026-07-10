@@ -1,12 +1,34 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { getDocs, query, orderBy, Timestamp, collection, where, documentId } from 'firebase/firestore';
-import { membersCollection, futureMembersCollection, ministeringCollection, convertsCollection, newConvertFriendsCollection } from '@/lib/collections';
-import type { Convert, Member, NewConvertFriendship, Companionship } from '@/lib/types';
+import {
+  getDocs,
+  getDocsFromServer,
+  query,
+  orderBy,
+  Timestamp,
+  collection,
+  where,
+  documentId,
+  deleteDoc,
+  doc,
+  setDoc,
+  addDoc,
+  updateDoc,
+  serverTimestamp,
+} from 'firebase/firestore';
+import { membersCollection, ministeringCollection, newConvertFriendsCollection } from '@/lib/collections';
+import type { Member, NewConvertFriendship, Companionship } from '@/lib/types';
 import { normalizeMemberStatus, getMembersForSelector } from '@/lib/members-data';
+import {
+  getMemberPhotoURL,
+  getRecentConvertCutoff,
+  membersToRecentConverts,
+  memberToConvertId,
+  parseMemberIdFromConvertId,
+} from '@/lib/converts-from-members';
 import {
   Card,
   CardContent,
@@ -14,25 +36,16 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Info, Pencil, Eye } from 'lucide-react';
-import { format, subMonths } from 'date-fns';
+import { format } from 'date-fns';
 import { getDateFnsLocale } from "@/lib/i18n-date";
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { doc, getDoc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { ConvertInfoSheet, type ConvertWithInfo } from './convert-info-sheet';
+import { MemberPhoto } from '@/components/members/member-photo';
 import { syncMinisteringAssignments } from '@/lib/ministering-sync';
 import { useToast } from '@/hooks/use-toast';
 import { buildMemberEditUrl } from '@/lib/navigation';
@@ -51,94 +64,57 @@ const getConvertAlertStatus = (convert: ConvertWithInfo): ConvertAlertStatus => 
 };
 
 async function getConvertsWithInfo(barrioOrg: string): Promise<ConvertWithInfo[]> {
-  const twentyFourMonthsAgo = subMonths(new Date(), 24);
-  const twentyFourMonthsAgoTs = Timestamp.fromDate(twentyFourMonthsAgo);
+  const cutoff = getRecentConvertCutoff();
+  const cutoffTs = Timestamp.fromDate(cutoff);
 
-  // Scoped + date-bounded queries (avoid full-collection reads)
-  const [
-    convertsSnapshot,
-    membersSnapshot,
-    friendshipsSnapshot,
-    companionshipsSnapshot
-  ] = await Promise.all([
-    getDocs(query(
-      convertsCollection,
-      where('barrioOrg', '==', barrioOrg),
-      where('baptismDate', '>=', twentyFourMonthsAgoTs),
-      orderBy('baptismDate', 'desc')
-    )),
-    getDocs(query(
-      membersCollection,
-      where('barrioOrg', '==', barrioOrg),
-      where('baptismDate', '>=', twentyFourMonthsAgoTs),
-      orderBy('baptismDate', 'desc')
-    )),
-    getDocs(query(newConvertFriendsCollection, where('barrioOrg', '==', barrioOrg))),
-    getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)))
-  ]);
-
-  // Obtener conversos de la colección c_conversos
-  const convertsFromCollection = convertsSnapshot.docs
-    .map(doc => ({ id: doc.id, ...doc.data() } as Convert & { barrioOrg?: string }))
-    .filter(convert =>
-      convert.baptismDate &&
-      convert.baptismDate.toDate &&
-      convert.baptismDate.toDate() > twentyFourMonthsAgo
-    );
-
-  // Obtener miembros bautizados hace 2 años
-  const membersAsConverts = membersSnapshot.docs
-    .map(doc => {
-      const memberData = doc.data();
-      if (normalizeMemberStatus(memberData.status) === 'deceased') {
-        return null;
-      }
-      if (memberData.baptismDate && memberData.baptismDate.toDate) {
-        const baptismDate = memberData.baptismDate.toDate();
-        if (baptismDate > twentyFourMonthsAgo) {
-          return {
-            id: `member_${doc.id}`,
-            name: `${memberData.firstName} ${memberData.lastName}`,
-            baptismDate: memberData.baptismDate,
-            photoURL: memberData.photoURL,
-            councilCompleted: memberData.councilCompleted || false,
-            councilCompletedAt: memberData.councilCompletedAt || null,
-            observation: 'Bautizado como miembro',
-            missionaryReference: 'Registro de miembros',
-            memberId: doc.id
-          } as Convert;
-        }
-      }
-      return null;
-    })
-    .filter(Boolean) as Convert[];
-
-  // Combinar y ordenar por fecha de bautismo (más reciente primero)
-  const allConverts = [...convertsFromCollection, ...membersAsConverts]
-    .sort((a, b) => b.baptismDate.toDate().getTime() - a.baptismDate.toDate().getTime());
-
-  // Eliminar duplicados basados en nombre y fecha de bautismo
-  const uniqueConverts = allConverts.filter((convert, index, self) =>
-    index === self.findIndex(c =>
-      c.name === convert.name &&
-      c.baptismDate.toDate().getTime() === convert.baptismDate.toDate().getTime()
-    )
+  const membersQuery = query(
+    membersCollection,
+    where('barrioOrg', '==', barrioOrg),
+    where('baptismDate', '>=', cutoffTs),
+    orderBy('baptismDate', 'desc')
   );
 
-  const friendships = friendshipsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as NewConvertFriendship));
-  const companionships = companionshipsSnapshot.docs.map(d => ({ id: d.id, ...d.data() } as Companionship));
+  // Preferir servidor para no usar IndexedDB stale sin photoURL (caché persistente de Firestore)
+  let membersSnapshot;
+  try {
+    membersSnapshot = await getDocsFromServer(membersQuery);
+  } catch {
+    membersSnapshot = await getDocs(membersQuery);
+  }
+
+  const [friendshipsSnapshot, companionshipsSnapshot] = await Promise.all([
+    getDocs(query(newConvertFriendsCollection, where('barrioOrg', '==', barrioOrg))),
+    getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg))),
+  ]);
+
   const members = membersSnapshot.docs
-    .map(d => {
-      const memberData = d.data();
+    .map((d) => {
+      const memberData = d.data() as Record<string, unknown>;
+      // Extraer foto de forma explícita (evita perder el campo al mapear)
+      const rawPhoto = memberData.photoURL;
+      const photoURL =
+        typeof rawPhoto === 'string' && rawPhoto.trim()
+          ? rawPhoto.trim()
+          : undefined;
       return {
-        id: d.id,
         ...memberData,
-        status: normalizeMemberStatus(memberData.status),
+        id: d.id,
+        photoURL,
+        status: normalizeMemberStatus(memberData.status as string | undefined),
       } as Member;
     })
-    .filter(member => member.status !== 'deceased');
+    .filter((m) => m.status !== 'deceased');
 
-  // Fetch additional convert info (callings, notes)
+  const uniqueConverts = membersToRecentConverts(members);
+
+  const friendships = friendshipsSnapshot.docs.map(
+    (d) => ({ id: d.id, ...d.data() } as NewConvertFriendship)
+  );
+  const companionships = companionshipsSnapshot.docs.map(
+    (d) => ({ id: d.id, ...d.data() } as Companionship)
+  );
+
+  // Info extra (llamamiento, notas) claveada por member_${id}
   const convertInfos: {
     convertId: string;
     calling: string;
@@ -148,79 +124,91 @@ async function getConvertsWithInfo(barrioOrg: string): Promise<ConvertWithInfo[]
   }[] = [];
 
   if (uniqueConverts.length > 0) {
+    const chunkSize = 30;
     const chunks: string[][] = [];
-    const chunkSize = 30; // Firestore 'in' query limit is 30
     for (let i = 0; i < uniqueConverts.length; i += chunkSize) {
-      chunks.push(uniqueConverts.slice(i, i + chunkSize).map(c => c.id));
+      chunks.push(uniqueConverts.slice(i, i + chunkSize).map((c) => c.id));
     }
 
-    const chunkPromises = chunks.map(async (chunk) => {
-      try {
-        const snapshot = await getDocs(
-          query(collection(firestore, 'c_conversos_info'), where(documentId(), 'in', chunk))
-        );
-        return snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            convertId: doc.id,
-            calling: data.calling as string || '',
-            notes: data.notes as string || '',
-            recommendationActive: data.recommendationActive === true,
-            selfRelianceCourse: data.selfRelianceCourse === true
-          };
-        });
-      } catch (error) {
-        console.error("Error fetching convert info chunk:", error);
-        return [];
-      }
-    });
-
-    const chunkResults = await Promise.all(chunkPromises);
+    const chunkResults = await Promise.all(
+      chunks.map(async (chunk) => {
+        try {
+          const snapshot = await getDocs(
+            query(collection(firestore, 'c_conversos_info'), where(documentId(), 'in', chunk))
+          );
+          return snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+            return {
+              convertId: docSnap.id,
+              calling: (data.calling as string) || '',
+              notes: (data.notes as string) || '',
+              recommendationActive: data.recommendationActive === true,
+              selfRelianceCourse: data.selfRelianceCourse === true,
+            };
+          });
+        } catch (error) {
+          console.error('Error fetching convert info chunk:', error);
+          return [];
+        }
+      })
+    );
     convertInfos.push(...chunkResults.flat());
   }
 
-  // Enrich converts with info
-  return uniqueConverts.map(convert => {
-    // Find friendship
-    const friendship = friendships.find(f => f.convertId === convert.id) || null;
+  return uniqueConverts.map((convert) => {
+    const memberId =
+      convert.memberId || parseMemberIdFromConvertId(convert.id) || '';
+    const memberData = memberId ? members.find((m) => m.id === memberId) || null : null;
 
-    // Find member data (for converts linked to members or member converts)
-    let memberId = convert.memberId;
-    if (convert.id.startsWith('member_')) {
-      memberId = convert.id.substring(7);
-    }
-    const memberData = memberId ? members.find(m => m.id === memberId) || null : null;
+    // Amistad: id canónico member_${id}; también match por memberId legacy
+    const friendship =
+      friendships.find(
+        (f) =>
+          f.convertId === convert.id ||
+          (memberId && f.convertId === memberId) ||
+          (memberId && f.convertId === memberToConvertId(memberId))
+      ) || null;
 
-    // Find ministering teachers from companionships
-    let ministeringTeachers: string[] = [];
-    if (memberData) {
-      // From member record
-      ministeringTeachers = memberData.ministeringTeachers || [];
-    }
-    // Also check companionships by family name
+    let ministeringTeachers: string[] = memberData?.ministeringTeachers || [];
     const familyName = convert.name?.split(' ').slice(1).join(' ');
     if (familyName) {
-      const matchingComp = companionships.find(comp =>
-        comp.families.some(f => f.name.toLowerCase().includes(familyName.toLowerCase()) ||
-          f.name.toLowerCase().includes(convert.name?.toLowerCase() || ''))
+      const matchingComp = companionships.find((comp) =>
+        comp.families.some(
+          (f) =>
+            f.name.toLowerCase().includes(familyName.toLowerCase()) ||
+            f.name.toLowerCase().includes(convert.name?.toLowerCase() || '')
+        )
       );
       if (matchingComp) {
         ministeringTeachers = [...new Set([...ministeringTeachers, ...matchingComp.companions])];
       }
     }
 
-    // Get additional info
-    const info = convertInfos.find(i => i?.convertId === convert.id);
+    const info = convertInfos.find((i) => i?.convertId === convert.id);
+
+    // Foto SIEMPRE desde el documento del miembro (fuente de verdad)
+    const baptismFallback = Array.isArray(memberData?.baptismPhotos)
+      ? memberData.baptismPhotos.find(
+          (u): u is string => typeof u === 'string' && u.trim().length > 0
+        )
+      : undefined;
+    const photoURL =
+      getMemberPhotoURL(memberData) ||
+      getMemberPhotoURL(convert) ||
+      baptismFallback ||
+      undefined;
 
     return {
       ...convert,
+      memberId,
+      photoURL,
       friendship,
       memberData,
       ministeringTeachers,
       calling: info?.calling || '',
       notes: info?.notes || '',
       recommendationActive: info?.recommendationActive || false,
-      selfRelianceCourse: info?.selfRelianceCourse || false
+      selfRelianceCourse: info?.selfRelianceCourse || false,
     };
   });
 }
@@ -237,27 +225,58 @@ export default function ConvertsPage() {
   const [saving, setSaving] = useState(false);
   const [availableMembers, setAvailableMembers] = useState<Member[]>([]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
+    if (!barrioOrg) {
+      setConverts([]);
+      setAvailableMembers([]);
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
       const [data, membersList] = await Promise.all([
         getConvertsWithInfo(barrioOrg),
-        getMembersForSelector(true, barrioOrg)
+        getMembersForSelector(true, barrioOrg),
       ]);
-      setConverts(data);
+
+      // Refuerzo: si el converso no trae foto, tomar photoURL del selector de miembros
+      const membersById = new Map(membersList.map((m) => [m.id, m]));
+      const enriched = data.map((c) => {
+        const fromList = c.memberId ? membersById.get(c.memberId) : undefined;
+        const photoURL =
+          getMemberPhotoURL(c) ||
+          getMemberPhotoURL(c.memberData) ||
+          getMemberPhotoURL(fromList) ||
+          undefined;
+        return {
+          ...c,
+          photoURL,
+          memberData: c.memberData || fromList || null,
+        };
+      });
+
+      if (process.env.NODE_ENV === 'development') {
+        const missing = enriched.filter((c) => !c.photoURL).map((c) => c.name);
+        const withPhoto = enriched.filter((c) => !!c.photoURL).length;
+        console.debug('[converts] fotos:', {
+          total: enriched.length,
+          withPhoto,
+          missingPhoto: missing,
+        });
+      }
+
+      setConverts(enriched);
       setAvailableMembers(membersList);
     } catch (error) {
-      console.error("Failed to fetch converts:", error);
+      console.error('Failed to fetch converts:', error);
     }
     setLoading(false);
-  };
+  }, [barrioOrg]);
 
   useEffect(() => {
     if (authLoading || !user) return;
-    queueMicrotask(() => {
-      void loadData();
-    });
-  }, [authLoading, user]);
+    void loadData();
+  }, [authLoading, user, loadData]);
 
   const handleSaveConvertInfo = async (convertId: string, calling: string, notes: string, recommendationActive: boolean, selfRelianceCourse: boolean) => {
     setSaving(true);
@@ -305,6 +324,7 @@ export default function ConvertsPage() {
           convertId,
           convertName,
           friends,
+          barrioOrg,
           assignedAt: serverTimestamp()
         });
         toast({ title: t('converts.friendsAssignedTitle'), description: t('converts.friendsAssignedDescription') });
@@ -366,108 +386,16 @@ export default function ConvertsPage() {
         </div>
       </CardHeader>
       <CardContent>
-        {/* Desktop table view */}
-        <div className="hidden md:block overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>{t('converts.name')}</TableHead>
-              <TableHead>{t('converts.baptismDate')}</TableHead>
-              <TableHead className="text-right">{t('converts.actions')}</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              Array.from({ length: 3 }).map((_, i) => (
-                <TableRow key={i}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Skeleton className="h-10 w-10 rounded-full" />
-                      <Skeleton className="h-5 w-32" />
-                    </div>
-                  </TableCell>
-                  <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                  <TableCell className="text-right"><Skeleton className="h-8 w-20 inline-block" /></TableCell>
-                </TableRow>
-              ))
-            ) : converts.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="h-24 text-center">
-                  {t('converts.noData')}
-                </TableCell>
-              </TableRow>
-            ) : (
-              converts.map((item) => {
-                const convertAlertStatus = getConvertAlertStatus(item);
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <div className="relative">
-                          <Avatar>
-                            <AvatarImage src={item.photoURL} data-ai-hint="profile picture" />
-                            <AvatarFallback>{item.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          {convertAlertStatus && (
-                            <span
-                              aria-label={convertAlertStatus === 'inactive' ? t('converts.alertInactiveAria') : t('converts.alertLessActiveAria')}
-                              title={convertAlertStatus === 'inactive' ? t('converts.alertInactiveTitle') : t('converts.alertLessActiveTitle')}
-                              className={`absolute -top-0.5 -right-0.5 block h-0 w-0 border-l-[10px] border-b-[10px] border-l-transparent ${
-                                convertAlertStatus === 'inactive' ? 'border-b-red-500' : 'border-b-yellow-400'
-                              }`}
-                            />
-                          )}
-                        </div>
-                        <span>{item.name}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      {format(item.baptismDate.toDate(), 'd LLLL yyyy', { locale: getDateFnsLocale() })}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={item.id.startsWith('member_')
-                            ? `/members/${item.id.substring(7)}`
-                            : item.memberId
-                              ? `/members/${item.memberId}`
-                              : `/members?search=${encodeURIComponent(item.name)}`}>
-                            <Eye className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        <Button variant="ghost" size="icon" onClick={() => openConvertInfo(item)}>
-                          <Info className="h-4 w-4" />
-                        </Button>
-                        {canWrite && (
-                        <Button variant="ghost" size="icon" asChild>
-                          <Link href={item.id.startsWith('member_')
-                            ? buildMemberEditUrl(item.id.substring(7), '/converts')
-                            : item.memberId
-                              ? buildMemberEditUrl(item.memberId, '/converts')
-                              : `/members?search=${encodeURIComponent(item.name)}`}>
-                            <Pencil className="h-4 w-4" />
-                          </Link>
-                        </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })
-            )}
-          </TableBody>
-        </Table>
-        </div>
-
-        {/* Mobile card view */}
-        <div className="md:hidden space-y-3">
+        {/* Lista única responsive: nombre completo siempre visible (sin truncate) */}
+        <div className="space-y-3">
           {loading ? (
             Array.from({ length: 3 }).map((_, i) => (
-              <div key={i} className="flex items-center gap-3 rounded-lg border p-3">
+              <div key={i} className="flex items-start gap-3 rounded-lg border p-3">
                 <Skeleton className="h-10 w-10 rounded-full shrink-0" />
-                <div className="flex-1 min-w-0 space-y-1.5">
-                  <Skeleton className="h-4 w-32" />
-                  <Skeleton className="h-3 w-20" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-4 w-3/4 max-w-[240px]" />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-8 w-28" />
                 </div>
               </div>
             ))
@@ -478,51 +406,85 @@ export default function ConvertsPage() {
           ) : (
             converts.map((item) => {
               const convertAlertStatus = getConvertAlertStatus(item);
+              const memberHref = item.memberId
+                ? `/members/${item.memberId}`
+                : `/members?search=${encodeURIComponent(item.name)}`;
+              const editHref = item.memberId
+                ? buildMemberEditUrl(item.memberId, '/converts')
+                : `/members?search=${encodeURIComponent(item.name)}`;
+
               return (
-                <div key={item.id} className="flex items-center gap-3 rounded-lg border p-3">
-                  <div className="relative shrink-0">
-                    <Avatar>
-                      <AvatarImage src={item.photoURL} data-ai-hint="profile picture" />
-                      <AvatarFallback>{item.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
+                <div
+                  key={item.id}
+                  className="flex items-start gap-3 rounded-lg border p-3 sm:p-4"
+                >
+                  <div className="relative shrink-0 mt-0.5">
+                    <MemberPhoto
+                      photoURL={item.photoURL || item.memberData?.photoURL}
+                      name={item.name}
+                      size={40}
+                    />
                     {convertAlertStatus && (
                       <span
+                        aria-label={
+                          convertAlertStatus === 'inactive'
+                            ? t('converts.alertInactiveAria')
+                            : t('converts.alertLessActiveAria')
+                        }
+                        title={
+                          convertAlertStatus === 'inactive'
+                            ? t('converts.alertInactiveTitle')
+                            : t('converts.alertLessActiveTitle')
+                        }
                         className={`absolute -top-0.5 -right-0.5 block h-0 w-0 border-l-[10px] border-b-[10px] border-l-transparent ${
-                          convertAlertStatus === 'inactive' ? 'border-b-red-500' : 'border-b-yellow-400'
+                          convertAlertStatus === 'inactive'
+                            ? 'border-b-red-500'
+                            : 'border-b-yellow-400'
                         }`}
                       />
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {format(item.baptismDate.toDate(), 'd LLLL yyyy', { locale: getDateFnsLocale() })}
+
+                  <div className="flex min-w-0 flex-1 flex-col gap-1">
+                    <p
+                      className="text-sm font-medium leading-snug text-foreground sm:text-base"
+                      style={{
+                        overflowWrap: 'anywhere',
+                        wordBreak: 'break-word',
+                        whiteSpace: 'normal',
+                      }}
+                    >
+                      {item.name}
                     </p>
-                  </div>
-                  <div className="flex items-center gap-0.5 shrink-0">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                      <Link href={item.id.startsWith('member_')
-                        ? `/members/${item.id.substring(7)}`
-                        : item.memberId
-                          ? `/members/${item.memberId}`
-                          : `/members?search=${encodeURIComponent(item.name)}`}>
-                        <Eye className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openConvertInfo(item)}>
-                      <Info className="h-4 w-4" />
-                    </Button>
-                    {canWrite && (
-                    <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
-                      <Link href={item.id.startsWith('member_')
-                        ? buildMemberEditUrl(item.id.substring(7), '/converts')
-                        : item.memberId
-                          ? buildMemberEditUrl(item.memberId, '/converts')
-                          : `/members?search=${encodeURIComponent(item.name)}`}>
-                        <Pencil className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    )}
+                    <p className="text-xs text-muted-foreground sm:text-sm">
+                      {format(item.baptismDate.toDate(), 'd LLLL yyyy', {
+                        locale: getDateFnsLocale(),
+                      })}
+                    </p>
+
+                    <div className="mt-1 flex flex-wrap items-center gap-0.5 -ml-1.5">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                        <Link href={memberHref} aria-label={t('converts.view') || 'Ver'}>
+                          <Eye className="h-4 w-4" />
+                        </Link>
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => openConvertInfo(item)}
+                        aria-label={t('converts.info') || 'Info'}
+                      >
+                        <Info className="h-4 w-4" />
+                      </Button>
+                      {canWrite && (
+                        <Button variant="ghost" size="icon" className="h-8 w-8" asChild>
+                          <Link href={editHref} aria-label={t('converts.edit') || 'Editar'}>
+                            <Pencil className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
