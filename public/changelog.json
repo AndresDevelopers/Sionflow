@@ -1,6 +1,28 @@
 {
-  "current": "1.1.27",
+  "current": "1.1.28",
   "entries": [
+    {
+      "version": "1.1.28",
+      "date": "2026-07-10",
+      "changes": {
+        "es": [
+          "Mejoramos la gestión de imágenes en obra misional con una pestaña dedicada y una API de carga, solucionando problemas de estabilidad.",
+          "Integramos la IA Gemini para análisis de imágenes: descripciones automáticas en obra misional y soporte para adjuntar imágenes en el chat de la iglesia.",
+          "Corregimos las fotos de perfil de conversos y miembros, usando next/image para una visualización confiable.",
+          "Simplificamos los conversos recientes: ahora se derivan únicamente de la fecha de bautismo, alineando todas las herramientas.",
+          "Añadimos una nueva interfaz de gestión de distritos para ministerio, incluyendo creación, eliminación y protección del distrito predeterminado.",
+          "Mejoramos la seguridad y el rendimiento: actualizamos las reglas de Firestore, optimizamos el caché y mejoramos los flujos de autenticación."
+        ],
+        "en": [
+          "Improved image management in missionary work with a dedicated tab and upload API, fixing stability issues.",
+          "Integrated Gemini AI for image analysis: automatic descriptions in missionary work and image attachment support in church chat.",
+          "Fixed profile photos for converts and members, using next/image for reliable display.",
+          "Streamlined recent converts: now derived solely from member baptism dates, aligning all tools.",
+          "Added a new district management UI for ministering, including creation, deletion, and default district protection.",
+          "Enhanced security and performance: updated Firestore rules, optimized caching, and improved authentication flows."
+        ]
+      }
+    },
     {
       "version": "1.1.27",
       "date": "2026-07-09",

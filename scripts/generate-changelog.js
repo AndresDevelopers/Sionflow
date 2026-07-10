@@ -15,8 +15,9 @@
 const path = require('path');
 const ROOT = path.join(__dirname, '..');
 
-// Load .env before anything else
+// Load env files before anything else (.env.local overrides .env)
 require('dotenv').config({ path: path.join(ROOT, '.env') });
+require('dotenv').config({ path: path.join(ROOT, '.env.local'), override: true });
 
 const { execSync } = require('child_process');
 const fs = require('fs');
@@ -37,8 +38,21 @@ function getLocalDateISO() {
 }
 
 /**
+ * Returns true when a commit is an internal/auto changelog commit
+ * and should not appear in the user-facing changelog.
+ */
+function shouldSkipCommit(message) {
+  const subject = extractSubject(message).toLowerCase();
+  return (
+    subject.includes('auto-update changelog') ||
+    subject.includes('[skip changelog]') ||
+    /^chore:\s*bump version/i.test(subject)
+  );
+}
+
+/**
  * Returns the full messages (subject + body) of all commits from today (local time).
- * Merge commits are excluded.
+ * Merge commits and auto-changelog commits are excluded.
  */
 function getCommitsForToday() {
   const today = getLocalDateISO();
@@ -51,8 +65,13 @@ function getCommitsForToday() {
     if (!raw) return [];
     return raw
       .split('===COMMIT===')
-      .map(l => l.trim())
-      .filter(l => l.length > 0 && !l.startsWith('Merge '));
+      .map((l) => l.trim())
+      .filter(
+        (l) =>
+          l.length > 0 &&
+          !l.startsWith('Merge ') &&
+          !shouldSkipCommit(l)
+      );
   } catch (err) {
     console.error('[changelog] Could not read git log:', err.message);
     return [];
@@ -162,7 +181,7 @@ async function callDeepSeek(commits) {
     'Each item must be a complete, friendly sentence describing a user-facing improvement or fix.';
 
   const body = JSON.stringify({
-    model: 'deepseek-v4-flash',
+    model: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content: userPrompt   },
@@ -190,6 +209,10 @@ async function callDeepSeek(commits) {
       res.on('end', () => {
         try {
           const json    = JSON.parse(data);
+          if (json.error) {
+            console.error('[changelog] DeepSeek API error:', json.error.message || JSON.stringify(json.error));
+            return resolve(friendlyFallback);
+          }
           const content = json.choices?.[0]?.message?.content ?? '';
           const match   = content.match(/\{[\s\S]*\}/);
           if (match) {
@@ -241,13 +264,18 @@ async function main() {
   }
 
   console.log(`📝 ${commits.length} commit(s) found:`);
-  commits.forEach((c) => console.log(`   • ${c}`));
+  commits.forEach((c) => console.log(`   • ${extractSubject(c)}`));
 
   // ── Load current data ──────────────────────────────────────────────────
   let changelog = { current: '1.0.0', entries: [] };
   if (fs.existsSync(CHANGELOG_FILE)) {
     try { changelog = readJSON(CHANGELOG_FILE); }
     catch { console.warn('[changelog] Could not parse changelog.json – starting fresh.'); }
+  }
+
+  if (!fs.existsSync(VERSION_FILE)) {
+    console.error('[changelog] public/version.json not found.');
+    process.exit(1);
   }
 
   const versionData = readJSON(VERSION_FILE);
@@ -262,6 +290,8 @@ async function main() {
     newVersion = bumpPatch(versionData.version);
     console.log(`\n🔢 New day – bumping version: ${versionData.version} → ${newVersion}`);
   } else {
+    // Prefer the entry's version if today already exists; keep package in sync
+    newVersion = changelog.entries[todayIndex]?.version || versionData.version;
     console.log(`\n🔄 Updating today's existing entry for v${newVersion}`);
   }
 
@@ -313,4 +343,5 @@ module.exports = {
   buildNormalizedCommitSet,
   isLikelyRaw,
   createFriendlyChanges,
+  shouldSkipCommit,
 };

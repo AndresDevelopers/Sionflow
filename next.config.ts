@@ -50,7 +50,7 @@ const nextConfig: NextConfig = {
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://*.firebaseio.com https://*.firebase.com https://*.googleapis.com wss://*.firebaseio.com https://api.deepseek.com https://*.upstash.io",
+              "connect-src 'self' https://*.firebaseio.com https://*.firebase.com https://*.googleapis.com https://storage.googleapis.com https://*.firebasestorage.app wss://*.firebaseio.com https://api.deepseek.com https://*.upstash.io https://generativelanguage.googleapis.com",
               "frame-src 'self' https://*.firebaseapp.com",
               "object-src 'none'",
               "base-uri 'self'",

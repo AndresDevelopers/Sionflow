@@ -1,4 +1,2 @@
-
-'use server';
-
-// This file is intentionally left blank as the logic has been moved to the client component.
+// Intentionally empty — missionary-work logic lives in client components.
+// Do not re-add 'use server' image analysis here (causes UnrecognizedActionError after HMR).

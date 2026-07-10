@@ -123,7 +123,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
 import { subHours } from 'date-fns';
 import { FriendshipForm } from './FriendshipForm';
-import { ImagesTab } from './ImagesTab';
+import { MissionaryImagesTab } from './MissionaryImagesTab';
 import { VoiceAnnotations } from '@/components/shared/voice-annotations';
 import { AnnotationManager } from '@/components/shared/annotation-manager';
 import { useI18n } from '@/contexts/i18n-context';
@@ -1027,7 +1027,7 @@ export default function MissionaryWorkPage() {
           />
         </TabsContent>
         <TabsContent value="images">
-          <ImagesTab
+          <MissionaryImagesTab
             images={missionaryImages}
             loading={loading}
             onRefresh={fetchData}

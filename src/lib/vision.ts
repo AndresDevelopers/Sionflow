@@ -24,10 +24,10 @@ const DescriptionSchema = z.object({
 type VisionResult = z.infer<typeof DescriptionSchema>;
 
 /** Prefer current stable vision models; gemini-2.0-flash was retired (404). */
-const DEFAULT_VISION_MODEL = 'gemini-2.5-flash';
+const DEFAULT_VISION_MODEL = 'gemini-2.5-flash-lite';
 const FALLBACK_VISION_MODELS = [
+  'gemini-2.5-flash',
   'gemini-flash-latest',
-  'gemini-2.5-flash-lite',
   'gemini-3.1-flash-lite',
 ];
 

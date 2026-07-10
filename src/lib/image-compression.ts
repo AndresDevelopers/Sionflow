@@ -12,6 +12,11 @@ export type CompressImageOptions = {
   preferWebp?: boolean;
   /** Max output bytes hint — will lower quality once if still large (default 450KB) */
   maxBytes?: number;
+  /**
+   * Always re-encode via canvas (ignore the "already small enough" short-circuit).
+   * Useful when forcing JPEG for vision APIs that reject HEIC/WebP edge cases.
+   */
+  force?: boolean;
 };
 
 const DEFAULTS: Required<CompressImageOptions> = {
@@ -19,6 +24,7 @@ const DEFAULTS: Required<CompressImageOptions> = {
   quality: 0.78,
   preferWebp: true,
   maxBytes: 450 * 1024,
+  force: false,
 };
 
 function supportsWebp(): boolean {
@@ -72,13 +78,25 @@ export async function compressImageForUpload(
   file: File,
   options: CompressImageOptions = {}
 ): Promise<File> {
-  if (!file.type.startsWith('image/') || file.type === 'image/svg+xml') {
+  // Empty MIME (common on mobile) is still OK when force-encoding for upload/AI.
+  const optsEarly = { ...DEFAULTS, ...options };
+  if (file.type === 'image/svg+xml') {
+    return file;
+  }
+  if (file.type && !file.type.startsWith('image/') && !optsEarly.force) {
     return file;
   }
 
-  // Already small enough — skip work
+  // Already small enough — skip work (unless force re-encode, e.g. HEIC → JPEG for AI)
   const opts = { ...DEFAULTS, ...options };
-  if (file.size <= opts.maxBytes / 2 && file.size < 200 * 1024) {
+  const needsFormatChange =
+    !opts.preferWebp && file.type !== 'image/jpeg' && file.type !== 'image/jpg';
+  if (
+    !opts.force &&
+    !needsFormatChange &&
+    file.size <= opts.maxBytes / 2 &&
+    file.size < 200 * 1024
+  ) {
     return file;
   }
 
@@ -118,8 +136,8 @@ export async function compressImageForUpload(
       blob = await canvasToBlob(canvas, mime, quality);
     }
 
-    // If compression somehow grew the file, keep original
-    if (blob.size >= file.size) {
+    // If compression grew the file and we don't need a format change, keep original
+    if (blob.size >= file.size && !opts.force && file.type === mime) {
       return file;
     }
 

@@ -1,6 +1,6 @@
 {
   "name": "nextn",
-  "version": "1.1.27",
+  "version": "1.1.28",
   "private": true,
   "scripts": {
     "dev": "next dev --webpack -p 9001",
@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "postinstall": "patch-package || echo 'No patches to apply'",
+    "prepare": "node scripts/setup-hooks.js",
     "approve-builds": "pnpm approve-builds",
     "changelog": "node scripts/generate-changelog.js",
     "setup-hooks": "node scripts/setup-hooks.js",

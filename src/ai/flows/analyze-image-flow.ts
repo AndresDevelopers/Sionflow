@@ -1,8 +1,12 @@
 /**
- * Shared image analysis helper (server-only logic via @/lib/vision).
- * Prefer POST /api/analyze-image from the client — avoids Next.js Server Action
- * ID mismatches after HMR ("UnrecognizedActionError").
+ * @deprecated Do NOT import this from client components.
+ * Image description must go through POST /api/analyze-image (plain HTTP).
+ * Calling this as a Server Action causes UnrecognizedActionError after HMR.
+ *
+ * Server-only helper kept for any legacy server-side imports.
+ * Prefer: import { describeImage } from '@/lib/vision'
  */
+import 'server-only';
 import { z } from 'zod';
 import { describeImage } from '@/lib/vision';
 
@@ -21,4 +25,3 @@ export async function analyzeImage(input: AnalyzeImageInput): Promise<AnalyzeIma
   const result = await describeImage(validatedInput.imageData);
   return AnalyzeImageOutputSchema.parse(result);
 }
-

@@ -17,11 +17,20 @@ export function ServiceWorkerRegistration() {
     const nukeCachesAndWorkers = async () => {
       try {
         const registrations = await navigator.serviceWorker.getRegistrations();
+        const hadWorkers = registrations.length > 0;
         await Promise.all(registrations.map((registration) => registration.unregister()));
 
         if ('caches' in window) {
           const cacheNames = await caches.keys();
           await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+        }
+
+        // One-shot reload so the page cannot keep executing a SW-cached
+        // bundle that still calls deleted Server Action IDs.
+        const reloadKey = 'qf-sw-nuke-reload-v1';
+        if (hadWorkers && sessionStorage.getItem(reloadKey) !== '1') {
+          sessionStorage.setItem(reloadKey, '1');
+          window.location.reload();
         }
       } catch {
         // ignore

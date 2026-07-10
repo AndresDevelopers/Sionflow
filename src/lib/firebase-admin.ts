@@ -84,6 +84,7 @@ if (!getApps().length) {
   try {
     const serviceAccountKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY;
     const envProjectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+    const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
     const isCi = Boolean(process.env.CI);
 
     if (serviceAccountKey) {
@@ -107,6 +108,7 @@ if (!getApps().length) {
         app = initializeApp({
           credential: cert(serviceAccount),
           projectId: resolvedProjectId,
+          storageBucket,
         });
       } else {
         if (!warnedInvalidServiceAccount) {
@@ -119,6 +121,7 @@ if (!getApps().length) {
         }
         app = initializeApp({
           projectId: envProjectId,
+          storageBucket,
         });
       }
     } else {
@@ -131,6 +134,7 @@ if (!getApps().length) {
       }
       app = initializeApp({
         projectId: envProjectId,
+        storageBucket,
       });
     }
   } catch (error) {
@@ -145,5 +149,19 @@ authAdmin = getAuth(app);
 firestoreAdmin = getFirestore(app);
 storageAdmin = getStorage(app);
 messagingAdmin = getMessaging(app);
+
+/** Default app bucket (NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET). */
+export function getAdminBucket(bucketName?: string) {
+  const name =
+    bucketName ||
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ||
+    (app.options.storageBucket as string | undefined);
+  if (!name) {
+    throw new Error(
+      'Storage bucket no configurado. Define NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET.'
+    );
+  }
+  return storageAdmin.bucket(name);
+}
 
 export { authAdmin, firestoreAdmin, storageAdmin, messagingAdmin };
