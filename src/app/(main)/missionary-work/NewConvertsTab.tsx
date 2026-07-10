@@ -5,8 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Loader2, RefreshCw, UserPlus, Trash2 } from 'lucide-react';
 import { useI18n } from '@/contexts/i18n-context';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import Image from 'next/image';
 import { Timestamp } from 'firebase/firestore';
-import { MemberPhoto } from '@/components/members/member-photo';
 
 interface Member {
   id: string;
@@ -162,7 +162,20 @@ export function NewConvertsTab({
                   <TableRow key={convert.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
-                        <MemberPhoto photoURL={photoURL} name={displayName} size={32} />
+                        {photoURL ? (
+                          <Image
+                            src={photoURL}
+                            alt={displayName}
+                            width={32}
+                            height={32}
+                            className="w-8 h-8 rounded-full object-cover shrink-0"
+                            unoptimized
+                          />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs text-muted-foreground shrink-0">
+                            {displayName.charAt(0)?.toUpperCase() || '?'}
+                          </div>
+                        )}
                         <span>{displayName}</span>
                       </div>
                     </TableCell>

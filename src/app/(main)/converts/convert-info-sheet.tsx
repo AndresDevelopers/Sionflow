@@ -12,9 +12,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
+import Image from 'next/image';
 import { PlusCircle, Trash2, UserPlus, Users } from 'lucide-react';
 import { MemberSelector } from '@/components/members/member-selector';
-import { MemberPhoto } from '@/components/members/member-photo';
 import type { Convert, Member, NewConvertFriendship, Ordinance } from '@/lib/types';
 import { useI18n } from '@/contexts/i18n-context';
 import { getMemberPhotoURL } from '@/lib/converts-from-members';
@@ -208,14 +208,28 @@ export function ConvertInfoSheet({
       >
         <SheetHeader className="pb-4">
           <div className="flex items-center gap-3">
-            <MemberPhoto
-              photoURL={
+            {(() => {
+              const photo =
                 getMemberPhotoURL(convert.memberData) ||
-                getMemberPhotoURL(convert)
+                getMemberPhotoURL(convert);
+              if (photo) {
+                return (
+                  <Image
+                    src={photo}
+                    alt={convert.name}
+                    width={48}
+                    height={48}
+                    className="h-12 w-12 rounded-full object-cover shrink-0"
+                    unoptimized
+                  />
+                );
               }
-              name={convert.name}
-              size={48}
-            />
+              return (
+                <div className="h-12 w-12 rounded-full bg-muted flex items-center justify-center shrink-0">
+                  <Users className="h-5 w-5 text-muted-foreground" />
+                </div>
+              );
+            })()}
             <div className="text-left">
               <SheetTitle className="text-lg">{convert.name}</SheetTitle>
               <SheetDescription>

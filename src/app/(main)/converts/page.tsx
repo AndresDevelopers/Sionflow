@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import Image from 'next/image';
 import {
   getDocs,
   getDocsFromServer,
@@ -37,7 +38,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Info, Pencil, Eye } from 'lucide-react';
+import { Info, Pencil, Eye, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDateFnsLocale } from "@/lib/i18n-date";
 import { Skeleton } from '@/components/ui/skeleton';
@@ -45,12 +46,46 @@ import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { ConvertInfoSheet, type ConvertWithInfo } from './convert-info-sheet';
-import { MemberPhoto } from '@/components/members/member-photo';
 import { syncMinisteringAssignments } from '@/lib/ministering-sync';
 import { useToast } from '@/hooks/use-toast';
 import { buildMemberEditUrl } from '@/lib/navigation';
 
 import { firestore } from '@/lib/firebase';
+
+/** Misma forma de foto que en la página de Miembros (next/image). */
+function ConvertAvatar({
+  photoURL,
+  name,
+  size = 40,
+}: {
+  photoURL?: string | null;
+  name: string;
+  size?: number;
+}) {
+  const src = typeof photoURL === 'string' && photoURL.trim() ? photoURL.trim() : undefined;
+  if (src) {
+    return (
+      <Image
+        src={src}
+        alt={name}
+        width={size}
+        height={size}
+        className="rounded-full object-cover shrink-0"
+        style={{ width: size, height: size }}
+        unoptimized
+      />
+    );
+  }
+  return (
+    <div
+      className="rounded-full bg-muted flex items-center justify-center shrink-0"
+      style={{ width: size, height: size }}
+      aria-hidden
+    >
+      <Users className="h-4 w-4 text-muted-foreground" />
+    </div>
+  );
+}
 // Convert info collection for additional data
 const convertInfoCollection = (convertId: string) => doc(firestore, 'c_conversos_info', convertId);
 
@@ -419,7 +454,7 @@ export default function ConvertsPage() {
                   className="flex items-start gap-3 rounded-lg border p-3 sm:p-4"
                 >
                   <div className="relative shrink-0 mt-0.5">
-                    <MemberPhoto
+                    <ConvertAvatar
                       photoURL={item.photoURL || item.memberData?.photoURL}
                       name={item.name}
                       size={40}
