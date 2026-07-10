@@ -23,7 +23,7 @@ export function resolveSelectedDistrictId({
   fallbackId: string;
 }) {
   if (!companionshipId) return fallbackId;
-  const currentDistrict = districts.find(d => d.companionshipIds.includes(companionshipId));
+  const currentDistrict = districts.find(d => (d.companionshipIds ?? []).includes(companionshipId));
   return currentDistrict?.id ?? fallbackId;
 }
 

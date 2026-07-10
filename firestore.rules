@@ -80,7 +80,12 @@ service cloud.firestore {
 
     match /c_ministracion/{document} {
       allow read: if isSameBarrio(resource.data.barrioOrg);
-      allow write: if canWrite() && isSameBarrio(request.resource.data.barrioOrg);
+      // create: validar barrio del documento nuevo
+      allow create: if canWrite() && isSameBarrio(request.resource.data.barrioOrg);
+      // update: validar barrio del documento existente (funciona con updates parciales)
+      allow update: if canWrite()
+        && (isSameBarrio(resource.data.barrioOrg) || isSameBarrio(request.resource.data.barrioOrg));
+      allow delete: if canWrite() && isSameBarrio(resource.data.barrioOrg);
     }
 
     match /c_actividades/{document} {
@@ -154,7 +159,11 @@ service cloud.firestore {
 
     match /c_ministracion_distritos/{document} {
       allow read: if isSameBarrio(resource.data.barrioOrg);
-      allow write: if canWrite() && isSameBarrio(request.resource.data.barrioOrg);
+      allow create: if canWrite() && isSameBarrio(request.resource.data.barrioOrg);
+      allow update: if canWrite()
+        && (isSameBarrio(resource.data.barrioOrg) || isSameBarrio(request.resource.data.barrioOrg));
+      // delete no tiene request.resource; validar barrio del documento existente
+      allow delete: if canWrite() && isSameBarrio(resource.data.barrioOrg);
     }
 
     match /c_ministracion_historial/{document} {

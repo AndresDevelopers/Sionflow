@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { addDoc, updateDoc, doc, getDocs, getDoc, query, orderBy, where, serverTimestamp, setDoc } from 'firebase/firestore';
+import { updateDoc, doc, getDocs, getDoc, query, orderBy, where, serverTimestamp, setDoc, arrayUnion, writeBatch } from 'firebase/firestore';
 import { ministeringCollection, membersCollection, ministeringDistrictsCollection } from '@/lib/collections';
+import { firestore } from '@/lib/firebase';
 import logger from '@/lib/logger';
 import { updateMinisteringTeachersOnCompanionshipChange } from '@/lib/ministering-reverse-sync';
 import { useAuth } from '@/contexts/auth-context';
@@ -144,9 +145,14 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
         });
         setDistricts(districtsList);
         
-        // Set initial selected district
+        // Set initial selected district (districtId del compañerismo o membership en distrito)
         if (companionship) {
+          const fromCompanionship = companionship.districtId &&
+            districtsList.some(d => d.id === companionship.districtId)
+            ? companionship.districtId
+            : null;
           setSelectedDistrictId(
+            fromCompanionship ??
             resolveSelectedDistrictId({
               districts: districtsList,
               companionshipId: companionship.id,
@@ -161,35 +167,42 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
     loadDistricts();
   }, [companionship, barrioOrg]);
 
-  // Handle district assignment
+  // Handle district assignment (exclusivo: un compañerismo solo en un distrito)
   const handleDistrictChange = async (districtId: string) => {
     if (!companionship) return;
-    
+
     try {
-      // Remove from previous district
-      for (const district of districts) {
-        if (district.companionshipIds.includes(companionship.id)) {
-          const newIds = district.companionshipIds.filter(id => id !== companionship.id);
-          await updateDoc(doc(ministeringDistrictsCollection, district.id), { 
-            companionshipIds: newIds,
-            updatedAt: serverTimestamp()
-          });
+      const batch = writeBatch(firestore);
+      const resolvedDistrictId = districtId && districtId !== 'none' ? districtId : null;
+
+      const nextDistricts = districts.map((district) => {
+        const currentIds = district.companionshipIds ?? [];
+        const isInDistrict = currentIds.includes(companionship.id);
+        const shouldBeInDistrict = Boolean(resolvedDistrictId && district.id === resolvedDistrictId);
+
+        if (isInDistrict === shouldBeInDistrict) {
+          return district;
         }
-      }
-      
-      // Add to new district (if selected)
-      if (districtId && districtId !== 'none') {
-        const district = districts.find(d => d.id === districtId);
-        if (district) {
-          const newIds = [...district.companionshipIds, companionship.id];
-          await updateDoc(doc(ministeringDistrictsCollection, districtId), { 
-            companionshipIds: newIds,
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
-      
-      setSelectedDistrictId(districtId);
+
+        const nextIds = shouldBeInDistrict
+          ? [...currentIds.filter(id => id !== companionship.id), companionship.id]
+          : currentIds.filter(id => id !== companionship.id);
+
+        batch.update(doc(ministeringDistrictsCollection, district.id), {
+          companionshipIds: nextIds,
+          updatedAt: serverTimestamp(),
+        });
+        return { ...district, companionshipIds: nextIds };
+      });
+
+      // districtId en el compañerismo: fuente de verdad para filtrar en la lista
+      batch.update(doc(ministeringCollection, companionship.id), {
+        districtId: resolvedDistrictId,
+      });
+
+      await batch.commit();
+      setDistricts(nextDistricts);
+      setSelectedDistrictId(districtId || 'none');
       toast({ title: t('ministering.success'), description: t('ministering.districtUpdatedDescription') });
     } catch (error) {
       logger.error({ error, message: "Failed to update district" });
@@ -392,9 +405,13 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
                  };
              });
 
+             const resolvedDistrictId =
+               selectedDistrictId && selectedDistrictId !== 'none' ? selectedDistrictId : null;
+
              await updateDoc(companionshipRef, {
                 companions: values.companions.map(c => c.value),
                 families: updatedFamilies,
+                districtId: resolvedDistrictId,
              });
 
              toast({
@@ -413,24 +430,24 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
                 memberId: f.memberId || undefined,
             }));
 
-            // Add the new companionship
+            const resolvedDistrictId =
+              selectedDistrictId && selectedDistrictId !== 'none' ? selectedDistrictId : null;
+
+            // Add the new companionship with districtId for reliable filtering
             const newCompanionshipRef = doc(ministeringCollection);
             await setDoc(newCompanionshipRef, {
                 companions: values.companions.map(c => c.value),
                 families: familiesWithObjects,
                 barrioOrg,
+                districtId: resolvedDistrictId,
             });
 
-            // Add to selected district (if any)
-            if (selectedDistrictId && selectedDistrictId !== 'none') {
-                const district = districts.find(d => d.id === selectedDistrictId);
-                if (district) {
-                    const newIds = [...district.companionshipIds, newCompanionshipRef.id];
-                    await updateDoc(doc(ministeringDistrictsCollection, selectedDistrictId), { 
-                        companionshipIds: newIds,
-                        updatedAt: serverTimestamp()
-                    });
-                }
+            // También mantener companionshipIds en el documento del distrito
+            if (resolvedDistrictId) {
+                await updateDoc(doc(ministeringDistrictsCollection, resolvedDistrictId), {
+                    companionshipIds: arrayUnion(newCompanionshipRef.id),
+                    updatedAt: serverTimestamp(),
+                });
             }
 
             toast({

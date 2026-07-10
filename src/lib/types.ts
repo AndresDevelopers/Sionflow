@@ -12,6 +12,8 @@ export type Companionship = {
     id: string;
     companions: string[];
     families: Family[];
+    /** Distrito asignado (fuente de verdad en el compañerismo para filtrar) */
+    districtId?: string | null;
 };
 
 export type MinisteringDistrict = {
@@ -20,6 +22,8 @@ export type MinisteringDistrict = {
     companionshipIds: string[];
     leaderId?: string | null;
     leaderName?: string | null;
+    /** Distrito 1 por defecto: no se puede eliminar desde la UI */
+    isDefault?: boolean;
     updatedAt?: Timestamp;
 };
 
