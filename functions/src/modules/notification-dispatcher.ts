@@ -99,15 +99,6 @@ interface LoggerPort {
   error: (...args: unknown[]) => void;
 }
 
-class UserRepository {
-  constructor(private readonly db: FirestoreNamespace.Firestore) { }
-
-  async getAllUserIds(): Promise<string[]> {
-    const snapshot = await this.db.collection("c_users").select().get();
-    return snapshot.docs.map((doc) => doc.id);
-  }
-}
-
 class NotificationRepository {
   private readonly collection: FirestoreNamespace.CollectionReference;
 
@@ -163,12 +154,15 @@ function sanitizeDocIdPart(input: string): string {
  * Reemplaza caracteres inválidos (espacios, pipes, tildes, etc.) por guiones.
  */
 function sanitizeAnalyticsLabel(label: string): string {
-  return label
+  const sanitized = label
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "") // quita tildes
     .replace(/[^a-zA-Z0-9\-_.~%]/g, "-") // reemplaza caracteres inválidos
     .replace(/-{2,}/g, "-") // colapsa múltiples guiones
     .replace(/^-|-$/g, ""); // quita guiones al inicio/final
+
+  // FCM analyticsLabel must be 1-50 characters
+  return sanitized.length > 50 ? sanitized.slice(0, 50) : sanitized;
 }
 
 class FcmRepository {
@@ -180,26 +174,6 @@ class FcmRepository {
     private readonly logger: LoggerPort
   ) {
     this.collection = this.db.collection("c_push_subscriptions");
-  }
-
-  async getActiveTokens(): Promise<FcmTokenRecord[]> {
-    const snapshot = await this.collection.get();
-    const tokens: FcmTokenRecord[] = [];
-
-    snapshot.forEach((doc) => {
-      const data = doc.data();
-      const fcmToken = data.fcmToken as string | null;
-        if (fcmToken) {
-          tokens.push({
-            docId: doc.id,
-            userId: data.userId as string,
-            deviceId: typeof data.deviceId === "string" ? data.deviceId : undefined,
-            fcmToken,
-          });
-        }
-    });
-
-    return tokens;
   }
 
   async getTokensForUsers(userIds: string[]): Promise<FcmTokenRecord[]> {
@@ -488,7 +462,6 @@ class NotificationRecordFactory {
 }
 
 export class NotificationDispatcher {
-  private readonly userRepository: UserRepository;
   private readonly notificationRepository: NotificationRepository;
   private readonly fcmRepository: FcmRepository;
   private readonly recordFactory: NotificationRecordFactory;
@@ -498,51 +471,9 @@ export class NotificationDispatcher {
     messaging: admin.messaging.Messaging,
     private readonly logger: LoggerPort
   ) {
-    this.userRepository = new UserRepository(db);
     this.notificationRepository = new NotificationRepository(db);
     this.fcmRepository = new FcmRepository(db, messaging, logger);
     this.recordFactory = new NotificationRecordFactory();
-  }
-
-  async broadcast(request: BroadcastNotificationRequest): Promise<void> {
-    this.logger.log(`Broadcasting notification: ${request.title}`);
-
-    const [userIds, fcmTokens] = await Promise.all([
-      this.userRepository.getAllUserIds(),
-      this.fcmRepository.getActiveTokens(),
-    ]);
-
-    if (userIds.length === 0) {
-      this.logger.warn("No users registered in the system to notify.");
-    }
-
-    const records = userIds.map((userId) =>
-      this.recordFactory.create(userId, request)
-    );
-
-    const [, pushSummary] = await Promise.all([
-      this.notificationRepository.saveMany(records),
-      this.fcmRepository.sendToTokens(fcmTokens, {
-        title: request.title,
-        body: request.body,
-        url: request.url ?? request.context?.actionUrl,
-        tag: request.tag,
-      }),
-    ]);
-
-    this.logDispatchSummary({
-      label: request.tag ?? request.title,
-      category: request.context?.contextType ?? request.tag ?? request.title,
-      source: "broadcast",
-      inAppRecipients: records.length,
-      pushRecipients: userIds.length,
-      pushTokensResolved: pushSummary.pushTokensResolved,
-      successCount: pushSummary.successCount,
-      failureCount: pushSummary.failureCount,
-      invalidatedCount: pushSummary.invalidatedCount,
-      attemptedAt: new Date().toISOString(),
-      outcomes: pushSummary.outcomes,
-    });
   }
 
   /**

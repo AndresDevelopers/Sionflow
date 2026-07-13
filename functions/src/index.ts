@@ -1632,7 +1632,7 @@ type NotifCategory =
 const CATEGORY_PAGE: Record<NotifCategory, string> = {
     observations: "/observations",
     converts: "/converts",
-    futureMembers: "/future-members",
+    futureMembers: "/missionary-work?tab=future_members",
     birthdays: "/birthdays",
     familySearch: "/family-search",
     missionaryWork: "/missionary-work",
@@ -1911,10 +1911,10 @@ export const dailyNotifications = functions.pubsub
                         {
                             title: "Próximo Bautismo",
                             body: `Faltan 3 días para el bautismo de ${fm.name} (${format(baptismDate, "d MMM yyyy", { locale: es })}).`,
-                            url: "/future-members",
+                            url: "/missionary-work?tab=future_members",
                             tag: `future-member-${doc.id}`,
                             barrioOrg: docBarrioOrg || null,
-                            context: { contextType: "future_member", contextId: doc.id, actionUrl: "/future-members", actionType: "navigate" },
+                            context: { contextType: "future_member", contextId: doc.id, actionUrl: "/missionary-work?tab=future_members", actionType: "navigate" },
                         },
                         fmEligible.pushUserIds,
                         futureMembersTrace

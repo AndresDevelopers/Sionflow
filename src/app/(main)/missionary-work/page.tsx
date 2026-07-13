@@ -65,7 +65,7 @@ import {
   useRef,
   useCallback,
 } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Image from 'next/image';
 import { query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { getDocs } from '@/lib/firestore-query';
@@ -128,6 +128,7 @@ import { usePermission } from '@/hooks/use-permission';
 import { subHours } from 'date-fns';
 import { FriendshipForm } from './FriendshipForm';
 import { MissionaryImagesTab } from './MissionaryImagesTab';
+import { FutureMembersTab } from './FutureMembersTab';
 import { VoiceAnnotations } from '@/components/shared/voice-annotations';
 import { AnnotationManager } from '@/components/shared/annotation-manager';
 import { useI18n } from '@/contexts/i18n-context';
@@ -953,6 +954,20 @@ function NewConvertsTab({
   );
 }
 
+const MISSIONARY_TABS = [
+  'assignments',
+  'investigators',
+  'images',
+  'new_converts',
+  'future_members',
+] as const;
+
+type MissionaryTab = (typeof MISSIONARY_TABS)[number];
+
+function isMissionaryTab(value: string | null): value is MissionaryTab {
+  return !!value && (MISSIONARY_TABS as readonly string[]).includes(value);
+}
+
 export default function MissionaryWorkPage() {
   const [assignments, setAssignments] = useState<MissionaryAssignment[]>([]);
   const [investigators, setInvestigators] = useState<Investigator[]>([]);
@@ -966,10 +981,21 @@ export default function MissionaryWorkPage() {
   const [loading, setLoading] = useState(true);
   const [loadingAnnotations, setLoadingAnnotations] = useState(true);
   const [faqFontSize, setFaqFontSize] = useState<'sm' | 'base' | 'lg'>('base');
-   const { user, loading: authLoading, barrioOrg } = useAuth();
-   const { canWrite } = usePermission();
-   const { toast } = useToast();
-   const { t } = useI18n();
+  const searchParams = useSearchParams();
+  const tabFromUrl = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<string>(
+    isMissionaryTab(tabFromUrl) ? tabFromUrl : 'assignments'
+  );
+  const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { canWrite } = usePermission();
+  const { toast } = useToast();
+  const { t } = useI18n();
+
+  useEffect(() => {
+    if (isMissionaryTab(tabFromUrl)) {
+      setActiveTab(tabFromUrl);
+    }
+  }, [tabFromUrl]);
 
    const fetchData = useCallback(async () => {
     setLoading(true);
@@ -1065,12 +1091,13 @@ export default function MissionaryWorkPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="assignments">
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-4 h-auto sm:h-10">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-5 h-auto sm:h-10">
           <TabsTrigger value="assignments">{t('missionaryWork.tabs.assignments')}</TabsTrigger>
           <TabsTrigger value="investigators">{t('missionaryWork.tabs.investigators')}</TabsTrigger>
           <TabsTrigger value="images">{t('missionaryWork.tabs.images')}</TabsTrigger>
           <TabsTrigger value="new_converts">{t('missionaryWork.tabs.new_converts')}</TabsTrigger>
+          <TabsTrigger value="future_members">{t('missionaryWork.tabs.future_members')}</TabsTrigger>
         </TabsList>
         <TabsContent value="assignments">
           <AssignmentsTab
@@ -1106,6 +1133,9 @@ export default function MissionaryWorkPage() {
             loading={loading}
             onRefresh={fetchData}
           />
+        </TabsContent>
+        <TabsContent value="future_members">
+          <FutureMembersTab />
         </TabsContent>
       </Tabs>
 

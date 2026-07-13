@@ -1117,7 +1117,7 @@ export default function SettingsPage() {
       key: 'futureMembers',
       label: t('settings.cat.futureMembers.label'),
       description: t('settings.cat.futureMembers.description'),
-      page: '/future-members',
+      page: '/missionary-work',
       inAppDetail: t('settings.cat.detail.baptism3days'),
       pushDetail: t('settings.cat.detail.baptism3days'),
     },

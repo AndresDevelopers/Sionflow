@@ -57,12 +57,10 @@ interface LoggerPort {
 }
 export declare class NotificationDispatcher {
     private readonly logger;
-    private readonly userRepository;
     private readonly notificationRepository;
     private readonly fcmRepository;
     private readonly recordFactory;
     constructor(db: FirestoreNamespace.Firestore, messaging: admin.messaging.Messaging, logger: LoggerPort);
-    broadcast(request: BroadcastNotificationRequest): Promise<void>;
     /**
      * Broadcast to specific users only (filtered by userId list).
      * Used by scheduled functions that already determine eligible users.

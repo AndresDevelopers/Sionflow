@@ -316,7 +316,7 @@ function DashboardPage() {
             description={t("in the last 18 months")}
           />
         </Link>}
-         {loading ? <StatCardSkeleton/> : <Link href="/future-members">
+         {loading ? <StatCardSkeleton/> : <Link href="/missionary-work?tab=future_members">
           <StatCard
             title={t("Future Members")}
             value={String(futureMembersCount)}

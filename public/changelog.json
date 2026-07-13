@@ -6,20 +6,12 @@
       "date": "2026-07-13",
       "changes": {
         "es": [
-          "Ahora la app sincroniza datos automáticamente y funciona sin conexión a internet.",
-          "Puedes forzar la actualización manual desde el menú principal y ver el estado de la sincronización.",
-          "Los cambios que hagas sin conexión se guardan y se envían automáticamente cuando vuelvas a estar en línea.",
-          "Los permisos y roles se actualizan al instante gracias a la sincronización en tiempo real.",
-          "Se ha mejorado la lectura de datos para que sea más rápida y confiable, incluso con conexión lenta.",
-          "Ahora la app soporta nombres de permisos en español y valores antiguos para una mejor compatibilidad."
+          "Hemos reorganizado la sección de futuros miembros dentro de la página de obra misional, facilitando su acceso desde una pestaña dedicada.",
+          "Ahora la aplicación sincroniza datos automáticamente y funciona sin conexión: los cambios se guardan localmente y se envían cuando vuelvas a estar en línea."
         ],
         "en": [
-          "The app now syncs data automatically and works offline.",
-          "You can manually refresh data from the main menu and see sync status notifications.",
-          "Changes made offline are saved and automatically sent when you're back online.",
-          "Roles and permissions update instantly thanks to real-time sync.",
-          "Data reading is now faster and more reliable, even on slow connections.",
-          "The app now supports Spanish permission names and legacy values for better compatibility."
+          "We've reorganized future members into a dedicated tab on the missionary work page, making it easier to find and manage.",
+          "The app now syncs data automatically and works offline: changes are saved locally and sent when you're back online."
         ]
       }
     },

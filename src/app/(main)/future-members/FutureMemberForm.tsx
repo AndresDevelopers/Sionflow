@@ -234,7 +234,7 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
           description: t('futureMembers.addedDescription'),
         });
       }
-      router.push('/future-members');
+      router.push('/missionary-work?tab=future_members');
       router.refresh();
     } catch (e) {
       logger.error({ error: e, message: `Error ${isEditMode ? 'updating' : 'adding'} future member`, data: values });
@@ -414,7 +414,7 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
           </CardContent>
           <CardFooter className="flex justify-end gap-2">
             <Button variant="outline" asChild>
-              <Link href="/future-members">{t('futureMembers.cancel')}</Link>
+              <Link href="/missionary-work?tab=future_members">{t('futureMembers.cancel')}</Link>
             </Button>
             <Button type="submit" disabled={isSubmitting}>
               {isSubmitting ? t('futureMembers.saving') : t('futureMembers.save')}

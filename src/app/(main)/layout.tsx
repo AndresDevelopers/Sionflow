@@ -31,8 +31,12 @@ function PrivateRoute({ children }: { children: ReactNode }) {
   // Redirect to user's main page if currently on the root path — uses auth context (no extra Firestore read)
   useEffect(() => {
     if (!loading && profileLoaded && user && !isRestricted && window.location.pathname === '/') {
-      const effectiveVisiblePages = Array.from(new Set([...visiblePages, '/church-chat']));
-      const savedMainPage = mainPage || '/';
+      const normalizedVisible = visiblePages.map((p) =>
+        p === '/future-members' ? '/missionary-work' : p
+      );
+      const effectiveVisiblePages = Array.from(new Set([...normalizedVisible, '/church-chat']));
+      const savedMainPage =
+        mainPage === '/future-members' ? '/missionary-work' : mainPage || '/';
 
       if (effectiveVisiblePages.length === 0) {
         router.replace('/members');

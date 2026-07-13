@@ -628,8 +628,8 @@ export async function sendDeceasedMembersOrdinanceNotifications(
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
         if (userData) {
-          // Check push notifications preference
-          if (userData.notificationsEnabled !== false) {
+          // Solo usuarios que han activado explícitamente push (consistente con Cloud Functions)
+          if (userData.pushNotificationsEnabled === true) {
             usersWithPushEnabled.push(userId);
           }
         }

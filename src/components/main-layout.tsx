@@ -238,9 +238,15 @@ export function MainLayout({ children }: { children: ReactNode }) {
   const showAdminLink = isAdmin(userRole);
 
   // Derive nav from auth context — no extra Firestore read
+  // Map legacy /future-members to /missionary-work (now a tab inside Obra Misional)
   const visibleNavItems = (() => {
     if (Array.isArray(visiblePages) && visiblePages.length > 0) {
-      const effectiveAllowed = Array.from(new Set([...visiblePages, "/church-chat"]));
+      const normalizedPages = visiblePages.map((p) =>
+        p === "/future-members" ? "/missionary-work" : p
+      );
+      const effectiveAllowed = Array.from(
+        new Set([...normalizedPages, "/church-chat"])
+      );
       return navigationItems.filter((item) => effectiveAllowed.includes(item.href));
     }
     return navigationItems;

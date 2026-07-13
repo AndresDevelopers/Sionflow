@@ -33,7 +33,15 @@ export function deriveFutureMembers(members: Member[]): Member[] {
     .filter(member => {
       if (member.status === 'deceased') return false;
       const isBaptized = member.ordinances?.includes('baptism') ?? false;
-      const hasFutureBaptism = member.baptismDate && member.baptismDate.toDate() > today;
+      // Include baptisms scheduled for today or later (compare at start of day)
+      const baptismDay = member.baptismDate
+        ? (() => {
+            const d = member.baptismDate.toDate();
+            d.setHours(0, 0, 0, 0);
+            return d;
+          })()
+        : null;
+      const hasFutureBaptism = baptismDay !== null && baptismDay >= today;
       return !isBaptized && hasFutureBaptism;
     })
     .sort((a, b) => {

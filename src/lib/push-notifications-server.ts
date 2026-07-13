@@ -117,7 +117,8 @@ async function getTargetUserIds(barrioOrg?: string | null): Promise<string[]> {
   usersSnapshot.forEach((doc) => {
     const userData = doc.data();
     if (barrioOrg && userData.barrioOrg !== barrioOrg) return;
-    if (userData.pushNotificationsEnabled === true || userData.notificationsEnabled !== false) {
+    // Solo usuarios que han activado explícitamente push (consistente con Cloud Functions)
+    if (userData.pushNotificationsEnabled === true) {
       userIds.push(doc.id);
     }
   });

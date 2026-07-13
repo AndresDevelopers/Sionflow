@@ -2,7 +2,6 @@ import type { LucideIcon } from "lucide-react";
 import type { Member } from "@/lib/types";
 import {
   AlertTriangle,
-  BookUser,
   Cake,
   ClipboardList,
   FileText,
@@ -68,11 +67,6 @@ export const navigationItems: NavigationItem[] = [
     icon: AlertTriangle,
   },
   { href: "/converts", i18nKey: "Converts", icon: HeartHandshake },
-  {
-    href: "/future-members",
-    i18nKey: "Future Members",
-    icon: BookUser,
-  },
   { href: "/ministering", i18nKey: "Ministering", icon: Users },
   { href: "/birthdays", i18nKey: "Birthdays", icon: Cake },
   { href: "/family-search", i18nKey: "FamilySearch", icon: Library },

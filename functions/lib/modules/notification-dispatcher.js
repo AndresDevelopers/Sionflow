@@ -36,16 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.NotificationDispatcher = void 0;
 const admin = __importStar(require("firebase-admin"));
 const crypto_1 = require("crypto");
-class UserRepository {
-    db;
-    constructor(db) {
-        this.db = db;
-    }
-    async getAllUserIds() {
-        const snapshot = await this.db.collection("c_users").select().get();
-        return snapshot.docs.map((doc) => doc.id);
-    }
-}
 class NotificationRepository {
     db;
     collection;
@@ -96,12 +86,14 @@ function sanitizeDocIdPart(input) {
  * Reemplaza caracteres inválidos (espacios, pipes, tildes, etc.) por guiones.
  */
 function sanitizeAnalyticsLabel(label) {
-    return label
+    const sanitized = label
         .normalize("NFD")
         .replace(/[\u0300-\u036f]/g, "") // quita tildes
         .replace(/[^a-zA-Z0-9\-_.~%]/g, "-") // reemplaza caracteres inválidos
         .replace(/-{2,}/g, "-") // colapsa múltiples guiones
         .replace(/^-|-$/g, ""); // quita guiones al inicio/final
+    // FCM analyticsLabel must be 1-50 characters
+    return sanitized.length > 50 ? sanitized.slice(0, 50) : sanitized;
 }
 class FcmRepository {
     db;
@@ -113,23 +105,6 @@ class FcmRepository {
         this.messaging = messaging;
         this.logger = logger;
         this.collection = this.db.collection("c_push_subscriptions");
-    }
-    async getActiveTokens() {
-        const snapshot = await this.collection.get();
-        const tokens = [];
-        snapshot.forEach((doc) => {
-            const data = doc.data();
-            const fcmToken = data.fcmToken;
-            if (fcmToken) {
-                tokens.push({
-                    docId: doc.id,
-                    userId: data.userId,
-                    deviceId: typeof data.deviceId === "string" ? data.deviceId : undefined,
-                    fcmToken,
-                });
-            }
-        });
-        return tokens;
     }
     async getTokensForUsers(userIds) {
         if (userIds.length === 0)
@@ -378,49 +353,14 @@ class NotificationRecordFactory {
 }
 class NotificationDispatcher {
     logger;
-    userRepository;
     notificationRepository;
     fcmRepository;
     recordFactory;
     constructor(db, messaging, logger) {
         this.logger = logger;
-        this.userRepository = new UserRepository(db);
         this.notificationRepository = new NotificationRepository(db);
         this.fcmRepository = new FcmRepository(db, messaging, logger);
         this.recordFactory = new NotificationRecordFactory();
-    }
-    async broadcast(request) {
-        this.logger.log(`Broadcasting notification: ${request.title}`);
-        const [userIds, fcmTokens] = await Promise.all([
-            this.userRepository.getAllUserIds(),
-            this.fcmRepository.getActiveTokens(),
-        ]);
-        if (userIds.length === 0) {
-            this.logger.warn("No users registered in the system to notify.");
-        }
-        const records = userIds.map((userId) => this.recordFactory.create(userId, request));
-        const [, pushSummary] = await Promise.all([
-            this.notificationRepository.saveMany(records),
-            this.fcmRepository.sendToTokens(fcmTokens, {
-                title: request.title,
-                body: request.body,
-                url: request.url ?? request.context?.actionUrl,
-                tag: request.tag,
-            }),
-        ]);
-        this.logDispatchSummary({
-            label: request.tag ?? request.title,
-            category: request.context?.contextType ?? request.tag ?? request.title,
-            source: "broadcast",
-            inAppRecipients: records.length,
-            pushRecipients: userIds.length,
-            pushTokensResolved: pushSummary.pushTokensResolved,
-            successCount: pushSummary.successCount,
-            failureCount: pushSummary.failureCount,
-            invalidatedCount: pushSummary.invalidatedCount,
-            attemptedAt: new Date().toISOString(),
-            outcomes: pushSummary.outcomes,
-        });
     }
     /**
      * Broadcast to specific users only (filtered by userId list).

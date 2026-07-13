@@ -1211,7 +1211,7 @@ async function getAllUsersNotificationData() {
 const CATEGORY_PAGE = {
     observations: "/observations",
     converts: "/converts",
-    futureMembers: "/future-members",
+    futureMembers: "/missionary-work?tab=future_members",
     birthdays: "/birthdays",
     familySearch: "/family-search",
     missionaryWork: "/missionary-work",
@@ -1439,10 +1439,10 @@ exports.dailyNotifications = functions.pubsub
                 await notificationDispatcher.broadcastToUsers(fmEligible.inAppUserIds, {
                     title: "Próximo Bautismo",
                     body: `Faltan 3 días para el bautismo de ${fm.name} (${(0, date_fns_1.format)(baptismDate, "d MMM yyyy", { locale: locale_1.es })}).`,
-                    url: "/future-members",
+                    url: "/missionary-work?tab=future_members",
                     tag: `future-member-${doc.id}`,
                     barrioOrg: docBarrioOrg || null,
-                    context: { contextType: "future_member", contextId: doc.id, actionUrl: "/future-members", actionType: "navigate" },
+                    context: { contextType: "future_member", contextId: doc.id, actionUrl: "/missionary-work?tab=future_members", actionType: "navigate" },
                 }, fmEligible.pushUserIds, futureMembersTrace);
             }
         }
