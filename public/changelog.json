@@ -6,12 +6,20 @@
       "date": "2026-07-13",
       "changes": {
         "es": [
-          "Hemos reorganizado la sección de futuros miembros dentro de la página de obra misional, facilitando su acceso desde una pestaña dedicada.",
-          "Ahora la aplicación sincroniza datos automáticamente y funciona sin conexión: los cambios se guardan localmente y se envían cuando vuelvas a estar en línea."
+          "Mejoramos la organización del trabajo misional añadiendo una pestaña dedicada para futuros miembros en la página de obra misional.",
+          "Ahora puedes sincronizar tus datos automáticamente y trabajar sin conexión; los cambios se guardan y se envían cuando vuelvas a estar en línea.",
+          "Actualizamos la navegación y los enlaces para que te lleven directamente a la nueva sección de futuros miembros.",
+          "Agregamos botones de contacto rápido (WhatsApp, SMS, Telegram) para números de teléfono, adaptados a tu dispositivo.",
+          "Mejoramos la precisión del cálculo de fechas de bautismo para filtrar correctamente a los futuros miembros.",
+          "Limpiamos código antiguo y archivos obsoletos para que la aplicación sea más rápida y confiable."
         ],
         "en": [
-          "We've reorganized future members into a dedicated tab on the missionary work page, making it easier to find and manage.",
-          "The app now syncs data automatically and works offline: changes are saved locally and sent when you're back online."
+          "We improved the missionary work page by adding a dedicated tab for future members, making it easier to manage them.",
+          "You can now sync your data automatically and work offline; changes are saved and sent when you're back online.",
+          "Updated navigation and links to point to the new future members section.",
+          "Added quick contact buttons (WhatsApp, SMS, Telegram) for phone numbers, adapted to your device.",
+          "Improved baptism date calculation for more accurate filtering of future members.",
+          "Cleaned up old code and obsolete files to make the app faster and more reliable."
         ]
       }
     },
