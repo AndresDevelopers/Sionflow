@@ -43,6 +43,7 @@ import { auth } from "@/lib/firebase";
 import OfflineIndicator from "@/components/offline-indicator";
 import { PushForegroundListener } from "@/components/push-foreground-listener";
 import { OfflineCacheWarmup } from "@/components/offline-cache-warmup";
+import { OfflineRouteCache } from "@/components/offline-route-cache";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -88,6 +89,8 @@ function UserNav() {
 
    const handleLogout = async () => {
      try {
+       // Mark intentional logout so offline sticky auth does not rehydrate session
+       window.dispatchEvent(new Event('sionflow:intent-sign-out'));
        await signOut(auth);
        toast({
          title: t("settings.security.passwordUpdatedTitle"),
@@ -349,7 +352,8 @@ export function MainLayout({ children }: { children: ReactNode }) {
             <UserNav />
           </div>
         </header>
-        {/* refreshGeneration remounts the page so client data loaders re-run after manual refresh */}
+        {/* refreshGeneration remounts the page so client data loaders re-run after manual refresh.
+            Offline refreshes do NOT bump generation (see refresh-context) so the UI stays put. */}
         <main className="page-shell" key={refreshGeneration}>
           {children}
         </main>
@@ -358,6 +362,7 @@ export function MainLayout({ children }: { children: ReactNode }) {
         </ErrorBoundary>
         <PushForegroundListener />
         <OfflineCacheWarmup />
+        <OfflineRouteCache />
         <PushOnboardingGuide />
         <OfflineSyncBootstrap />
         <DataSyncListener />

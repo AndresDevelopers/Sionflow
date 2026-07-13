@@ -173,8 +173,13 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
         );
       }
 
-      router.refresh();
-      setRefreshGeneration((g) => g + 1);
+      // CRITICAL offline: never call router.refresh() — App Router re-fetches RSC
+      // over the network and tears down the shell (mobile shows "sin internet").
+      // Also avoid remounting pages so in-memory + local cache stay visible.
+      if (online) {
+        router.refresh();
+        setRefreshGeneration((g) => g + 1);
+      }
 
       // Toasts only for manual fallback (or offline feedback)
       if (!silent) {

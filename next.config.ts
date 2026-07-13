@@ -27,15 +27,38 @@ const withPWA = withPWAInit({
     cleanupOutdatedCaches: true,
     runtimeCaching: [
       {
-        // Override default "pages" — longer retention for offline shell
+        // Override default "pages" — short network timeout so mobile offline fails over fast
         urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
         handler: 'NetworkFirst',
         options: {
           cacheName: 'pages',
-          networkTimeoutSeconds: 3,
+          networkTimeoutSeconds: 2,
           expiration: {
             maxEntries: 128,
             maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
+          },
+        },
+      },
+      {
+        // Next.js App Router flight/RSC payloads for client-side route changes
+        urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+          request.method === 'GET' &&
+          (url.searchParams.has('_rsc') ||
+            request.headers.get('RSC') === '1' ||
+            request.headers.get('Next-Router-Prefetch') === '1'),
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'pages-rsc',
+          networkTimeoutSeconds: 2,
+          expiration: {
+            maxEntries: 128,
+            maxAgeSeconds: 60 * 60 * 24 * 7,
+          },
+          cacheableResponse: {
+            statuses: [0, 200],
           },
         },
       },

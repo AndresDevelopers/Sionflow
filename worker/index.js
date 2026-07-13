@@ -5,14 +5,17 @@
 importScripts('/firebase-messaging-sw.js');
 
 /**
- * Extra offline helpers for the custom worker bridge:
- * - Warm-cache URLs requested by the app (pages, icons, photos)
- * - Cache-first for Firebase Storage / GCS images
- * - SKIP_WAITING support for manual activation
+ * Offline-first bridge for the PWA:
+ * - Navigation: network short timeout → cache → start URL → /~offline
+ * - Images (Firebase/GCS): cache-first
+ * - Warm-cache URLs from the client
+ * - SKIP_WAITING for updates
  */
 
 const IMAGE_CACHE = 'firebase-images-v1';
 const WARM_CACHE = 'pages-warm-v1';
+const PAGES_CACHE = 'pages';
+const START_CACHE = 'start-url';
 
 const IMAGE_HOST_RE =
   /firebasestorage\.googleapis\.com|storage\.googleapis\.com|\.firebasestorage\.app$/i;
@@ -34,6 +37,7 @@ self.addEventListener('message', (event) => {
 async function warmCacheUrls(urls) {
   const pageCache = await caches.open(WARM_CACHE);
   const imageCache = await caches.open(IMAGE_CACHE);
+  const pagesCache = await caches.open(PAGES_CACHE);
 
   await Promise.all(
     urls.map(async (raw) => {
@@ -54,6 +58,10 @@ async function warmCacheUrls(urls) {
         });
         if (response && (response.ok || response.type === 'opaque')) {
           await target.put(raw, response.clone());
+          // Also put navigations into Workbox "pages" cache
+          if (!isImage && sameOrigin) {
+            await pagesCache.put(raw, response.clone());
+          }
         }
       } catch {
         // ignore individual warm failures
@@ -62,7 +70,54 @@ async function warmCacheUrls(urls) {
   );
 }
 
-// Image cache-first for Firebase/GCS (complements Workbox runtimeCaching)
+async function matchInCaches(request) {
+  const names = [PAGES_CACHE, WARM_CACHE, START_CACHE, 'next-data', 'pages-rsc'];
+  for (const name of names) {
+    try {
+      const cache = await caches.open(name);
+      const hit =
+        (await cache.match(request, { ignoreSearch: true })) ||
+        (await cache.match(request));
+      if (hit) return hit;
+    } catch {
+      // continue
+    }
+  }
+  // Global match (precache)
+  try {
+    const hit =
+      (await caches.match(request, { ignoreSearch: true })) ||
+      (await caches.match(request));
+    if (hit) return hit;
+  } catch {
+    // ignore
+  }
+  return null;
+}
+
+async function offlineNavigationFallback() {
+  const candidates = ['/', '/~offline', '/login', '/members'];
+  for (const path of candidates) {
+    try {
+      const abs = new URL(path, self.location.origin).href;
+      const hit =
+        (await caches.match(abs, { ignoreSearch: true })) ||
+        (await caches.match(path, { ignoreSearch: true }));
+      if (hit) return hit;
+    } catch {
+      // continue
+    }
+  }
+  return new Response(
+    `<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Sin conexión</title><style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#fafafa;color:#111;padding:24px;text-align:center}h1{font-size:1.25rem;margin:0 0 8px}p{color:#555;font-size:.9rem;line-height:1.45}</style></head><body><div><h1>Sin conexión</h1><p>Abre la app una vez con internet para cachear las pantallas. Luego podrás usarlas sin red.</p></div></body></html>`,
+    {
+      status: 200,
+      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+    }
+  );
+}
+
+// Offline-first navigations MUST be handled here (before/alongside Workbox)
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
@@ -74,26 +129,94 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  if (!IMAGE_HOST_RE.test(url.hostname)) return;
+  // Same-origin document navigations (open app, pull-to-refresh, hard links)
+  const isNavigate =
+    request.mode === 'navigate' ||
+    (request.destination === 'document' && url.origin === self.location.origin);
 
-  event.respondWith(
-    (async () => {
-      const cache = await caches.open(IMAGE_CACHE);
-      const cached = await cache.match(request);
-      if (cached) return cached;
-
-      try {
-        const response = await fetch(request);
-        if (response && response.ok) {
-          event.waitUntil(cache.put(request, response.clone()));
+  if (isNavigate && url.origin === self.location.origin) {
+    event.respondWith(
+      (async () => {
+        // Try network quickly when online-ish; fail fast offline
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 2500);
+          const networkResponse = await fetch(request, { signal: controller.signal });
+          clearTimeout(timer);
+          if (networkResponse && networkResponse.ok) {
+            const cache = await caches.open(PAGES_CACHE);
+            event.waitUntil(cache.put(request, networkResponse.clone()));
+            return networkResponse;
+          }
+        } catch {
+          // offline or timeout — use cache
         }
-        return response;
-      } catch {
+
+        const cached = await matchInCaches(request);
+        if (cached) return cached;
+        return offlineNavigationFallback();
+      })()
+    );
+    return;
+  }
+
+  // Next.js RSC / flight payloads (client navigations)
+  const isRsc =
+    url.origin === self.location.origin &&
+    (url.searchParams.has('_rsc') ||
+      request.headers.get('RSC') === '1' ||
+      request.headers.get('Next-Router-Prefetch') === '1' ||
+      request.headers.get('Next-Router-State-Tree') != null);
+
+  if (isRsc) {
+    event.respondWith(
+      (async () => {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 2500);
+          const networkResponse = await fetch(request, { signal: controller.signal });
+          clearTimeout(timer);
+          if (networkResponse && networkResponse.ok) {
+            const cache = await caches.open('pages-rsc');
+            event.waitUntil(cache.put(request, networkResponse.clone()));
+            return networkResponse;
+          }
+        } catch {
+          // fall through to cache
+        }
+        const cached = await matchInCaches(request);
+        if (cached) return cached;
+        // Empty RSC-ish response would break router; prefer last HTML shell path
         return (
-          cached ||
-          new Response('', { status: 503, statusText: 'Offline image unavailable' })
+          (await caches.match(url.pathname, { ignoreSearch: true })) ||
+          (await offlineNavigationFallback())
         );
-      }
-    })()
-  );
+      })()
+    );
+    return;
+  }
+
+  // Firebase / GCS images
+  if (IMAGE_HOST_RE.test(url.hostname)) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(IMAGE_CACHE);
+        const cached = await cache.match(request);
+        if (cached) return cached;
+
+        try {
+          const response = await fetch(request);
+          if (response && response.ok) {
+            event.waitUntil(cache.put(request, response.clone()));
+          }
+          return response;
+        } catch {
+          return (
+            cached ||
+            new Response('', { status: 503, statusText: 'Offline image unavailable' })
+          );
+        }
+      })()
+    );
+  }
 });

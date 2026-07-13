@@ -6,20 +6,20 @@
       "date": "2026-07-13",
       "changes": {
         "es": [
-          "Ahora puedes usar la aplicación sin conexión a internet gracias al nuevo modo offline.",
-          "Se agregaron límites de miembros según el rol, y la página de administración muestra alertas cuando se alcanza el tope.",
-          "Eliminamos código antiguo y archivos sin usar para que la app sea más rápida y estable.",
-          "Los futuros miembros ahora se gestionan desde la pestaña 'Futuros miembros' en la página de obra misional.",
-          "La aplicación sincroniza automáticamente los datos cuando hay cambios, incluso si estás offline.",
-          "Puedes refrescar los datos manualmente y ver el estado de sincronización con notificaciones."
+          "Mejora la experiencia fuera de línea: ahora puedes recargar la página sin conexión y la app se mantiene estable.",
+          "Se añadió soporte completo para usar la app sin internet, con almacenamiento local de datos y sincronización automática al volver en línea.",
+          "Ahora los líderes pueden ver y gestionar los límites de miembros por rol, con alertas cuando se alcanza el máximo.",
+          "Se reorganizó la sección de miembros futuros en la página de obra misional, con acceso directo desde el menú.",
+          "La app ahora sincroniza automáticamente los cambios cuando vuelves a tener conexión, sin necesidad de recargar manualmente.",
+          "Se eliminaron archivos y código antiguo que ya no se usaban, haciendo la app más rápida y ligera."
         ],
         "en": [
-          "You can now use the app offline thanks to the new offline mode.",
-          "Role-based member limits have been added, and the admin page shows alerts when limits are reached.",
-          "We removed old, unused code to make the app faster and more stable.",
-          "Future members are now managed in the 'Future Members' tab on the missionary work page.",
-          "The app automatically syncs data when changes occur, even when you're offline.",
-          "You can manually refresh data and see sync status with toast notifications."
+          "Improved offline experience: you can now pull-to-refresh even without internet, and the app stays stable.",
+          "Full offline support added: your data is stored locally and syncs automatically when you're back online.",
+          "Leaders can now see and manage role-based member limits, with alerts when the maximum is reached.",
+          "Future members section moved to the missionary work page for easier access from the menu.",
+          "The app now automatically syncs changes when you reconnect, no manual refresh needed.",
+          "Removed old unused files and code, making the app faster and leaner."
         ]
       }
     },

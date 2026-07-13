@@ -27,12 +27,12 @@ function PrivateRoute({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Offline: wait for Firebase Auth to restore session from IndexedDB
-    // before forcing login (login itself needs network for new sessions).
+    // Offline: NEVER hard-navigate to /login — that full page load dies without network
+    // and the phone shows the native "sin internet" screen. Wait for sticky auth restore.
     if (!isBrowserOnline()) {
       const t = window.setTimeout(() => {
         setOfflineAuthGaveUp(true);
-      }, 3000);
+      }, 4000);
       return () => window.clearTimeout(t);
     }
 
@@ -45,9 +45,12 @@ function PrivateRoute({ children }: { children: ReactNode }) {
     }
   }, [profileLoaded, isRestricted, loading, router, user]);
 
-  // Redirect to user's main page if currently on the root path — uses auth context (no extra Firestore read)
+  // Redirect to user's main page if currently on the root path — uses auth context (no extra Firestore read).
+  // Skip while offline: client navigations need RSC network and can blank the shell on mobile.
   useEffect(() => {
     if (!loading && profileLoaded && user && !isRestricted && window.location.pathname === '/') {
+      if (!isBrowserOnline()) return;
+
       const normalizedVisible = visiblePages.map((p) =>
         p === '/future-members' ? '/missionary-work' : p
       );

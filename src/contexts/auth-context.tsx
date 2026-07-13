@@ -46,6 +46,8 @@ interface CachedAuthProfile {
   organizacion: string;
   barrioOrg: string;
   photoURL: string | null;
+  email: string | null;
+  displayName: string | null;
   savedAt: number;
 }
 
@@ -61,6 +63,10 @@ const formatUser = (user: FirebaseUser): User => ({
 
 function profileCacheKey(uid: string): string {
   return `${getAppStoragePrefix()}_auth_profile_${uid}`;
+}
+
+function lastSessionKey(): string {
+  return `${getAppStoragePrefix()}_last_auth_uid`;
 }
 
 function loadCachedProfile(uid: string): CachedAuthProfile | null {
@@ -80,8 +86,27 @@ function saveCachedProfile(profile: CachedAuthProfile): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.setItem(profileCacheKey(profile.uid), JSON.stringify(profile));
+    localStorage.setItem(lastSessionKey(), profile.uid);
   } catch {
     // quota / private mode
+  }
+}
+
+function loadLastSessionUid(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return localStorage.getItem(lastSessionKey());
+  } catch {
+    return null;
+  }
+}
+
+function clearLastSessionUid(): void {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(lastSessionKey());
+  } catch {
+    // ignore
   }
 }
 
@@ -100,6 +125,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [profileLoaded, setProfileLoaded] = useState(false);
   const { setTheme } = useTheme();
   const profileAppliedFromCache = useRef(false);
+  /** Sticky offline session: never wipe UI when auth flickers to null without network */
+  const stickyUserRef = useRef<User | null>(null);
+  const stickyFirebaseUserRef = useRef<FirebaseUser | null>(null);
+  const intentionalSignOutRef = useRef(false);
 
   const applyProfile = useCallback(
     (data: {
@@ -111,6 +140,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       organizacion?: string;
       theme?: string;
       photoURL?: string | null;
+      email?: string | null;
+      displayName?: string | null;
     }, options?: { persistUid?: string }) => {
       const role = normalizeRole(data.role);
       const permission = normalizePermission(data.permission);
@@ -147,6 +178,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
 
       if (options?.persistUid) {
+        const existing = loadCachedProfile(options.persistUid);
         saveCachedProfile({
           uid: options.persistUid,
           role,
@@ -157,7 +189,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           barrio: barrioVal,
           organizacion: orgVal,
           barrioOrg: nextBarrioOrg,
-          photoURL: typeof data.photoURL === "string" ? data.photoURL : null,
+          photoURL: typeof data.photoURL === "string" ? data.photoURL : existing?.photoURL ?? null,
+          email: data.email ?? existing?.email ?? null,
+          displayName: data.displayName ?? existing?.displayName ?? null,
           savedAt: Date.now(),
         });
       }
@@ -165,15 +199,60 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [setTheme]
   );
 
+  // Instant hydrate from last session while Firebase Auth boots (esp. offline cold start)
   useEffect(() => {
+    const lastUid = loadLastSessionUid();
+    if (!lastUid) return;
+    const cached = loadCachedProfile(lastUid);
+    if (!cached) return;
+
+    const stickyUser: User = {
+      uid: cached.uid,
+      email: cached.email,
+      displayName: cached.displayName,
+      photoURL: cached.photoURL,
+      initials: cached.displayName
+        ? cached.displayName.charAt(0).toUpperCase()
+        : cached.email
+          ? cached.email.charAt(0).toUpperCase()
+          : '?',
+    };
+    stickyUserRef.current = stickyUser;
+    setUser(stickyUser);
+    applyProfile({
+      role: cached.role,
+      permission: cached.permission,
+      mainPage: cached.mainPage,
+      visiblePages: cached.visiblePages,
+      barrio: cached.barrio,
+      organizacion: cached.organizacion,
+      theme: cached.theme,
+      photoURL: cached.photoURL,
+    });
+    profileAppliedFromCache.current = true;
+    setProfileLoaded(true);
+    // Keep loading=true until onAuthStateChanged confirms, unless offline
+    if (!isBrowserOnline()) {
+      setLoading(false);
+    }
+  }, [applyProfile]);
+
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (currentUser) {
-        setUser(formatUser(currentUser));
+        intentionalSignOutRef.current = false;
+        const formatted = formatUser(currentUser);
+        stickyUserRef.current = formatted;
+        stickyFirebaseUserRef.current = currentUser;
+        setUser(formatted);
         setFirebaseUser(currentUser);
-        setProfileLoaded(false);
-        profileAppliedFromCache.current = false;
 
-        // Hydrate instantly from last known profile (critical for offline cold start)
+        // Only reset profileLoaded if we don't already have cache for this uid
         const cached = loadCachedProfile(currentUser.uid);
         if (cached) {
           applyProfile({
@@ -185,17 +264,61 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             organizacion: cached.organizacion,
             theme: cached.theme,
             photoURL: cached.photoURL,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
           });
-          if (cached.photoURL) {
+          if (cached.photoURL || currentUser.photoURL) {
             setUser((prev) =>
-              prev ? { ...prev, photoURL: cached.photoURL ?? prev.photoURL } : prev
+              prev
+                ? {
+                    ...prev,
+                    photoURL: cached.photoURL ?? currentUser.photoURL ?? prev.photoURL,
+                  }
+                : prev
             );
           }
           profileAppliedFromCache.current = true;
           setProfileLoaded(true);
+          saveCachedProfile({
+            ...cached,
+            email: currentUser.email,
+            displayName: currentUser.displayName,
+            photoURL: cached.photoURL ?? currentUser.photoURL,
+            savedAt: Date.now(),
+          });
+        } else {
+          setProfileLoaded(false);
+          profileAppliedFromCache.current = false;
+          // Seed last session so offline reopen works even before profile loads
+          try {
+            localStorage.setItem(lastSessionKey(), currentUser.uid);
+          } catch {
+            // ignore
+          }
         }
       } else {
-        // Keep localStorage profile for the next session on this device (offline reopen).
+        // CRITICAL: when the network drops, Firebase can briefly report null.
+        // Do NOT wipe the session offline — that forces /login and kills the PWA shell.
+        const offline = !isBrowserOnline();
+        const hasSticky =
+          stickyUserRef.current != null || loadLastSessionUid() != null;
+
+        if (offline && hasSticky && !intentionalSignOutRef.current) {
+          console.warn('[auth] offline: ignoring null auth event, keeping sticky session');
+          if (stickyUserRef.current) {
+            setUser(stickyUserRef.current);
+          }
+          if (stickyFirebaseUserRef.current) {
+            setFirebaseUser(stickyFirebaseUserRef.current);
+          }
+          setProfileLoaded(true);
+          setLoading(false);
+          return;
+        }
+
+        stickyUserRef.current = null;
+        stickyFirebaseUserRef.current = null;
+        clearLastSessionUid();
         setUser(null);
         setFirebaseUser(null);
         setUserRole(null);
@@ -220,7 +343,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return;
     }
 
-    // If we already have a cached profile, stay usable; still try live updates when possible
     if (!profileAppliedFromCache.current) {
       setProfileLoaded(false);
     }
@@ -233,7 +355,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setProfileLoaded(true);
     };
 
-    // Offline safety net: if snapshot never arrives, don't block the app forever
     const offlineTimeout =
       !isBrowserOnline() && !profileAppliedFromCache.current
         ? window.setTimeout(() => {
@@ -251,18 +372,44 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 photoURL: cached.photoURL,
               });
             } else {
-              // Defaults so PrivateRoute can still render (same as missing doc online)
               applyProfile({});
             }
             markLoaded();
-          }, 1500)
+          }, 800)
         : null;
+
+    // Always ensure we don't hang forever even if online snapshot is slow on flaky mobile
+    const hardTimeout = window.setTimeout(() => {
+      if (settled) return;
+      const cached = loadCachedProfile(firebaseUser.uid);
+      if (cached) {
+        applyProfile({
+          role: cached.role,
+          permission: cached.permission,
+          mainPage: cached.mainPage,
+          visiblePages: cached.visiblePages,
+          barrio: cached.barrio,
+          organizacion: cached.organizacion,
+          theme: cached.theme,
+          photoURL: cached.photoURL,
+        });
+      } else if (!profileAppliedFromCache.current) {
+        applyProfile({});
+      }
+      markLoaded();
+    }, 5000);
 
     const unsubscribe = onSnapshot(
       userDocRef,
       (userDoc) => {
         if (!userDoc.exists()) {
-          applyProfile({}, { persistUid: firebaseUser.uid });
+          applyProfile(
+            {
+              email: firebaseUser.email,
+              displayName: firebaseUser.displayName,
+            },
+            { persistUid: firebaseUser.uid }
+          );
           markLoaded();
           return;
         }
@@ -278,13 +425,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             organizacion: data.organizacion,
             theme: data.theme,
             photoURL: typeof data.photoURL === "string" ? data.photoURL : null,
+            email: firebaseUser.email,
+            displayName: firebaseUser.displayName,
           },
           { persistUid: firebaseUser.uid }
         );
         markLoaded();
       },
       () => {
-        // Network/Firestore error: keep cache if present, else safe defaults
         if (!profileAppliedFromCache.current) {
           const cached = loadCachedProfile(firebaseUser.uid);
           if (cached) {
@@ -309,20 +457,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       unsubscribe();
       if (offlineTimeout != null) window.clearTimeout(offlineTimeout);
+      window.clearTimeout(hardTimeout);
     };
   }, [firebaseUser, applyProfile]);
   
   const refreshAuth = useCallback(async () => {
-    const currentUser = auth.currentUser;
-    if (currentUser) {
+    const currentUser = auth?.currentUser;
+    if (!currentUser) return;
+    // Never reload profile from network while offline — it fails and can wipe session
+    if (!isBrowserOnline()) return;
+    try {
       await currentUser.reload();
       const freshUser = auth.currentUser;
       if (freshUser) {
-        // Auth profile fields only; role/permission stay live via onSnapshot
         setUser(formatUser(freshUser));
         setFirebaseUser(freshUser);
+        stickyUserRef.current = formatUser(freshUser);
+        stickyFirebaseUserRef.current = freshUser;
       }
+    } catch (error) {
+      console.warn('[auth] refreshAuth failed', error);
     }
+  }, []);
+
+  // Expose intentional sign-out for logout buttons (via custom event)
+  useEffect(() => {
+    const onSignOut = () => {
+      intentionalSignOutRef.current = true;
+      stickyUserRef.current = null;
+      stickyFirebaseUserRef.current = null;
+      clearLastSessionUid();
+    };
+    window.addEventListener('sionflow:intent-sign-out', onSignOut);
+    return () => window.removeEventListener('sionflow:intent-sign-out', onSignOut);
   }, []);
 
   const value = {

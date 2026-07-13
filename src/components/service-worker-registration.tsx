@@ -66,10 +66,11 @@ export function ServiceWorkerRegistration() {
           });
         });
 
-        // First install: page may not be controlled until reload — do it once
+        // First install: page may not be controlled until reload — do it once.
+        // Never force reload while offline (would show the native "sin internet" page).
         await navigator.serviceWorker.ready;
-        if (!navigator.serviceWorker.controller) {
-          const claimKey = 'qf-sw-claim-reload-v2';
+        if (!navigator.serviceWorker.controller && isBrowserOnline()) {
+          const claimKey = 'qf-sw-claim-reload-v3';
           if (sessionStorage.getItem(claimKey) !== '1') {
             sessionStorage.setItem(claimKey, '1');
             window.location.reload();

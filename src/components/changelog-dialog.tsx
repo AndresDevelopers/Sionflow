@@ -10,7 +10,6 @@ import {
   DialogTrigger,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
 
 interface ChangelogEntry {
   version: string;
@@ -52,14 +51,15 @@ export function ChangelogDialog({ children }: { children: React.ReactNode }) {
     <Dialog>
       <DialogTrigger asChild>{children}</DialogTrigger>
 
-      <DialogContent className="max-w-[95vw] sm:max-w-[425px] w-full max-h-[85vh] flex flex-col overflow-hidden p-4 sm:p-6">
+      <DialogContent className="max-w-[95vw] sm:max-w-[425px] w-full max-h-[85vh] flex flex-col gap-3 overflow-hidden p-4 sm:p-6">
         <DialogHeader className="shrink-0">
           <DialogTitle>{t("changelog.title")}</DialogTitle>
           <DialogDescription>{t("changelog.description")}</DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="flex-1 min-h-0 min-w-0 w-full">
-          <div className="grid gap-4 py-2 pr-3 max-w-full min-w-0">
+        {/* Explicit max-height so vertical scroll works inside the max-h dialog */}
+        <div className="max-h-[calc(85vh-8.5rem)] overflow-y-auto overflow-x-hidden overscroll-contain pr-1">
+          <div className="grid gap-4 py-2 max-w-full min-w-0">
             {loading && (
               <p className="text-sm text-muted-foreground">{t("changelog.loading")}</p>
             )}
@@ -92,7 +92,7 @@ export function ChangelogDialog({ children }: { children: React.ReactNode }) {
               </div>
             ))}
           </div>
-        </ScrollArea>
+        </div>
       </DialogContent>
     </Dialog>
   );

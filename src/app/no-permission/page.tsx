@@ -17,6 +17,7 @@ export default function NoPermissionPage() {
     setIsSigningOut(true);
     try {
       const { auth } = await import("@/lib/firebase");
+      window.dispatchEvent(new Event("sionflow:intent-sign-out"));
       await signOut(auth);
       router.push("/login");
     } catch (error) {
