@@ -9,6 +9,13 @@ import {
   canManageSettings,
   hasLeadershipPrivileges,
   canViewSettings,
+  ROLE_LIMITS,
+  countRoles,
+  getRoleRemaining,
+  isRoleAtCapacity,
+  canAssignRole,
+  canBulkAssignRole,
+  projectedRoleCountAfterBulk,
 } from '../src/lib/roles';
 import type { UserRole } from '../src/lib/roles';
 
@@ -120,4 +127,51 @@ test('canViewSettings', () => {
   assert.strictEqual(canViewSettings('counselor'), true);
   assert.strictEqual(canViewSettings('user'), true);
   assert.strictEqual(canViewSettings('other'), true);
+});
+
+test('ROLE_LIMITS', () => {
+  assert.strictEqual(ROLE_LIMITS.president, 2);
+  assert.strictEqual(ROLE_LIMITS.counselor, 3);
+  assert.strictEqual(ROLE_LIMITS.secretary, 3);
+  assert.strictEqual(ROLE_LIMITS.other, 8);
+  assert.strictEqual(ROLE_LIMITS.user, 6);
+});
+
+test('role capacity helpers', async (t) => {
+  await t.test('counts roles and remaining seats', () => {
+    const counts = countRoles([
+      { role: 'president' },
+      { role: 'president' },
+      { role: 'user' },
+      { role: 'counselor' },
+    ]);
+    assert.strictEqual(counts.president, 2);
+    assert.strictEqual(counts.user, 1);
+    assert.strictEqual(counts.counselor, 1);
+    assert.strictEqual(getRoleRemaining(counts, 'president'), 0);
+    assert.strictEqual(getRoleRemaining(counts, 'user'), 5);
+    assert.strictEqual(isRoleAtCapacity(counts, 'president'), true);
+    assert.strictEqual(isRoleAtCapacity(counts, 'user'), false);
+  });
+
+  await t.test('allows keeping the same role even at capacity', () => {
+    const counts = countRoles([{ role: 'president' }, { role: 'president' }]);
+    assert.strictEqual(canAssignRole(counts, 'president', 'president'), true);
+    assert.strictEqual(canAssignRole(counts, 'president', 'user'), false);
+    assert.strictEqual(canAssignRole(counts, 'counselor', 'user'), true);
+  });
+
+  await t.test('validates bulk role assignment against limits', () => {
+    const users = [
+      { uid: 'a', role: 'user' as UserRole },
+      { uid: 'b', role: 'user' as UserRole },
+      { uid: 'c', role: 'user' as UserRole },
+      { uid: 'p1', role: 'president' as UserRole },
+      { uid: 'p2', role: 'president' as UserRole },
+    ];
+    assert.strictEqual(canBulkAssignRole(users, new Set(['a']), 'president'), false);
+    assert.strictEqual(canBulkAssignRole(users, new Set(['p1']), 'president'), true);
+    assert.strictEqual(projectedRoleCountAfterBulk(users, new Set(['a', 'b']), 'counselor'), 2);
+    assert.strictEqual(canBulkAssignRole(users, new Set(['a', 'b', 'c']), 'counselor'), true);
+  });
 });

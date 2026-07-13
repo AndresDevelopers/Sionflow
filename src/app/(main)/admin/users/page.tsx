@@ -21,6 +21,12 @@ import {
   normalizePermission,
   getDefaultPermission,
   resolvePermissionForRoleChange,
+  countRoles,
+  getRoleLimit,
+  getRoleRemaining,
+  isRoleAtCapacity,
+  canAssignRole,
+  canBulkAssignRole,
   type UserRole,
   type UserPermission,
   PERMISSION_META,
@@ -54,6 +60,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -65,6 +72,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  AlertTriangle,
   Eye,
   Loader2,
   Search,
@@ -183,17 +191,34 @@ export default function AdminUsersPage() {
     setFiltered(list);
   }, [users, search, roleFilter]);
 
+  const roleCounts = useMemo(() => countRoles(users), [users]);
+  const membersAtCapacity = isRoleAtCapacity(roleCounts, "user");
+
   const getDefaultVisiblePages = (role: UserRole): string[] => {
     if (role === "user") return [];
     return defaultVisiblePages;
   };
 
   const handleRoleChange = async (userId: string, newRole: UserRole) => {
+    const normalized = normalizeRole(newRole);
+    const target = users.find((u) => u.uid === userId);
+    const previousRole = target?.role ?? "user";
+
+    if (!canAssignRole(roleCounts, normalized, previousRole)) {
+      toast({
+        title: t("admin.users.toast.roleLimitTitle"),
+        description: t("admin.users.toast.roleLimitDesc", {
+          role: t(`role.${normalized}`),
+          limit: getRoleLimit(normalized),
+          count: roleCounts[normalized],
+        }),
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSaving(userId);
     try {
-      const normalized = normalizeRole(newRole);
-      const target = users.find((u) => u.uid === userId);
-      const previousRole = target?.role ?? "user";
       // Preserve custom Lectura/Todo when moving between leadership roles
       const nextPermission = resolvePermissionForRoleChange(
         previousRole,
@@ -360,6 +385,20 @@ export default function AdminUsersPage() {
 
   const handleBulkRole = async () => {
     if (!bulkRole || selectedUids.size === 0) return;
+
+    if (!canBulkAssignRole(users, selectedUids, bulkRole)) {
+      toast({
+        title: t("admin.users.toast.roleLimitTitle"),
+        description: t("admin.users.toast.roleLimitBulkDesc", {
+          role: t(`role.${bulkRole}`),
+          limit: getRoleLimit(bulkRole),
+          remaining: getRoleRemaining(roleCounts, bulkRole),
+        }),
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsBulkSaving(true);
     try {
       const defaultPages = getDefaultVisiblePages(bulkRole);
@@ -534,6 +573,25 @@ export default function AdminUsersPage() {
   const allSelected =
     filtered.length > 0 && selectedUids.size === filtered.length;
 
+  const roleSlotLabel = (role: UserRole) => {
+    const used = roleCounts[role];
+    const limit = getRoleLimit(role);
+    const remaining = getRoleRemaining(roleCounts, role);
+    if (remaining === 0) {
+      return t("admin.users.roleSlots.full", {
+        role: t(`role.${role}`),
+        used,
+        limit,
+      });
+    }
+    return t("admin.users.roleSlots.remaining", {
+      role: t(`role.${role}`),
+      used,
+      limit,
+      remaining,
+    });
+  };
+
   return (
     <section className="page-section">
       <header className="flex flex-col gap-2">
@@ -547,6 +605,43 @@ export default function AdminUsersPage() {
           {t("admin.users.subtitle")}
         </p>
       </header>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">{t("admin.users.roleSlots.title")}</CardTitle>
+          <CardDescription>{t("admin.users.roleSlots.description")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap gap-2">
+            {assignableRoles.map((role) => {
+              const remaining = getRoleRemaining(roleCounts, role);
+              const full = remaining === 0;
+              return (
+                <Badge
+                  key={role}
+                  variant="secondary"
+                  className={`text-xs font-normal ${ROLE_META[role].color} ${
+                    full ? "ring-1 ring-destructive/40" : ""
+                  }`}
+                >
+                  {roleSlotLabel(role)}
+                </Badge>
+              );
+            })}
+          </div>
+          {membersAtCapacity && (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>{t("admin.users.roleSlots.membersFullTitle")}</AlertTitle>
+              <AlertDescription>
+                {t("admin.users.roleSlots.membersFullDescription", {
+                  limit: getRoleLimit("user"),
+                })}
+              </AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
@@ -591,11 +686,18 @@ export default function AdminUsersPage() {
                   <SelectValue placeholder={t("admin.users.assignRole")} />
                 </SelectTrigger>
                 <SelectContent>
-                  {assignableRoles.map((r) => (
-                    <SelectItem key={r} value={r}>
-                      {t(`role.${r}`)}
-                    </SelectItem>
-                  ))}
+                  {assignableRoles.map((r) => {
+                    const remaining = getRoleRemaining(roleCounts, r);
+                    const allowed = canBulkAssignRole(users, selectedUids, r);
+                    return (
+                      <SelectItem key={r} value={r} disabled={!allowed}>
+                        {t(`role.${r}`)}
+                        {remaining === 0
+                          ? ` (${t("admin.users.roleSlots.noSlots")})`
+                          : ` (${t("admin.users.roleSlots.left", { remaining })})`}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
               <Button
@@ -724,11 +826,19 @@ export default function AdminUsersPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {assignableRoles.map((r) => (
-                                  <SelectItem key={r} value={r}>
-                                    {t(`role.${r}`)}
-                                  </SelectItem>
-                                ))}
+                                {assignableRoles.map((r) => {
+                                  const allowed = canAssignRole(roleCounts, r, user.role);
+                                  const remaining = getRoleRemaining(roleCounts, r);
+                                  return (
+                                    <SelectItem key={r} value={r} disabled={!allowed}>
+                                      {t(`role.${r}`)}
+                                      {r !== user.role &&
+                                        (remaining === 0
+                                          ? ` (${t("admin.users.roleSlots.noSlots")})`
+                                          : ` (${t("admin.users.roleSlots.left", { remaining })})`)}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                             <Badge
@@ -921,11 +1031,19 @@ export default function AdminUsersPage() {
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
-                                {assignableRoles.map((r) => (
-                                  <SelectItem key={r} value={r}>
-                                    {t(`role.${r}`)}
-                                  </SelectItem>
-                                ))}
+                                {assignableRoles.map((r) => {
+                                  const allowed = canAssignRole(roleCounts, r, user.role);
+                                  const remaining = getRoleRemaining(roleCounts, r);
+                                  return (
+                                    <SelectItem key={r} value={r} disabled={!allowed}>
+                                      {t(`role.${r}`)}
+                                      {r !== user.role &&
+                                        (remaining === 0
+                                          ? ` (${t("admin.users.roleSlots.noSlots")})`
+                                          : ` (${t("admin.users.roleSlots.left", { remaining })})`)}
+                                    </SelectItem>
+                                  );
+                                })}
                               </SelectContent>
                             </Select>
                             <Badge

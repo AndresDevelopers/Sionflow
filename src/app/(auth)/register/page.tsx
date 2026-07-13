@@ -7,12 +7,12 @@ import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { createUserWithEmailAndPassword, deleteUser, updateProfile } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { doc, serverTimestamp, setDoc, getDocs } from "firebase/firestore";
+import { doc, serverTimestamp, setDoc, getDocs, query, where } from "firebase/firestore";
 import { format } from 'date-fns';
 import { getDateFnsLocale } from "@/lib/i18n-date";
-import { CalendarIcon } from 'lucide-react';
+import { AlertTriangle, CalendarIcon } from 'lucide-react';
 
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -44,10 +44,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from '@/lib/utils';
 import { useI18n } from "@/contexts/i18n-context";
 import { usersCollection, barriosCollection, organizacionesCollection } from "@/lib/collections";
+import { ROLE_LIMITS, normalizeRole } from "@/lib/roles";
 
 const createRegisterSchema = (t: (key: string, params?: Record<string, string | number>) => string) =>
   z.object({
@@ -77,12 +79,43 @@ const createRegisterSchema = (t: (key: string, params?: Record<string, string | 
   });
 
 
+type CapacityState = {
+  count: number;
+  limit: number;
+  remaining: number;
+  full: boolean;
+  loading: boolean;
+};
+
 export default function RegisterPage() {
   const router = useRouter();
   const { toast } = useToast();
   const { t } = useI18n();
   const [barrios, setBarrios] = useState<string[]>([]);
   const [organizaciones, setOrganizaciones] = useState<string[]>([]);
+  const [capacity, setCapacity] = useState<CapacityState>({
+    count: 0,
+    limit: ROLE_LIMITS.user,
+    remaining: ROLE_LIMITS.user,
+    full: false,
+    loading: true,
+  });
+
+  const form = useForm<z.infer<ReturnType<typeof createRegisterSchema>>>({
+    resolver: zodResolver(createRegisterSchema(t)),
+    mode: "onTouched",
+    defaultValues: {
+      name: "",
+      email: "",
+      password: "",
+      confirmPassword: "",
+      barrio: "Libertad",
+      organizacion: "Quórum de Élderes",
+    },
+  });
+
+  const watchedBarrio = form.watch("barrio");
+  const watchedOrganizacion = form.watch("organizacion");
 
   useEffect(() => {
     const fetchOptions = async () => {
@@ -106,28 +139,123 @@ export default function RegisterPage() {
     fetchOptions();
   }, []);
 
-  const form = useForm<z.infer<ReturnType<typeof createRegisterSchema>>>({
-    resolver: zodResolver(createRegisterSchema(t)),
-    mode: "onTouched",
-    defaultValues: {
-      name: "",
-      email: "",
-      password: "",
-      confirmPassword: "",
-      barrio: "Libertad",
-      organizacion: "Quórum de Élderes",
-    },
-  });
+  useEffect(() => {
+    if (!watchedBarrio || !watchedOrganizacion) return;
+
+    let cancelled = false;
+    const checkCapacity = async () => {
+      setCapacity((prev) => ({ ...prev, loading: true }));
+      try {
+        const params = new URLSearchParams({
+          barrio: watchedBarrio,
+          organizacion: watchedOrganizacion,
+        });
+        const res = await fetch(`/api/auth/registration-capacity?${params.toString()}`);
+        if (!res.ok) throw new Error("capacity-check-failed");
+        const data = (await res.json()) as {
+          count: number;
+          limit: number;
+          remaining: number;
+          full: boolean;
+        };
+        if (!cancelled) {
+          setCapacity({
+            count: data.count,
+            limit: data.limit,
+            remaining: data.remaining,
+            full: data.full,
+            loading: false,
+          });
+        }
+      } catch (err) {
+        console.error("Error checking registration capacity:", err);
+        if (!cancelled) {
+          // Fail open on check errors; hard limit still applied on submit.
+          setCapacity((prev) => ({ ...prev, loading: false }));
+        }
+      }
+    };
+
+    void checkCapacity();
+    return () => {
+      cancelled = true;
+    };
+  }, [watchedBarrio, watchedOrganizacion]);
+
+  const countMemberSeats = async (barrioOrg: string): Promise<number> => {
+    const snap = await getDocs(
+      query(usersCollection, where("barrioOrg", "==", barrioOrg))
+    );
+    let count = 0;
+    snap.forEach((d) => {
+      if (normalizeRole(d.data().role) === "user") count += 1;
+    });
+    return count;
+  };
 
   const onSubmit = async (values: z.infer<ReturnType<typeof createRegisterSchema>>) => {
+    if (capacity.full) {
+      toast({
+        title: t("register.capacity.fullTitle"),
+        description: t("register.capacity.fullDescription", {
+          limit: capacity.limit,
+          barrio: values.barrio,
+          organizacion: values.organizacion,
+        }),
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, values.email, values.password);
       const user = userCredential.user;
-      
+
       await updateProfile(user, {
           displayName: values.name
       });
-      
+
+      const barrioOrg = `${values.barrio}|${values.organizacion}`;
+
+      // Re-check after auth (user is signed in) to avoid racing past the public API.
+      try {
+        const memberCount = await countMemberSeats(barrioOrg);
+        if (memberCount >= ROLE_LIMITS.user) {
+          await deleteUser(user);
+          setCapacity({
+            count: memberCount,
+            limit: ROLE_LIMITS.user,
+            remaining: 0,
+            full: true,
+            loading: false,
+          });
+          toast({
+            title: t("register.capacity.fullTitle"),
+            description: t("register.capacity.fullDescription", {
+              limit: ROLE_LIMITS.user,
+              barrio: values.barrio,
+              organizacion: values.organizacion,
+            }),
+            variant: "destructive",
+          });
+          return;
+        }
+      } catch (capacityErr) {
+        console.error("Post-auth capacity check failed:", capacityErr);
+        // If we cannot verify seats, do not create a user doc with an unknown slot.
+        try {
+          await deleteUser(user);
+        } catch {
+          /* ignore cleanup errors */
+        }
+        toast({
+          title: t("register.toastErrorTitle"),
+          description: t("register.toastErrorUnexpected"),
+          variant: "destructive",
+        });
+        return;
+      }
+
       const userDocRef = doc(usersCollection, user.uid);
       await setDoc(userDocRef, {
         uid: user.uid,
@@ -136,7 +264,7 @@ export default function RegisterPage() {
         birthDate: values.birthDate ?? null,
         barrio: values.barrio,
         organizacion: values.organizacion,
-        barrioOrg: `${values.barrio}|${values.organizacion}`,
+        barrioOrg,
         role: 'user',
         permission: 'read',
         createdAt: serverTimestamp(),
@@ -171,6 +299,31 @@ export default function RegisterPage() {
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {capacity.full && !capacity.loading && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{t("register.capacity.fullTitle")}</AlertTitle>
+            <AlertDescription>
+              {t("register.capacity.fullDescription", {
+                limit: capacity.limit,
+                barrio: watchedBarrio,
+                organizacion: watchedOrganizacion,
+              })}
+            </AlertDescription>
+          </Alert>
+        )}
+        {!capacity.full && !capacity.loading && capacity.remaining <= 2 && (
+          <Alert className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>{t("register.capacity.lowTitle")}</AlertTitle>
+            <AlertDescription>
+              {t("register.capacity.lowDescription", {
+                remaining: capacity.remaining,
+                limit: capacity.limit,
+              })}
+            </AlertDescription>
+          </Alert>
+        )}
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
@@ -182,7 +335,7 @@ export default function RegisterPage() {
                     {t('register.nameLabel')} <span className="text-destructive">*</span>
                   </FormLabel>
                   <FormControl>
-                    <Input placeholder="John Doe" {...field} />
+                    <Input placeholder="John Doe" {...field} disabled={capacity.full} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -331,8 +484,16 @@ export default function RegisterPage() {
                 </FormItem>
               )}
             />
-            <Button type="submit" className="w-full" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? t('register.submitButtonLoading') : t('register.submitButton')}
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={form.formState.isSubmitting || capacity.full || capacity.loading}
+            >
+              {form.formState.isSubmitting
+                ? t('register.submitButtonLoading')
+                : capacity.full
+                  ? t('register.capacity.submitDisabled')
+                  : t('register.submitButton')}
             </Button>
           </form>
         </Form>

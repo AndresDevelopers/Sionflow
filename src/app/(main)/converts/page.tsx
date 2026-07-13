@@ -37,14 +37,23 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Info, Pencil, Eye, Users } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Info, Pencil, Eye, Users, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { getDateFnsLocale } from "@/lib/i18n-date";
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { ConvertInfoSheet, type ConvertWithInfo } from './convert-info-sheet';
+import { MemberForm } from '@/components/members/member-form';
 import { syncMinisteringAssignments } from '@/lib/ministering-sync';
 import { useToast } from '@/hooks/use-toast';
 import { buildMemberEditUrl } from '@/lib/navigation';
@@ -256,6 +265,7 @@ export default function ConvertsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedConvert, setSelectedConvert] = useState<ConvertWithInfo | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
+  const [isFormOpen, setIsFormOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [availableMembers, setAvailableMembers] = useState<Member[]>([]);
 
@@ -407,17 +417,74 @@ export default function ConvertsPage() {
     setIsSheetOpen(true);
   };
 
+  const handleFormClose = (savedMember?: Member | null) => {
+    setIsFormOpen(false);
+    // Si se creó/guardó un miembro con bautismo reciente, refrescar la lista
+    if (savedMember) {
+      void loadData();
+    }
+  };
+
+  const totalConverts = converts.length;
+  const inactiveCount = converts.filter((c) => getConvertAlertStatus(c) === 'inactive').length;
+  const lessActiveCount = converts.filter((c) => getConvertAlertStatus(c) === 'less_active').length;
+
   return (
     <Card>
       <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start">
+          <div className="min-w-0">
             <CardTitle>{t('converts.title')}</CardTitle>
             <CardDescription>
               {t('converts.description')}
             </CardDescription>
           </div>
+          <div className="flex flex-col items-stretch gap-3 sm:items-end shrink-0">
+            <div
+              className="text-left sm:text-right"
+              aria-label={t('converts.totalCountAria', { count: loading ? 0 : totalConverts })}
+            >
+              {loading ? (
+                <Skeleton className="h-9 w-12 sm:ml-auto" />
+              ) : (
+                <>
+                  <div className="text-3xl font-bold tabular-nums leading-none tracking-tight">
+                    {totalConverts}
+                  </div>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {t('converts.countLabel')}
+                  </p>
+                </>
+              )}
+            </div>
+            {canWrite && (
+              <Button className="w-full sm:w-auto" onClick={() => setIsFormOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                {t('converts.addButton')}
+              </Button>
+            )}
+          </div>
         </div>
+        {!loading && totalConverts > 0 && (inactiveCount > 0 || lessActiveCount > 0) && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {lessActiveCount > 0 && (
+              <Badge
+                variant="outline"
+                className="border-yellow-400/60 text-yellow-700 dark:text-yellow-400"
+              >
+                {t('converts.countLessActive', { count: lessActiveCount })}
+              </Badge>
+            )}
+            {inactiveCount > 0 && (
+              <Badge
+                variant="outline"
+                className="border-red-500/60 text-red-600 dark:text-red-400"
+              >
+                {t('converts.countInactive', { count: inactiveCount })}
+              </Badge>
+            )}
+          </div>
+        )}
       </CardHeader>
       <CardContent>
         {/* Lista única responsive: nombre completo siempre visible (sin truncate) */}
@@ -537,6 +604,18 @@ export default function ConvertsPage() {
           saving={saving}
           availableMembers={availableMembers}
         />
+
+        <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+          <DialogContent className="left-0 top-0 h-[100dvh] w-screen max-w-none translate-x-0 translate-y-0 overflow-y-auto rounded-none p-4 sm:left-[50%] sm:top-1/2 sm:h-auto sm:w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-lg sm:p-6">
+            <DialogHeader>
+              <DialogTitle>{t('converts.addTitle')}</DialogTitle>
+              <DialogDescription>{t('converts.addDescription')}</DialogDescription>
+            </DialogHeader>
+            {isFormOpen && (
+              <MemberForm member={null} onClose={handleFormClose} />
+            )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );

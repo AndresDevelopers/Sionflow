@@ -7,6 +7,13 @@ import {
   canWrite,
   getDefaultPermission,
   resolvePermissionForRoleChange,
+  ROLE_LIMITS,
+  countRoles,
+  getRoleRemaining,
+  isRoleAtCapacity,
+  canAssignRole,
+  canBulkAssignRole,
+  projectedRoleCountAfterBulk,
 } from '@/lib/roles';
 import type { UserRole } from '@/lib/roles';
 
@@ -126,5 +133,54 @@ describe('canViewSettings', () => {
     expect(canViewSettings('counselor')).toBe(true);
     expect(canViewSettings('user')).toBe(true);
     expect(canViewSettings('other')).toBe(true);
+  });
+});
+
+describe('ROLE_LIMITS', () => {
+  it('defines the expected seats per role', () => {
+    expect(ROLE_LIMITS.president).toBe(2);
+    expect(ROLE_LIMITS.counselor).toBe(3);
+    expect(ROLE_LIMITS.secretary).toBe(3);
+    expect(ROLE_LIMITS.other).toBe(8);
+    expect(ROLE_LIMITS.user).toBe(6);
+  });
+});
+
+describe('role capacity helpers', () => {
+  it('counts roles and remaining seats', () => {
+    const counts = countRoles([
+      { role: 'president' },
+      { role: 'president' },
+      { role: 'user' },
+      { role: 'counselor' },
+    ]);
+    expect(counts.president).toBe(2);
+    expect(counts.user).toBe(1);
+    expect(counts.counselor).toBe(1);
+    expect(getRoleRemaining(counts, 'president')).toBe(0);
+    expect(getRoleRemaining(counts, 'user')).toBe(5);
+    expect(isRoleAtCapacity(counts, 'president')).toBe(true);
+    expect(isRoleAtCapacity(counts, 'user')).toBe(false);
+  });
+
+  it('allows keeping the same role even at capacity', () => {
+    const counts = countRoles([{ role: 'president' }, { role: 'president' }]);
+    expect(canAssignRole(counts, 'president', 'president')).toBe(true);
+    expect(canAssignRole(counts, 'president', 'user')).toBe(false);
+    expect(canAssignRole(counts, 'counselor', 'user')).toBe(true);
+  });
+
+  it('validates bulk role assignment against limits', () => {
+    const users = [
+      { uid: 'a', role: 'user' as UserRole },
+      { uid: 'b', role: 'user' as UserRole },
+      { uid: 'c', role: 'user' as UserRole },
+      { uid: 'p1', role: 'president' as UserRole },
+      { uid: 'p2', role: 'president' as UserRole },
+    ];
+    expect(canBulkAssignRole(users, new Set(['a']), 'president')).toBe(false);
+    expect(canBulkAssignRole(users, new Set(['p1']), 'president')).toBe(true);
+    expect(projectedRoleCountAfterBulk(users, new Set(['a', 'b']), 'counselor')).toBe(2);
+    expect(canBulkAssignRole(users, new Set(['a', 'b', 'c']), 'counselor')).toBe(true);
   });
 });

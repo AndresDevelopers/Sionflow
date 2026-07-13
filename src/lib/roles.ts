@@ -116,3 +116,82 @@ export const canViewSettings = (_role: UserRole): boolean => true;
 
 export const isAdmin = (role: UserRole | null | undefined): boolean =>
   role === settingsAdminRole || role === 'president';
+
+/**
+ * Maximum seats per role within a single barrio + organization (barrioOrg).
+ * New self-registrations always receive the `user` (miembro) role.
+ */
+export const ROLE_LIMITS: Readonly<Record<UserRole, number>> = {
+  president: 2,
+  counselor: 3,
+  secretary: 3,
+  other: 8,
+  user: 6,
+};
+
+export type RoleCounts = Record<UserRole, number>;
+
+export const emptyRoleCounts = (): RoleCounts => ({
+  user: 0,
+  counselor: 0,
+  president: 0,
+  secretary: 0,
+  other: 0,
+});
+
+export const countRoles = (
+  users: ReadonlyArray<{ role: UserRole }>
+): RoleCounts => {
+  const counts = emptyRoleCounts();
+  for (const u of users) {
+    const role = normalizeRole(u.role);
+    counts[role] += 1;
+  }
+  return counts;
+};
+
+export const getRoleLimit = (role: UserRole): number => ROLE_LIMITS[role];
+
+export const getRoleRemaining = (counts: RoleCounts, role: UserRole): number =>
+  Math.max(0, ROLE_LIMITS[role] - (counts[role] ?? 0));
+
+export const isRoleAtCapacity = (counts: RoleCounts, role: UserRole): boolean =>
+  (counts[role] ?? 0) >= ROLE_LIMITS[role];
+
+/**
+ * Whether a user may be assigned `newRole`.
+ * Keeping the same role is always allowed (no extra seat consumed).
+ */
+export const canAssignRole = (
+  counts: RoleCounts,
+  newRole: UserRole,
+  currentRole?: UserRole
+): boolean => {
+  if (currentRole !== undefined && currentRole === newRole) return true;
+  return !isRoleAtCapacity(counts, newRole);
+};
+
+/**
+ * Projected occupancy after assigning `newRole` to every selected uid.
+ * Non-selected users keep their current roles.
+ */
+export const projectedRoleCountAfterBulk = (
+  users: ReadonlyArray<{ uid: string; role: UserRole }>,
+  selectedUids: ReadonlySet<string>,
+  newRole: UserRole
+): number => {
+  let count = 0;
+  for (const u of users) {
+    if (selectedUids.has(u.uid) || u.role === newRole) {
+      count += 1;
+    }
+  }
+  return count;
+};
+
+export const canBulkAssignRole = (
+  users: ReadonlyArray<{ uid: string; role: UserRole }>,
+  selectedUids: ReadonlySet<string>,
+  newRole: UserRole
+): boolean =>
+  projectedRoleCountAfterBulk(users, selectedUids, newRole) <= ROLE_LIMITS[newRole];

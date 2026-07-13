@@ -169,10 +169,12 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning translate="no">
       <head>
-        {/* Runs before any app JS: kill stale service workers / caches that served old Server Actions */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
+        {/* Solo en desarrollo: limpiar SW/caches viejos que sirven bundles obsoletos.
+            En producción NO se tocan: son necesarios para que la PWA funcione offline. */}
+        {isDevelopment && (
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `
 (function () {
   try {
     if ('serviceWorker' in navigator) {
@@ -187,8 +189,9 @@ export default function RootLayout({
     }
   } catch (e) {}
 })();`,
-          }}
-        />
+            }}
+          />
+        )}
       </head>
       <body className={`${ptSans.className} antialiased`}>
         <ThemeProvider

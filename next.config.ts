@@ -6,8 +6,47 @@ const withPWA = withPWAInit({
   dest: 'public',
   disable: process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test',
   sw: 'sw.js',
+  // Manual registration in ServiceWorkerRegistration (login + main layout)
   register: false,
   customWorkerSrc: 'worker',
+  // App shell offline: serve last good navigation when the network is down
+  fallbacks: {
+    document: '/',
+  },
+  // Keep default Workbox rules (fonts, etc.) and append ours
+  extendDefaultRuntimeCaching: true,
+  workboxOptions: {
+    skipWaiting: true,
+    clientsClaim: true,
+    runtimeCaching: [
+      {
+        // HTML / client navigations — network first, then cache (offline shell)
+        urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'pages-cache',
+          networkTimeoutSeconds: 3,
+          expiration: {
+            maxEntries: 64,
+            maxAgeSeconds: 60 * 60 * 24 * 7,
+          },
+        },
+      },
+      {
+        // Members list API — last good response usable offline
+        urlPattern: /\/api\/members/i,
+        handler: 'NetworkFirst',
+        options: {
+          cacheName: 'api-members',
+          networkTimeoutSeconds: 5,
+          expiration: {
+            maxEntries: 16,
+            maxAgeSeconds: 60 * 60 * 24 * 7,
+          },
+        },
+      },
+    ],
+  },
 });
 
 const nextConfig: NextConfig = {

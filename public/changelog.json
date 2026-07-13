@@ -6,20 +6,20 @@
       "date": "2026-07-13",
       "changes": {
         "es": [
-          "Mejoramos la organización del trabajo misional añadiendo una pestaña dedicada para futuros miembros en la página de obra misional.",
-          "Ahora puedes sincronizar tus datos automáticamente y trabajar sin conexión; los cambios se guardan y se envían cuando vuelvas a estar en línea.",
-          "Actualizamos la navegación y los enlaces para que te lleven directamente a la nueva sección de futuros miembros.",
-          "Agregamos botones de contacto rápido (WhatsApp, SMS, Telegram) para números de teléfono, adaptados a tu dispositivo.",
-          "Mejoramos la precisión del cálculo de fechas de bautismo para filtrar correctamente a los futuros miembros.",
-          "Limpiamos código antiguo y archivos obsoletos para que la aplicación sea más rápida y confiable."
+          "Ahora puedes ver cuántos miembros caben en tu barrio y organización, y la app te avisa si intentas asignar más roles de los permitidos.",
+          "La aplicación funciona mejor sin conexión: guarda datos en caché y sincroniza automáticamente cuando vuelves a estar en línea.",
+          "Agregamos una pestaña de 'Futuros miembros' en la página de obra misional, con accesos directos a WhatsApp, SMS y Telegram.",
+          "Mejoramos la página de conversos: ahora puedes agregar nuevos conversos y ver insignias para miembros inactivos o menos activos.",
+          "La app ahora se actualiza automáticamente cuando hay cambios, y puedes forzar una sincronización manual desde el menú principal.",
+          "Corregimos errores menores y eliminamos código antiguo para que todo funcione más rápido."
         ],
         "en": [
-          "We improved the missionary work page by adding a dedicated tab for future members, making it easier to manage them.",
-          "You can now sync your data automatically and work offline; changes are saved and sent when you're back online.",
-          "Updated navigation and links to point to the new future members section.",
-          "Added quick contact buttons (WhatsApp, SMS, Telegram) for phone numbers, adapted to your device.",
-          "Improved baptism date calculation for more accurate filtering of future members.",
-          "Cleaned up old code and obsolete files to make the app faster and more reliable."
+          "You can now see how many member seats are available in your ward and organization, and the app warns you if you try to assign more roles than allowed.",
+          "The app works better offline: it caches data and automatically syncs when you're back online.",
+          "We added a 'Future members' tab to the missionary work page, with quick actions for WhatsApp, SMS, and Telegram.",
+          "The converts page is improved: you can now add new converts and see badges for inactive or less active members.",
+          "The app now updates automatically when changes occur, and you can manually trigger a sync from the main menu.",
+          "Fixed minor bugs and removed old code to make everything run faster."
         ]
       }
     },
