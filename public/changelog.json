@@ -6,20 +6,20 @@
       "date": "2026-07-14",
       "changes": {
         "es": [
-          "Mejoramos la sincronización de datos para que funcione con ambos tipos de eventos de sincronización.",
-          "Optimizamos las notificaciones para que sean específicas de cada barrio, evitando mezclar información entre diferentes organizaciones.",
-          "Añadimos protección multi-inquilino en todas las escrituras de datos para que cada barrio solo vea su propia información.",
-          "Estandarizamos las rutas de almacenamiento para que sean seguras y consistentes con las reglas de seguridad.",
-          "Implementamos filtros de barrioOrg en todas las consultas de Firestore para evitar el acceso a datos de otros barrios.",
-          "Añadimos autenticación con Bearer token y límites de tiempo en las solicitudes a la API de DeepSeek para mayor seguridad y confiabilidad."
+          "Ahora puedes elegir si recibir notificaciones en cada dispositivo, en lugar de una configuración general para toda la cuenta.",
+          "Corregimos un problema que impedía la sincronización correcta de datos al manejar diferentes tipos de eventos de sincronización.",
+          "Mejoramos la privacidad y el rendimiento al separar la caché de notificaciones por barrio, evitando filtraciones de datos entre diferentes organizaciones.",
+          "Implementamos un sistema de aislamiento de datos por barrio (barrioOrg) para todas las operaciones de escritura, garantizando que cada barrio solo acceda a su propia información.",
+          "Unificamos las rutas de almacenamiento de archivos para que sean consistentes con las reglas de seguridad y el modelo de datos multiinquilino.",
+          "Reforzamos la seguridad de todas las APIs públicas añadiendo autenticación Bearer y verificaciones de ámbito de barrio, protegiendo tus datos contra accesos no autorizados."
         ],
         "en": [
-          "Fixed data sync to support both sync event types seamlessly.",
-          "Optimized notifications to be per-barrio, preventing cross-tenant data leaks.",
-          "Added multi-tenant scoping for all data writes, ensuring each ward only sees its own data.",
-          "Standardized storage paths to be secure and consistent with security rules.",
-          "Enforced barrioOrg filtering on all Firestore queries to prevent cross-ward data access.",
-          "Added Bearer token authentication and configurable timeouts for DeepSeek API requests."
+          "You can now choose to receive notifications on each device individually, instead of a single account-wide setting.",
+          "Fixed a data sync issue that prevented correct handling of different sync event types.",
+          "Improved privacy and performance by splitting the notification cache per ward, preventing data leaks between different organizations.",
+          "Implemented multi-tenant data isolation for all write operations, ensuring each ward only accesses its own data.",
+          "Standardized file storage paths to be consistent with security rules and the multi-tenant data model.",
+          "Hardened security for all public APIs by adding Bearer authentication and ward scope checks, protecting your data from unauthorized access."
         ]
       }
     },

@@ -177,11 +177,16 @@ const nextConfig: NextConfig = {
             key: "Content-Security-Policy",
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.firebaseio.com https://*.firebase.com",
+              // Firebase Messaging SW (firebase-messaging-sw.js) importScripts from gstatic.
+              // Without this, push fails on modern Chrome/Android (incl. Android 16) when the SW installs/updates.
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.gstatic.com https://*.gstatic.com https://*.firebaseio.com https://*.firebase.com",
+              "worker-src 'self' blob:",
+              "child-src 'self' blob:",
               "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
               "img-src 'self' data: blob: https: http:",
               "font-src 'self' https://fonts.gstatic.com",
-              "connect-src 'self' https://*.firebaseio.com https://*.firebase.com https://*.googleapis.com https://storage.googleapis.com https://*.firebasestorage.app wss://*.firebaseio.com https://api.deepseek.com https://*.upstash.io https://generativelanguage.googleapis.com https://nominatim.openstreetmap.org",
+              // FCM token registration + Installations + Firestore/Storage
+              "connect-src 'self' https://*.firebaseio.com https://*.firebase.com https://*.googleapis.com https://firebaseinstallations.googleapis.com https://fcmregistrations.googleapis.com https://fcm.googleapis.com https://www.gstatic.com https://storage.googleapis.com https://*.firebasestorage.app wss://*.firebaseio.com https://api.deepseek.com https://*.upstash.io https://generativelanguage.googleapis.com https://nominatim.openstreetmap.org",
               "frame-src 'self' https://*.firebaseapp.com",
               "object-src 'none'",
               "base-uri 'self'",

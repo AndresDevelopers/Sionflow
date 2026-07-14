@@ -171,8 +171,12 @@ async function sendDataSyncFcm(
       .where("userId", "in", batch)
       .get();
     subSnap.forEach((docSnap) => {
-      const t = docSnap.data().fcmToken;
-      if (typeof t === "string" && t.length > 0) tokens.push(t);
+      const data = docSnap.data();
+      const t = data.fcmToken;
+      // Silent data-sync only to devices that still have an active push subscription
+      if (typeof t === "string" && t.length > 0 && data.enabled !== false) {
+        tokens.push(t);
+      }
     });
   }
 

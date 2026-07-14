@@ -27,8 +27,10 @@ async function getFCMTokensForUsers(userIds: string[]): Promise<string[]> {
 
     snapshot.forEach((doc) => {
       const data = doc.data();
-      if (data.fcmToken) {
-        tokens.push(data.fcmToken as string);
+      const token = data.fcmToken;
+      // Only devices that opted in on that device (token present, not disabled)
+      if (typeof token === 'string' && token.length > 0 && data.enabled !== false) {
+        tokens.push(token);
       }
     });
   }
@@ -101,17 +103,14 @@ export async function POST(request: NextRequest) {
       }
       targetUserIds = [userId];
     } else {
-      // Broadcast: only users in the caller's barrioOrg with push enabled
+      // Broadcast to the caller's barrio. Only devices with an active
+      // c_push_subscriptions token receive FCM (per-device opt-in).
       const usersSnapshot = await firestoreAdmin
         .collection('c_users')
         .where('barrioOrg', '==', callerBarrioOrg)
         .get();
       usersSnapshot.forEach((doc) => {
-        const userData = doc.data();
-        // pushNotificationsEnabled must be explicitly true
-        if (userData.pushNotificationsEnabled === true) {
-          targetUserIds.push(doc.id);
-        }
+        targetUserIds.push(doc.id);
       });
     }
 
@@ -202,6 +201,7 @@ export async function POST(request: NextRequest) {
               ...(isInvalidToken
                 ? {
                   fcmToken: null,
+                  enabled: false,
                   unsubscribedAt: new Date(),
                 }
                 : {}),

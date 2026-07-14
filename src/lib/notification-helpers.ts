@@ -643,31 +643,10 @@ export async function sendDeceasedMembersOrdinanceNotifications(
   let sentCount = 0;
   let skippedCount = 0;
   const membersNotified: string[] = [];
-  const chunkSize = 30;
 
   for (const [barrioOrg, scopedMembers] of byBarrio) {
+    // Per-device opt-in: notify all barrio users; FCM only hits devices with tokens.
     const userIds = await getAllUserIds(barrioOrg);
-    const usersWithPushEnabled: string[] = [];
-
-    for (let i = 0; i < userIds.length; i += chunkSize) {
-      const chunk = userIds.slice(i, i + chunkSize);
-      try {
-        const firestore = await import('firebase/firestore');
-        const q = firestore.query(
-          usersCollection,
-          firestore.where(firestore.documentId(), 'in', chunk)
-        );
-        const snapshot = await firestore.getDocs(q);
-        snapshot.forEach((docSnap) => {
-          const userData = docSnap.data();
-          if (userData.pushNotificationsEnabled === true) {
-            usersWithPushEnabled.push(docSnap.id);
-          }
-        });
-      } catch (error) {
-        console.error(`Error checking push preference for barrio ${barrioOrg}:`, error);
-      }
-    }
 
     const missingCount = scopedMembers.length;
     const memberNames = scopedMembers.map((m) => `${m.firstName} ${m.lastName}`).join(', ');
@@ -677,7 +656,7 @@ export async function sendDeceasedMembersOrdinanceNotifications(
         ? `Hay ${missingCount} miembro fallecido que necesita ordenanzas del templo: ${memberNames}`
         : `Hay ${missingCount} miembros fallecidos que necesitan ordenanzas del templo: ${memberNames}`;
 
-    for (const userId of usersWithPushEnabled) {
+    for (const userId of userIds) {
       try {
         await createNotification({
           userId,

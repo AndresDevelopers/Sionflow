@@ -69,10 +69,13 @@ async function getFCMTokenInfoForUsers(userIds: string[]): Promise<{
 
     snapshot.forEach((doc) => {
       const data = doc.data();
-      if (data.fcmToken) {
+      const token = data.fcmToken;
+      // Per-device opt-in: only deliver to subscriptions that still have a token
+      // and were not explicitly disabled on that device (enabled !== false).
+      if (typeof token === 'string' && token.length > 0 && data.enabled !== false) {
         tokenInfos.push({
           docId: doc.id,
-          fcmToken: data.fcmToken as string,
+          fcmToken: token,
         });
       }
     });
@@ -117,15 +120,10 @@ async function getTargetUserIds(barrioOrg?: string | null): Promise<string[]> {
     console.warn('[push] getTargetUserIds called without barrioOrg — refusing global broadcast');
     return [];
   }
+  // Include all users in the barrio; delivery is gated by each device's
+  // active FCM token in c_push_subscriptions (not the account-level flag).
   const usersSnapshot = await usersCollection.where('barrioOrg', '==', barrioOrg).get();
-  const userIds: string[] = [];
-  usersSnapshot.forEach((doc) => {
-    const userData = doc.data();
-    // Solo usuarios que han activado explícitamente push (consistente con Cloud Functions)
-    if (userData.pushNotificationsEnabled === true) {
-      userIds.push(doc.id);
-    }
-  });
+  const userIds = usersSnapshot.docs.map((d) => d.id);
 
   _targetUsersCache = { key: cacheKey, userIds, ts: now };
   return userIds;
@@ -217,6 +215,7 @@ export async function sendServerSidePushNotification(
             updatedAt: new Date(),
             ...(isInvalidToken ? {
               fcmToken: null,
+              enabled: false,
               unsubscribedAt: new Date(),
             } : {}),
           },

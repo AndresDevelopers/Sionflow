@@ -1809,13 +1809,13 @@ async function getAllUsersNotificationData(): Promise<UserNotificationData[]> {
 const FIRESTORE_IN_LIMIT = 30;
 
 /**
- * Unique barrioOrg values that have at least one user with notifications active
- * (inAppEnabled or pushEnabled). Used to scope scheduled notification reads.
+ * Unique barrioOrg values that have users. Used to scope scheduled notification reads.
+ * Push delivery is later filtered by per-device FCM tokens.
  */
 function getActiveBarrioOrgs(users: UserNotificationData[]): string[] {
     const set = new Set<string>();
     for (const u of users) {
-        if ((u.inAppEnabled || u.pushEnabled) && u.barrioOrg) {
+        if (u.barrioOrg) {
             set.add(u.barrioOrg);
         }
     }
@@ -2007,7 +2007,10 @@ function getEligibleUsers(
         const pushCat = u.notificationPrefs.push[category] !== false;
 
         if (u.inAppEnabled && inAppCat) inAppUserIds.push(u.userId);
-        if (u.pushEnabled && pushCat) pushUserIds.push(u.userId);
+        // Push is per-device: include users by category preference; FCM only
+        // reaches devices with an active c_push_subscriptions token.
+        // Account pushEnabled is derived/diagnostic and must not hide other devices.
+        if (pushCat) pushUserIds.push(u.userId);
     }
 
     return { inAppUserIds, pushUserIds };
@@ -2491,7 +2494,8 @@ export const weeklyNotifications = functions
             for (const [barrioOrg, membersNeedingOrdinances] of deceasedByBarrioOrg.entries()) {
                 if (membersNeedingOrdinances.length === 0) continue;
 
-                const pushUsers = allUsers.filter(u => u.pushEnabled && (!barrioOrg || barrioOrg === "unknown" || u.barrioOrg === barrioOrg));
+                // Per-device opt-in: include barrio users; only devices with tokens receive FCM
+                const pushUsers = allUsers.filter(u => !barrioOrg || barrioOrg === "unknown" || u.barrioOrg === barrioOrg);
                 
                 if (pushUsers.length > 0) {
                     const memberNames = membersNeedingOrdinances

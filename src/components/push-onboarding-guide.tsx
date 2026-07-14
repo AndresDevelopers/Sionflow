@@ -15,13 +15,18 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  getExistingNotificationToken,
+  isBrowserPushApiAvailable,
+  isIosLikeDevice,
+  isStandaloneDisplayMode,
+  PushEnableError,
   requestNotificationPermission,
 } from '@/lib/firebase-messaging';
 import {
   getCurrentPushSubscription,
   getCurrentPushSubscriptionTarget,
+  isActivePushSubscription,
   saveCurrentPushSubscription,
+  syncAccountPushEnabledFlag,
 } from '@/lib/push-subscription';
 import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { usersCollection } from '@/lib/collections';
@@ -41,18 +46,21 @@ export function PushOnboardingGuide() {
   const [isLoading, setIsLoading] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
-  // Verificar si el navegador soporta notificaciones push
+  // Verificar si el navegador soporta notificaciones push (Android antiguos → 16, desktop, iOS PWA)
   useEffect(() => {
-    if (
-      typeof window !== 'undefined' &&
-      'Notification' in window &&
-      'serviceWorker' in navigator &&
-      'PushManager' in window
-    ) {
-      setIsSupported(true);
+    if (!isBrowserPushApiAvailable()) {
+      setIsSupported(false);
+      return;
     }
+    // iOS only supports web push when installed to home screen
+    if (isIosLikeDevice() && !isStandaloneDisplayMode()) {
+      setIsSupported(false);
+      return;
+    }
+    setIsSupported(true);
   }, []);
 
+  /** True only if THIS device already opted in (not another phone on the same account). */
   const checkSubscription = useCallback(async () => {
     if (!user) return false;
 
@@ -61,12 +69,7 @@ export function PushOnboardingGuide() {
 
     try {
       const subscriptionDoc = await getCurrentPushSubscription(user.uid);
-      if (subscriptionDoc && subscriptionDoc.fcmToken) {
-        return true;
-      }
-
-      const existingToken = await getExistingNotificationToken();
-      return Boolean(existingToken);
+      return isActivePushSubscription(subscriptionDoc);
     } catch {
       return false;
     }
@@ -95,26 +98,18 @@ export function PushOnboardingGuide() {
 
         const data = userDoc.data();
         const role = normalizeRole(data.role);
-        const pushEnabled = data.pushNotificationsEnabled === true;
         const dismissedAt = data.pushOnboardingDismissedAt;
 
-        // Solo mostrar a roles de liderazgo sin push activado
+        // Solo mostrar a roles de liderazgo
         if (!leadershipRoles.includes(role as typeof leadershipRoles[number])) {
           setIsChecking(false);
           return;
         }
 
-        // Ya tiene push activado → no mostrar
-        if (pushEnabled) {
-          setIsChecking(false);
-          return;
-        }
-
-        // Verificar suscripción real del dispositivo
+        // Solo importa el estado de ESTE dispositivo (no el flag de cuenta)
         const subscribed = await checkSubscription();
         if (isMounted) setIsSubscribed(subscribed);
 
-        // Si ya tiene suscripción activa en este dispositivo, no mostrar
         if (subscribed) {
           setIsChecking(false);
           return;
@@ -205,10 +200,10 @@ export function PushOnboardingGuide() {
 
       await saveCurrentPushSubscription(user.uid, fcmToken);
 
-      // Sincronizar pushNotificationsEnabled en c_users
+      // Account flag = any device active; onboarding dismiss is account-level
+      await syncAccountPushEnabledFlag(user.uid);
       const userDocRef = doc(usersCollection, firebaseUser.uid);
       await setDoc(userDocRef, {
-        pushNotificationsEnabled: true,
         pushOnboardingDismissedAt: serverTimestamp(),
       }, { merge: true });
 
@@ -220,22 +215,42 @@ export function PushOnboardingGuide() {
         description: t('push.onboarding.toast.enabledDescription'),
       });
 
-      // Notificación de bienvenida
-      if (Notification.permission === 'granted') {
-        new Notification(t('push.onboarding.nativeTitle'), {
-          body: t('push.onboarding.nativeBody'),
-          icon: '/icono-app.png',
-          badge: '/icono-app.png',
-        });
+      // Notificación de bienvenida (skip if Notification constructor is restricted)
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(t('push.onboarding.nativeTitle'), {
+            body: t('push.onboarding.nativeBody'),
+            icon: '/icono-app.png',
+            badge: '/icono-app.png',
+          });
+        }
+      } catch {
+        // Some Android WebViews allow permission but block the Notification constructor
       }
     } catch (error) {
       logger.error({ error, message: 'Error activating push from onboarding guide' });
+      let description = t('push.onboarding.toast.activateError');
+      if (error instanceof PushEnableError) {
+        if (error.code === 'permission-denied' || error.code === 'permission-dismissed') {
+          description = t('push.onboarding.toast.permissionDeniedDescription');
+        } else if (error.code === 'ios-not-standalone') {
+          description = t('settings.toast.pushIosStandaloneDesc');
+        } else if (error.code === 'service-worker') {
+          description = t('settings.toast.pushServiceWorkerDesc');
+        }
+      }
       toast({
         title: t('common.error'),
-        description: t('push.onboarding.toast.activateError'),
+        description,
         variant: 'destructive',
       });
-      await handleDismiss();
+      // Keep guide available so the user can retry (do not dismiss on transient SW/token errors)
+      if (
+        error instanceof PushEnableError &&
+        (error.code === 'permission-denied' || error.code === 'ios-not-standalone')
+      ) {
+        await handleDismiss();
+      }
     } finally {
       setIsLoading(false);
     }

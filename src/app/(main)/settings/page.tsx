@@ -69,12 +69,19 @@ import { navigationItems } from '@/lib/navigation';
 import {
   deleteNotificationToken,
   getExistingNotificationToken,
+  isBrowserPushApiAvailable,
+  isIosLikeDevice,
+  isStandaloneDisplayMode,
+  PushEnableError,
   requestNotificationPermission,
 } from '@/lib/firebase-messaging';
 import {
   clearCurrentPushSubscription,
   getCurrentPushSubscriptionToken,
+  getPushDeviceId,
+  isCurrentDevicePushEnabled,
   saveCurrentPushSubscription,
+  syncAccountPushEnabledFlag,
 } from '@/lib/push-subscription';
 
 type TranslateFn = (key: string, params?: Record<string, string | number>) => string;
@@ -136,6 +143,8 @@ export default function SettingsPage() {
   const [isInAppNotificationLoading, setIsInAppNotificationLoading] = useState(true);
   const [isPushNotificationLoading, setIsPushNotificationLoading] = useState(true);
   const [, setFcmToken] = useState<string | null>(null);
+  // Sync lock: Radix Switch can fire twice on some Android touch stacks before disabled re-renders
+  const pushToggleLockRef = useRef(false);
 
   // Per-category notification preferences
   const defaultCategoryPrefs = useMemo<Record<string, boolean>>(
@@ -195,20 +204,23 @@ export default function SettingsPage() {
 
         if (userDoc.exists()) {
           const userData = userDoc.data();
-          // Si no existe la preferencia, por defecto es true para in-app, false para push
+          // In-app is account-level; push switch is THIS device only
           setInAppNotificationsEnabled(userData.inAppNotificationsEnabled !== false);
-          setPushNotificationsEnabled(userData.pushNotificationsEnabled === true);
 
-          // Load per-category prefs (default all true)
+          // Load per-category prefs (default all true) — categories are account-level
           const savedInApp = (userData.notificationPrefs?.inApp as Record<string, boolean>) ?? {};
           const savedPush = (userData.notificationPrefs?.push as Record<string, boolean>) ?? {};
           setInAppCategoryPrefs({ ...defaultCategoryPrefs, ...savedInApp });
           setPushCategoryPrefs({ ...defaultCategoryPrefs, ...savedPush });
         } else {
-          // Usuario nuevo, activar in-app por defecto, push desactivado
           setInAppNotificationsEnabled(true);
-          setPushNotificationsEnabled(false);
+          setInAppCategoryPrefs(defaultCategoryPrefs);
+          setPushCategoryPrefs(defaultCategoryPrefs);
         }
+
+        // Source of truth for the switch: active FCM subscription on this device
+        const devicePushOn = await isCurrentDevicePushEnabled(user.uid);
+        setPushNotificationsEnabled(devicePushOn);
       } catch (error) {
         logger.error({ error, message: 'Error loading notification preferences' });
         setInAppNotificationsEnabled(true);
@@ -256,8 +268,10 @@ export default function SettingsPage() {
     loadPermissionPreferences();
   }, [user]);
 
+  // Refresh FCM token only when THIS device already opted in.
+  // Never auto-register a new device just because the account has another phone enabled.
   useEffect(() => {
-    const initializeFCM = async () => {
+    const refreshDeviceTokenIfSubscribed = async () => {
       if (!pushNotificationsEnabled || !user) {
         setFcmToken(null);
         return;
@@ -265,27 +279,30 @@ export default function SettingsPage() {
 
       try {
         const savedToken = await getCurrentPushSubscriptionToken(user.uid);
-        if (savedToken) {
-          setFcmToken(savedToken);
-          return;
-        }
-
-        const token = await getExistingNotificationToken();
-        if (!token) {
+        if (!savedToken) {
+          // Switch was true but this device has no subscription (stale UI / storage cleared)
+          setPushNotificationsEnabled(false);
           setFcmToken(null);
           return;
         }
 
-        const saved = await saveCurrentPushSubscription(user.uid, token);
-        if (saved) {
-          setFcmToken(token);
+        setFcmToken(savedToken);
+
+        // Quiet token rotation for devices that already opted in
+        const freshToken = await getExistingNotificationToken();
+        if (freshToken && freshToken !== savedToken) {
+          const saved = await saveCurrentPushSubscription(user.uid, freshToken);
+          if (saved) {
+            setFcmToken(freshToken);
+            await syncAccountPushEnabledFlag(user.uid);
+          }
         }
       } catch (error) {
-        console.error('Error initializing FCM:', error);
+        console.error('Error refreshing device FCM token:', error);
       }
     };
 
-    initializeFCM();
+    void refreshDeviceTokenIfSubscribed();
   }, [pushNotificationsEnabled, user]);
 
   // Click outside to close sync dropdown
@@ -818,6 +835,33 @@ export default function SettingsPage() {
     }
   };
 
+  const describePushEnableError = (error: unknown): string => {
+    if (error instanceof PushEnableError) {
+      switch (error.code) {
+        case 'permission-denied':
+          return t('settings.toast.pushPermissionDeniedDesc');
+        case 'permission-dismissed':
+          return t('settings.toast.pushPermissionDismissedDesc');
+        case 'ios-not-standalone':
+          return t('settings.toast.pushIosStandaloneDesc');
+        case 'service-worker':
+          return t('settings.toast.pushServiceWorkerDesc');
+        case 'insecure-context':
+          return t('settings.toast.pushInsecureContextDesc');
+        case 'unsupported':
+          return t('settings.toast.pushUnsupportedDesc');
+        case 'vapid':
+          return t('settings.toast.pushVapidDesc');
+        case 'token':
+          return t('settings.toast.pushTokenDesc');
+        default:
+          return t('settings.toast.pushUpdateError');
+      }
+    }
+
+    return t('settings.toast.pushUpdateError');
+  };
+
   const handlePushNotificationChange = async (checked: boolean) => {
     if (!user) {
       toast({
@@ -828,36 +872,60 @@ export default function SettingsPage() {
       return;
     }
 
+    // Prevent double-toggles on Android before React re-renders disabled state
+    if (pushToggleLockRef.current || isPushNotificationLoading) {
+      return;
+    }
+    pushToggleLockRef.current = true;
     setIsPushNotificationLoading(true);
 
-    try {
-      const userDocRef = doc(usersCollection, user.uid);
+    const previousEnabled = pushNotificationsEnabled;
 
+    try {
       if (checked) {
-        // Request permission + token BEFORE flipping the server flag, so Cloud
-        // Functions never see pushEnabled=true without a registered FCM token.
+        if (!isBrowserPushApiAvailable()) {
+          if (isIosLikeDevice() && !isStandaloneDisplayMode()) {
+            throw new PushEnableError('ios-not-standalone', 'iOS requires home-screen PWA');
+          }
+          throw new PushEnableError('unsupported', 'Push API unavailable');
+        }
+
+        if (!getPushDeviceId()) {
+          throw new PushEnableError('token', 'Device id unavailable (storage blocked)');
+        }
+
+        // Register ONLY this device. Other phones keep their own opt-in state.
         const token = await requestNotificationPermission();
         if (!token) {
-          throw new Error(t('settings.toast.pushUpdateError'));
+          throw new PushEnableError('token', 'Empty FCM token');
         }
 
         const saved = await saveCurrentPushSubscription(user.uid, token);
         if (!saved) {
-          throw new Error(t('settings.toast.pushUpdateError'));
+          throw new PushEnableError('token', 'Could not persist push subscription');
         }
 
-        await setDoc(userDocRef, {
-          pushNotificationsEnabled: true
-        }, { merge: true });
+        // Derived account flag for server eligibility (any device active)
+        await syncAccountPushEnabledFlag(user.uid);
 
         setPushNotificationsEnabled(true);
         setFcmToken(token);
       } else {
-        await deleteNotificationToken();
-        await clearCurrentPushSubscription(user.uid);
-        await setDoc(userDocRef, {
-          pushNotificationsEnabled: false
-        }, { merge: true });
+        // Unsubscribe THIS device only — never wipe other devices' tokens.
+        try {
+          await deleteNotificationToken();
+        } catch (tokenError) {
+          logger.error({ error: tokenError, message: 'deleteNotificationToken failed during push disable' });
+        }
+
+        try {
+          await clearCurrentPushSubscription(user.uid);
+        } catch (clearError) {
+          logger.error({ error: clearError, message: 'clearCurrentPushSubscription failed during push disable' });
+        }
+
+        // Account flag stays true if another device is still opted in
+        await syncAccountPushEnabledFlag(user.uid);
 
         setPushNotificationsEnabled(false);
         setFcmToken(null);
@@ -873,12 +941,13 @@ export default function SettingsPage() {
       logger.error({ error, message: 'Failed to update push notification preference' });
       toast({
         title: t('common.error'),
-        description: t('settings.toast.pushUpdateError'),
+        description: describePushEnableError(error),
         variant: 'destructive',
       });
       // Keep UI in sync with the last known successful state
-      setPushNotificationsEnabled(!checked);
+      setPushNotificationsEnabled(previousEnabled);
     } finally {
+      pushToggleLockRef.current = false;
       setIsPushNotificationLoading(false);
     }
   };

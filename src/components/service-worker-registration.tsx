@@ -66,9 +66,21 @@ export function ServiceWorkerRegistration() {
           });
         });
 
+        // Wait until an active worker exists (needed before FCM getToken on Android).
+        // navigator.serviceWorker.ready can hang if install never completes — bound the wait.
+        const readyWithTimeout = Promise.race([
+          navigator.serviceWorker.ready,
+          new Promise<null>((resolve) => {
+            window.setTimeout(() => resolve(null), 15_000);
+          }),
+        ]);
+        const readyRegistration = await readyWithTimeout;
+        if (!readyRegistration) {
+          console.warn('[sw] ready timed out — push may fail until next load');
+        }
+
         // First install: page may not be controlled until reload — do it once.
         // Never force reload while offline (would show the native "sin internet" page).
-        await navigator.serviceWorker.ready;
         if (!navigator.serviceWorker.controller && isBrowserOnline()) {
           const claimKey = 'qf-sw-claim-reload-v3';
           if (sessionStorage.getItem(claimKey) !== '1') {
