@@ -5,13 +5,9 @@ import { sendServerSidePushNotification } from '@/lib/push-notifications-server'
 import { enforceRateLimit } from '@/lib/rate-limit';
 
 /**
- * API Endpoint for weekly deceased members ordinances notifications
- * 
- * This endpoint should be called by a Firebase Scheduler cron job every Monday at 9:00 AM
- * Schedule: 0 9 * * 1 (every Monday at 9:00 AM)
- * 
- * The endpoint checks if there are deceased members with incomplete temple ordinances
- * and sends push notifications to all users with push notifications enabled.
+ * Weekly deceased members ordinances notifications (cron).
+ * Requires CRON_SECRET Bearer token. Never exposes full member lists across barrios
+ * in the HTTP response — only aggregated counts.
  */
 
 interface DeceasedMember {
@@ -38,23 +34,31 @@ function hasAllTempleOrdinances(member: { templeOrdinances?: string[] }) {
   return ALL_TEMPLE_ORDINANCES.every((ord) => memberOrdinances.includes(ord));
 }
 
-function getMissingTempleOrdinances(member: { templeOrdinances?: string[] }) {
-  const memberOrdinances = member.templeOrdinances ?? [];
-  return ALL_TEMPLE_ORDINANCES.filter((ord) => !memberOrdinances.includes(ord));
+function requireCronAuth(request: Request): NextResponse | null {
+  const authHeader = request.headers.get('authorization');
+  const cronSecret = process.env.CRON_SECRET;
+  // Fail closed: if CRON_SECRET is not configured, reject all calls
+  if (!cronSecret) {
+    logger.error({ message: 'CRON_SECRET not configured; rejecting deceased-members-ordinances' });
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  if (authHeader !== `Bearer ${cronSecret}`) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
+  return null;
 }
 
 export async function GET(request: Request) {
   const limited = await enforceRateLimit(request, 'api');
   if (limited) return limited;
 
+  const unauthorized = requireCronAuth(request);
+  if (unauthorized) return unauthorized;
+
   try {
-    // Check if today is Monday (for validation)
     const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
-    // In production, this should be triggered by a cron job
-    // For development, we can still test it manually
-    
+    const dayOfWeek = today.getDay();
+
     const deceasedSnapshot = await membersCollection.where('status', '==', 'deceased').get();
 
     const deceasedMembers: DeceasedMember[] = deceasedSnapshot.docs.map((docSnap) => {
@@ -74,14 +78,9 @@ export async function GET(request: Request) {
         barrioOrg: data.barrioOrg || null
       };
     });
-    
-    // Filter members who still need ordinances
-    const membersNeedingOrdinances = deceasedMembers.filter(member => {
-      if (hasAllTempleOrdinances(member)) return false;
-      return true;
-    });
-    
-    // If no members need ordinances, return early
+
+    const membersNeedingOrdinances = deceasedMembers.filter(member => !hasAllTempleOrdinances(member));
+
     if (membersNeedingOrdinances.length === 0) {
       return NextResponse.json({
         success: true,
@@ -92,7 +91,6 @@ export async function GET(request: Request) {
       });
     }
 
-    // Group by barrioOrg so each ward only sees their own deceased members
     const byBarrioOrg = new Map<string, DeceasedMember[]>();
     for (const m of membersNeedingOrdinances) {
       const key = m.barrioOrg || '__no_barrio__';
@@ -101,6 +99,8 @@ export async function GET(request: Request) {
     }
 
     let totalSent = 0;
+    const perBarrio: { barrioOrg: string; count: number; sent: number }[] = [];
+
     for (const [barrioOrg, members] of byBarrioOrg) {
       const missingCount = members.length;
       const memberNames = members.map((m) => `${m.firstName} ${m.lastName}`).join(', ');
@@ -118,28 +118,27 @@ export async function GET(request: Request) {
         tag: 'deceased-ordinances',
         barrioOrg: barrioOrg === '__no_barrio__' ? null : barrioOrg,
       });
-      totalSent += pushResult.sentCount ?? 0;
+      const sent = pushResult.sentCount ?? 0;
+      totalSent += sent;
+      perBarrio.push({ barrioOrg, count: missingCount, sent });
     }
-    
+
+    // Response intentionally omits full member names/ids (cross-tenant PII)
     return NextResponse.json({
       success: true,
       message: `Processed ${membersNeedingOrdinances.length} deceased members needing ordinances`,
       membersNeedingOrdinances: membersNeedingOrdinances.length,
-      members: membersNeedingOrdinances.map(m => ({
-        id: m.id,
-        name: `${m.firstName} ${m.lastName}`,
-        missingOrdinances: getMissingTempleOrdinances(m)
-      })),
+      perBarrio,
       sent: totalSent,
       skipped: 0,
       dayOfWeek
     });
-    
+
   } catch (error) {
     logger.error({ error, message: 'Error in deceased members ordinances notification' });
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Failed to process deceased members notifications',
         details: error instanceof Error ? error.message : 'Unknown error'
       },
@@ -148,7 +147,6 @@ export async function GET(request: Request) {
   }
 }
 
-// Also support POST for manual triggering
 export async function POST(request: Request) {
   return GET(request);
 }

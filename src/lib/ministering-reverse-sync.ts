@@ -1,9 +1,10 @@
 /**
  * Sincronización inversa: de Ministración a Miembros
- * Cuando se elimina o modifica un compañerismo, actualiza los maestros ministrantes de los miembros
+ * Cuando se elimina o modifica un compañerismo, actualiza los maestros ministrantes de los miembros.
+ * ALWAYS scoped by barrioOrg — never query members across wards.
  */
 
-import { getDocs, query, where, updateDoc, doc, writeBatch } from 'firebase/firestore';
+import { getDocs, query, where, doc, writeBatch } from 'firebase/firestore';
 import { membersCollection } from './collections';
 import { firestore } from './firebase';
 import type { Member } from './types';
@@ -12,11 +13,14 @@ import logger from './logger';
 /**
  * Obtiene los miembros de varias familias en lotes de 30 (límite de Firestore para la cláusula 'in')
  * @param familyNames - Nombres de las familias a buscar
- * @returns Map donde la clave es el apellido y el valor es el array de miembros
+ * @param barrioOrg - Multi-tenant scope (required)
  */
-async function getMembersByFamilies(familyNames: string[]): Promise<Map<string, Member[]>> {
+async function getMembersByFamilies(
+  familyNames: string[],
+  barrioOrg: string
+): Promise<Map<string, Member[]>> {
   const lastNamesMap = new Map<string, Member[]>();
-  if (familyNames.length === 0) return lastNamesMap;
+  if (familyNames.length === 0 || !barrioOrg) return lastNamesMap;
 
   // Extraer apellidos únicos
   const uniqueLastNames = [...new Set(familyNames.map(f => f.replace('Familia ', '').trim()))];
@@ -25,11 +29,15 @@ async function getMembersByFamilies(familyNames: string[]): Promise<Map<string, 
   const CHUNK_SIZE = 30;
   for (let i = 0; i < uniqueLastNames.length; i += CHUNK_SIZE) {
     const batch = uniqueLastNames.slice(i, i + CHUNK_SIZE);
-    const memberQuery = query(membersCollection, where('lastName', 'in', batch));
+    const memberQuery = query(
+      membersCollection,
+      where('barrioOrg', '==', barrioOrg),
+      where('lastName', 'in', batch)
+    );
     const memberSnap = await getDocs(memberQuery);
 
-    memberSnap.forEach((doc) => {
-      const member = { id: doc.id, ...doc.data() } as Member;
+    memberSnap.forEach((docSnap) => {
+      const member = { id: docSnap.id, ...docSnap.data() } as Member;
       const lastName = member.lastName;
       if (!lastNamesMap.has(lastName)) {
         lastNamesMap.set(lastName, []);
@@ -43,25 +51,28 @@ async function getMembersByFamilies(familyNames: string[]): Promise<Map<string, 
 
 /**
  * Elimina los maestros ministrantes de las familias cuando se elimina un compañerismo
- * @param companionNames - Nombres de los compañeros del compañerismo eliminado
- * @param familyNames - Nombres de las familias asignadas
  */
 export async function removeMinisteringTeachersFromFamilies(
   companionNames: string[],
-  familyNames: string[]
+  familyNames: string[],
+  barrioOrg: string
 ): Promise<void> {
+  if (!barrioOrg) {
+    throw new Error('barrioOrg es requerido para sincronizar ministración');
+  }
   try {
     const normalizedCompanions = companionNames.map(name => name.trim().toLowerCase());
 
     console.log('🔄 Removing ministering teachers from families:', {
       companions: companionNames,
-      families: familyNames
+      families: familyNames,
+      barrioOrg,
     });
 
     let batch = writeBatch(firestore);
     let batchCount = 0;
 
-    const membersByFamilies = await getMembersByFamilies(familyNames);
+    const membersByFamilies = await getMembersByFamilies(familyNames, barrioOrg);
 
     for (const familyName of familyNames) {
       const lastName = familyName.replace('Familia ', '').trim();
@@ -69,12 +80,10 @@ export async function removeMinisteringTeachersFromFamilies(
 
       for (const member of members) {
         if (member.ministeringTeachers && member.ministeringTeachers.length > 0) {
-          // Filtrar los maestros que pertenecen a este compañerismo
           const updatedTeachers = member.ministeringTeachers.filter(
             teacher => !normalizedCompanions.includes(teacher.trim().toLowerCase())
           );
 
-          // Solo actualizar si hubo cambios
           if (updatedTeachers.length !== member.ministeringTeachers.length) {
             console.log(`  ✏️ Updating ${member.firstName} ${member.lastName}:`, {
               before: member.ministeringTeachers,
@@ -85,7 +94,6 @@ export async function removeMinisteringTeachersFromFamilies(
             batch.update(memberRef, { ministeringTeachers: updatedTeachers });
             batchCount++;
 
-            // Ejecutar batch si alcanzamos el límite
             if (batchCount >= 500) {
               await batch.commit();
               batch = writeBatch(firestore);
@@ -96,7 +104,6 @@ export async function removeMinisteringTeachersFromFamilies(
       }
     }
 
-    // Ejecutar operaciones restantes
     if (batchCount > 0) {
       await batch.commit();
     }
@@ -110,38 +117,33 @@ export async function removeMinisteringTeachersFromFamilies(
 
 /**
  * Actualiza los maestros ministrantes cuando se modifica un compañerismo
- * @param oldCompanions - Compañeros anteriores
- * @param newCompanions - Compañeros nuevos
- * @param oldFamilies - Familias anteriores
- * @param newFamilies - Familias nuevas
  */
 export async function updateMinisteringTeachersOnCompanionshipChange(
   oldCompanions: string[],
   newCompanions: string[],
   oldFamilies: string[],
-  newFamilies: string[]
+  newFamilies: string[],
+  barrioOrg: string
 ): Promise<void> {
+  if (!barrioOrg) {
+    throw new Error('barrioOrg es requerido para sincronizar ministración');
+  }
   try {
     console.log('🔄 Updating ministering teachers on companionship change:', {
       oldCompanions,
       newCompanions,
       oldFamilies,
-      newFamilies
+      newFamilies,
+      barrioOrg,
     });
 
-    // Familias que se eliminaron del compañerismo
     const removedFamilies = oldFamilies.filter(f => !newFamilies.includes(f));
-    
-    // Familias que se agregaron al compañerismo
     const addedFamilies = newFamilies.filter(f => !oldFamilies.includes(f));
-
-    // Familias que permanecen pero los compañeros cambiaron
     const remainingFamilies = oldFamilies.filter(f => newFamilies.includes(f));
 
     let batch = writeBatch(firestore);
     let batchCount = 0;
 
-    // Helper to commit batch and reset
     const maybeCommit = async () => {
       if (batchCount >= 500) {
         await batch.commit();
@@ -150,11 +152,9 @@ export async function updateMinisteringTeachersOnCompanionshipChange(
       }
     };
 
-    // Obtener todos los miembros necesarios de una sola vez
     const allUniqueFamilies = [...new Set([...removedFamilies, ...addedFamilies, ...remainingFamilies])];
-    const membersByFamilies = await getMembersByFamilies(allUniqueFamilies);
+    const membersByFamilies = await getMembersByFamilies(allUniqueFamilies, barrioOrg);
 
-    // 1. Eliminar maestros de las familias removidas
     if (removedFamilies.length > 0) {
       for (const familyName of removedFamilies) {
         const lastName = familyName.replace('Familia ', '').trim();
@@ -178,7 +178,6 @@ export async function updateMinisteringTeachersOnCompanionshipChange(
       }
     }
 
-    // 2. Agregar maestros a las familias nuevas
     if (addedFamilies.length > 0) {
       for (const familyName of addedFamilies) {
         const lastName = familyName.replace('Familia ', '').trim();
@@ -199,9 +198,8 @@ export async function updateMinisteringTeachersOnCompanionshipChange(
       }
     }
 
-    // 3. Actualizar maestros en familias que permanecen (si los compañeros cambiaron)
-    const companionsChanged = JSON.stringify(oldCompanions.sort()) !== JSON.stringify(newCompanions.sort());
-    
+    const companionsChanged = JSON.stringify([...oldCompanions].sort()) !== JSON.stringify([...newCompanions].sort());
+
     if (companionsChanged && remainingFamilies.length > 0) {
       for (const familyName of remainingFamilies) {
         const lastName = familyName.replace('Familia ', '').trim();
@@ -210,11 +208,10 @@ export async function updateMinisteringTeachersOnCompanionshipChange(
         for (const member of members) {
           const currentTeachers = member.ministeringTeachers || [];
 
-          // Remover compañeros antiguos y agregar nuevos
           const withoutOld = currentTeachers.filter(t => !oldCompanions.includes(t));
           const updatedTeachers = [...new Set([...withoutOld, ...newCompanions])];
 
-          if (JSON.stringify(updatedTeachers.sort()) !== JSON.stringify(currentTeachers.sort())) {
+          if (JSON.stringify([...updatedTeachers].sort()) !== JSON.stringify([...currentTeachers].sort())) {
             console.log(`  🔄 Updating ${member.firstName} ${member.lastName}`);
             const memberRef = doc(membersCollection, member.id);
             batch.update(memberRef, { ministeringTeachers: updatedTeachers });
@@ -225,7 +222,6 @@ export async function updateMinisteringTeachersOnCompanionshipChange(
       }
     }
 
-    // Ejecutar batch si hay operaciones
     if (batchCount > 0) {
       await batch.commit();
       console.log(`✅ Updated ${batchCount} member(s)`);

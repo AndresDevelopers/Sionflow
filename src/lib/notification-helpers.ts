@@ -411,8 +411,17 @@ export async function createNotificationsForAll(
           // When barrioOrg was provided, user IDs are already scoped server-side.
           // Still check barrioOrg match as defense in depth for edge cases.
           if (barrioOrg) {
-            const userBarrioOrg = userData.barrioOrg || `${userData.barrio || 'Libertad'}|${userData.organizacion || 'Quórum de Élderes'}`;
-            if (userBarrioOrg !== barrioOrg) continue;
+            const explicit = typeof userData.barrioOrg === 'string' ? userData.barrioOrg.trim() : '';
+            const barrio = typeof userData.barrio === 'string' ? userData.barrio.trim() : '';
+            const organizacion = typeof userData.organizacion === 'string' ? userData.organizacion.trim() : '';
+            const userBarrioOrg =
+              explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')
+                ? explicit
+                : barrio && organizacion
+                  ? `${barrio}|${organizacion}`
+                  : '';
+            // No Libertad defaults — incomplete profiles are skipped
+            if (!userBarrioOrg || userBarrioOrg !== barrioOrg) continue;
           }
 
           // Por defecto las notificaciones in-app están activas (inAppNotificationsEnabled !== false)
@@ -532,8 +541,16 @@ export async function createNewConvertCouncilNotificationsForAll(
           // When barrioOrg was provided, user IDs are already scoped server-side.
           // Still check barrioOrg match as defense in depth for edge cases.
           if (barrioOrg) {
-            const userBarrioOrg = userData.barrioOrg || `${userData.barrio || 'Libertad'}|${userData.organizacion || 'Quórum de Élderes'}`;
-            if (userBarrioOrg !== barrioOrg) continue;
+            const explicit = typeof userData.barrioOrg === 'string' ? userData.barrioOrg.trim() : '';
+            const barrio = typeof userData.barrio === 'string' ? userData.barrio.trim() : '';
+            const organizacion = typeof userData.organizacion === 'string' ? userData.organizacion.trim() : '';
+            const userBarrioOrg =
+              explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')
+                ? explicit
+                : barrio && organizacion
+                  ? `${barrio}|${organizacion}`
+                  : '';
+            if (!userBarrioOrg || userBarrioOrg !== barrioOrg) continue;
           }
 
           // Check in-app notifications preference

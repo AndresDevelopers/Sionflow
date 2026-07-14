@@ -91,7 +91,7 @@ async function getServicesForYear(year: number, barrioOrg?: string): Promise<Ser
 }
 
 export default function ServicePage() {
-  const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { user, loading: authLoading, barrioOrg, firebaseUser } = useAuth();
   const { t } = useI18n();
   const { canWrite } = usePermission();
   const searchParams = useSearchParams();
@@ -195,7 +195,12 @@ export default function ServicePage() {
           }
         }
 
-        const response = await fetch(refresh ? '/api/service-suggestions?refresh=true' : '/api/service-suggestions');
+        const idToken = await firebaseUser?.getIdToken().catch(() => null);
+        if (!idToken) throw new Error('No autenticado');
+        const response = await fetch(
+          refresh ? '/api/service-suggestions?refresh=true' : '/api/service-suggestions',
+          { headers: { Authorization: `Bearer ${idToken}` } }
+        );
         if (!response.ok) {
           throw new Error(`Failed to fetch service suggestions: ${response.status} ${response.statusText}`);
         }
@@ -211,7 +216,7 @@ export default function ServicePage() {
         setServiceSuggestions(null);
       }
     });
-  }, []);
+  }, [firebaseUser]);
 
   useEffect(() => {
     if (!authLoading && user) {

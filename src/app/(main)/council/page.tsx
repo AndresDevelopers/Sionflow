@@ -451,7 +451,13 @@ export default function CouncilPage() {
           toast({ title: t("council.action.friendsUpdatedTitle"), description: t("council.action.friendsUpdatedDescription") });
         }
       } else if (friends.length > 0) {
-        await addDoc(newConvertFriendsCollection, { convertId, convertName, friends, assignedAt: serverTimestamp() });
+        await addDoc(newConvertFriendsCollection, {
+          convertId,
+          convertName,
+          friends,
+          assignedAt: serverTimestamp(),
+          barrioOrg,
+        });
         toast({ title: t("council.action.friendsAssignedTitle"), description: t("council.action.friendsAssignedDescription") });
       }
     } catch (error) {

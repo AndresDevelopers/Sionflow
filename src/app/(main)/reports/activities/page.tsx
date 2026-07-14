@@ -103,7 +103,7 @@ async function getActivitiesForYear(year: number, barrioOrg?: string): Promise<A
 }
 
 export default function ActivitiesPage() {
-  const { user, loading: authLoading, barrioOrg } = useAuth();
+  const { user, loading: authLoading, barrioOrg, firebaseUser } = useAuth();
   const { t } = useI18n();
   const { toast } = useToast();
   const router = useRouter();
@@ -209,8 +209,12 @@ export default function ActivitiesPage() {
           }
         }
 
+        const idToken = await firebaseUser?.getIdToken().catch(() => null);
+        if (!idToken) throw new Error('No autenticado');
         const url = refresh ? '/api/suggestions?refresh=true' : '/api/suggestions';
-        const response = await fetch(url);
+        const response = await fetch(url, {
+          headers: { Authorization: `Bearer ${idToken}` },
+        });
         if (!response.ok) {
           console.error(`Failed to fetch suggestions: ${response.status} ${response.statusText}`);
           const errorText = await response.text();

@@ -1,13 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
-import { authAdmin, firestoreAdmin } from '@/lib/firebase-admin';
+import { firestoreAdmin } from '@/lib/firebase-admin';
 import { enforceRateLimit } from '@/lib/rate-limit';
-
-function getBearerToken(request: NextRequest): string | null {
-  const authorization = request.headers.get('authorization');
-  if (!authorization?.startsWith('Bearer ')) return null;
-  return authorization.slice('Bearer '.length).trim() || null;
-}
+import { getErrorStatus, requireUidAndBarrioOrg } from '@/lib/api-auth';
 
 interface ResolvedAuth {
   barrioOrg: string;
@@ -15,29 +10,16 @@ interface ResolvedAuth {
 }
 
 async function resolveAuth(request: NextRequest): Promise<ResolvedAuth | NextResponse> {
-  const token = getBearerToken(request);
-  if (!token) {
-    return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 });
-  }
-
-  let decoded;
   try {
-    decoded = await authAdmin.verifyIdToken(token);
-  } catch {
-    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    const { barrioOrg, email } = await requireUidAndBarrioOrg(request);
+    return { barrioOrg, userEmail: email };
+  } catch (error) {
+    const status = getErrorStatus(error, 401);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unauthorized' },
+      { status: status === 500 ? 401 : status }
+    );
   }
-
-  const userDoc = await firestoreAdmin.collection('c_users').doc(decoded.uid).get();
-  if (!userDoc.exists) {
-    return NextResponse.json({ error: 'User not found' }, { status: 403 });
-  }
-
-  const data = userDoc.data()!;
-  const barrio = data.barrio || 'Libertad';
-  const organizacion = data.organizacion || 'Quórum de Élderes';
-  const userEmail = decoded.email || null;
-
-  return { barrioOrg: `${barrio}|${organizacion}`, userEmail };
 }
 
 function serializeDoc(docData: Record<string, unknown>): Record<string, unknown> {
@@ -64,11 +46,14 @@ async function resolveMemberNames(barrioOrg: string, email: string | null, membe
   const collection = firestoreAdmin.collection('c_miembros');
 
   if (memberId) {
-    const doc = await collection.doc(memberId).get();
-    if (doc.exists) {
-      const m = doc.data()!;
-      const fullName = `${m.firstName || ''} ${m.lastName || ''}`.trim();
-      if (fullName) memberNames.add(fullName);
+    const memberDoc = await collection.doc(memberId).get();
+    if (memberDoc.exists) {
+      const m = memberDoc.data()!;
+      // Never resolve members from another barrio
+      if (m.barrioOrg === barrioOrg) {
+        const fullName = `${m.firstName || ''} ${m.lastName || ''}`.trim();
+        if (fullName) memberNames.add(fullName);
+      }
     }
   }
 

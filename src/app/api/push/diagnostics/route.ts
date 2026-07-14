@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue, Timestamp } from 'firebase-admin/firestore';
-import { authAdmin, firestoreAdmin, messagingAdmin } from '@/lib/firebase-admin';
+import { firestoreAdmin, messagingAdmin } from '@/lib/firebase-admin';
 import { hasLeadershipPrivileges, normalizeRole } from '@/lib/roles';
 import { getAppName } from '@/lib/app-config';
 import {
@@ -9,15 +9,7 @@ import {
   type PushSubscriptionDiagnostic,
 } from '@/lib/push-diagnostics';
 import { enforceRateLimit } from '@/lib/rate-limit';
-
-function getBearerToken(request: NextRequest): string | null {
-  const authorization = request.headers.get('authorization');
-  if (!authorization?.startsWith('Bearer ')) {
-    return null;
-  }
-
-  return authorization.slice('Bearer '.length).trim() || null;
-}
+import { buildBarrioOrgFromUserData, getErrorStatus, requireUidAndBarrioOrg } from '@/lib/api-auth';
 
 function toIsoString(value: unknown): string | null {
   if (value instanceof Timestamp) {
@@ -45,13 +37,8 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const token = getBearerToken(request);
-    if (!token) {
-      return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 });
-    }
-
-    const decodedToken = await authAdmin.verifyIdToken(token);
-    const viewerDoc = await firestoreAdmin.collection('c_users').doc(decodedToken.uid).get();
+    const { uid: viewerUid, barrioOrg: viewerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    const viewerDoc = await firestoreAdmin.collection('c_users').doc(viewerUid).get();
     const viewerRole = normalizeRole(viewerDoc.data()?.role);
 
     if (!hasLeadershipPrivileges(viewerRole)) {
@@ -67,7 +54,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { userId, runDryCheck } = parsedBody.data;
-    const targetUserId = userId ?? decodedToken.uid;
+    const targetUserId = userId ?? viewerUid;
 
     const [targetUserDoc, subscriptionsSnapshot] = await Promise.all([
       firestoreAdmin.collection('c_users').doc(targetUserId).get(),
@@ -75,6 +62,13 @@ export async function POST(request: NextRequest) {
     ]);
 
     const targetUserData = targetUserDoc.data() ?? {};
+    const targetBarrioOrg = buildBarrioOrgFromUserData(targetUserData);
+    if (!targetBarrioOrg || targetBarrioOrg !== viewerBarrioOrg) {
+      return NextResponse.json(
+        { error: 'No tienes acceso a este usuario' },
+        { status: 403 }
+      );
+    }
     const subscriptions = subscriptionsSnapshot.docs.map((doc) => {
       const data = doc.data();
       const diagnostic: PushSubscriptionDiagnostic = {
@@ -183,7 +177,7 @@ export async function POST(request: NextRequest) {
 
     const now = new Date();
     const response: PushDiagnosticsResponse = {
-      viewerUserId: decodedToken.uid,
+      viewerUserId: viewerUid,
       viewerRole,
       targetUserId,
       pushNotificationsEnabled: targetUserData.pushNotificationsEnabled === true,
@@ -196,6 +190,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(response);
   } catch (error) {
+    const status = getErrorStatus(error, 500);
+    if (status === 401 || status === 403) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Unauthorized' },
+        { status }
+      );
+    }
     return NextResponse.json(
       {
         error: 'Failed to build push diagnostics',

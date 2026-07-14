@@ -268,11 +268,24 @@ async function getBaptismsForYear(year: number, barrioOrg?: string): Promise<Bap
   return Array.from(baptismMap.values()).sort((a, b) => b.date.toMillis() - a.date.toMillis());
 }
 
-async function getAnnualReportAnswers(year: number): Promise<AnnualReportAnswers | null> {
-  const docRef = doc(annualReportsCollection, String(year));
-  const docSnap = await getDoc(docRef);
-  if (docSnap.exists()) {
-    return docSnap.data() as AnnualReportAnswers;
+async function getAnnualReportAnswers(
+  year: number,
+  barrioOrg: string
+): Promise<AnnualReportAnswers | null> {
+  // Prefer multi-tenant id year|barrioOrg
+  const scopedRef = doc(annualReportsCollection, `${year}|${barrioOrg}`);
+  const scopedSnap = await getDoc(scopedRef);
+  if (scopedSnap.exists()) {
+    return scopedSnap.data() as AnnualReportAnswers;
+  }
+  // Legacy single-doc-per-year — only if same barrioOrg (or missing field on old docs)
+  const legacyRef = doc(annualReportsCollection, String(year));
+  const legacySnap = await getDoc(legacyRef);
+  if (legacySnap.exists()) {
+    const data = legacySnap.data() as AnnualReportAnswers & { barrioOrg?: string };
+    if (!data.barrioOrg || data.barrioOrg === barrioOrg) {
+      return data;
+    }
   }
   return null;
 }
@@ -324,7 +337,7 @@ export default function ReportsPage() {
     try {
       const [baptismsData, answersData] = await Promise.all([
         getBaptismsForYear(selectedYear, barrioOrg),
-        getAnnualReportAnswers(selectedYear)
+        getAnnualReportAnswers(selectedYear, barrioOrg)
       ]);
 
       setBaptisms(baptismsData);
@@ -389,8 +402,9 @@ export default function ReportsPage() {
 
   const handleSaveAnswers = async () => {
     try {
-      const docRef = doc(annualReportsCollection, String(selectedYear));
-      await setDoc(docRef, { ...answers, barrioOrg }, { merge: true });
+      // Multi-tenant doc id: year|barrioOrg (avoids sharing answers across wards)
+      const docRef = doc(annualReportsCollection, `${selectedYear}|${barrioOrg}`);
+      await setDoc(docRef, { ...answers, barrioOrg, year: selectedYear }, { merge: true });
        toast({ title: t('settings.toast.profileUpdatedTitle'), description: t('reports.toast.answersSaved') });
     } catch (error) {
       logger.error({ error, message: 'Error saving annual report answers' });

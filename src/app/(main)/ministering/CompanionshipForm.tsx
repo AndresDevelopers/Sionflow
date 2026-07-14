@@ -398,7 +398,8 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
                 oldCompanions,
                 companionNames,
                 oldFamilies,
-                newFamilyNames
+                newFamilyNames,
+                barrioOrg
             );
         } else {
             // For new companionships, add ministering assignments
@@ -408,6 +409,8 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
                     const memberSnap = await getDoc(memberRef);
                     if (memberSnap.exists()) {
                       const member = { id: memberSnap.id, ...memberSnap.data() } as Member;
+                      // Never write ministers onto members of another barrio
+                      if (member.barrioOrg && member.barrioOrg !== barrioOrg) continue;
                       const currentTeachers = member.ministeringTeachers || [];
                       const newTeachers = [...new Set([...currentTeachers, ...companionNames])];
                       await updateDoc(memberRef, { ministeringTeachers: newTeachers });

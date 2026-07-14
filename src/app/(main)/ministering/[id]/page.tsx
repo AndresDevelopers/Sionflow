@@ -117,7 +117,7 @@ export default function ManageCompanionshipPage() {
       const companionNames = companionship.companions || [];
       const familyNames = companionship.families.map(f => f.name);
 
-      await removeMinisteringTeachersFromFamilies(companionNames, familyNames);
+      await removeMinisteringTeachersFromFamilies(companionNames, familyNames, barrioOrg);
 
       await deleteDoc(doc(ministeringCollection, companionshipId));
 

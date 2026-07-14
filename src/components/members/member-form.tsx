@@ -338,7 +338,11 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
     }
 
     try {
-      const duplicates = await searchMembersByName(firstName, lastName);
+      if (!barrioOrg) {
+        setDuplicateMembers([]);
+        return;
+      }
+      const duplicates = await searchMembersByName(firstName, lastName, barrioOrg);
       setDuplicateMembers(duplicates);
       if (duplicates.length > 0) {
         setShowDuplicateDialog(true);

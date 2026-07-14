@@ -6,16 +6,22 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function currentUserDoc() {
+      return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data;
+    }
+
     function currentUserRole() {
-      return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data.role;
+      return currentUserDoc().role;
     }
 
     function currentUserPermission() {
-      return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data.permission;
+      return currentUserDoc().permission;
     }
 
     function currentUserBarrioOrg() {
-      return get(/databases/$(database)/documents/c_users/$(request.auth.uid)).data.barrioOrg;
+      // Prefer explicit barrioOrg field (canonical multi-tenant key)
+      let d = currentUserDoc();
+      return d.barrioOrg;
     }
 
     // Accept canonical 'all' and legacy Spanish aliases stored in older docs
@@ -33,7 +39,14 @@ service cloud.firestore {
     }
 
     function isSameBarrio(docBarrioOrg) {
-      return signedIn() && docBarrioOrg == currentUserBarrioOrg();
+      return signedIn()
+        && docBarrioOrg != null
+        && currentUserBarrioOrg() != null
+        && docBarrioOrg == currentUserBarrioOrg();
+    }
+
+    function isSecretaryInSameBarrio(docBarrioOrg) {
+      return isSecretary() && isSameBarrio(docBarrioOrg);
     }
 
     // create/update: validar barrio del documento resultante
@@ -260,46 +273,53 @@ service cloud.firestore {
       allow delete: if isOwnUserId(resource.data.userId);
     }
 
-    // ── Audit — already properly restricted ──
-
+    // Audit — leadership, same barrio only
     match /c_admin_audit/{document} {
-      allow read: if isSecretary();
-      allow create: if isSecretary() && request.resource.data.actorUid == request.auth.uid;
+      allow read: if isSecretaryInSameBarrio(resource.data.barrioOrg);
+      allow create: if isSecretaryInSameBarrio(request.resource.data.barrioOrg)
+        && request.resource.data.actorUid == request.auth.uid;
       allow update, delete: if false;
     }
 
-    // ── Users — existing logic preserved ──
-
+    // Users — own profile always; peers only same barrioOrg (never global list)
     match /c_users/{document} {
-      allow read: if signedIn();
+      allow read: if signedIn()
+        && (
+          document == request.auth.uid
+          || isSameBarrio(resource.data.barrioOrg)
+        );
       allow create: if signedIn() && document == request.auth.uid;
       allow update: if signedIn()
         && (
-          isSecretary()
+          (
+            // Leadership can manage roles only within their own barrio
+            isSecretaryInSameBarrio(resource.data.barrioOrg)
+            && isSameBarrio(request.resource.data.barrioOrg)
+          )
           || (
             document == request.auth.uid
-            && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'permission'])
+            && !request.resource.data.diff(resource.data).changedKeys().hasAny(['role', 'permission', 'barrioOrg', 'barrio', 'organizacion'])
           )
         );
-      allow delete: if isSecretary();
+      allow delete: if isSecretaryInSameBarrio(resource.data.barrioOrg);
     }
 
-    // ── Reference data — public read ──
+    // ── Reference data — public read (names only for registration) ──
 
     match /c_barrios/{document} {
       allow read: if true;
-      allow write: if request.auth != null;
+      // Only leadership can mutate reference lists
+      allow write: if isSecretary();
     }
 
     match /c_organizaciones/{document} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isSecretary();
     }
 
-    // ── Default ──
-
+    // ── Default: deny everything not explicitly matched ──
     match /{document=**} {
-      allow read: if signedIn();
+      allow read, write: if false;
     }
   }
 }

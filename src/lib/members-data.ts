@@ -185,6 +185,10 @@ export async function updateMember(
     }
 
     const currentData = currentMemberDoc.data() as Member;
+    // Never allow client to re-scope a member to another barrio
+    if ('barrioOrg' in memberData) {
+      delete (memberData as { barrioOrg?: string }).barrioOrg;
+    }
     // Preparar datos limpios
     const cleanData: any = {
       updatedAt: Timestamp.now()
@@ -536,16 +540,18 @@ export async function getMembersByStatus(
   options?: { includeDeceased?: boolean; barrioOrg?: string }
 ): Promise<Member[]> {
   try {
+    // Fail closed: never list members across all barrios
+    if (!options?.barrioOrg) {
+      console.warn('getMembersByStatus called without barrioOrg — returning empty');
+      return [];
+    }
     // Get firestore instance
     const db = getFirestoreInstance();
     const membersCollection = collection(db, 'c_miembros');
 
-    const constraints: QueryConstraint[] = [];
-
-    // Add barrioOrg filter if provided
-    if (options?.barrioOrg) {
-      constraints.push(where('barrioOrg', '==', options.barrioOrg));
-    }
+    const constraints: QueryConstraint[] = [
+      where('barrioOrg', '==', options.barrioOrg),
+    ];
 
     // Add status filter if provided
     if (status) {
@@ -597,16 +603,18 @@ export async function getMembersByStatus(
 // Get members for selector component
 export async function getMembersForSelector(includeInactive = false, barrioOrg?: string): Promise<Member[]> {
   try {
+    // Fail closed: never list members across all barrios
+    if (!barrioOrg) {
+      console.warn('getMembersForSelector called without barrioOrg — returning empty');
+      return [];
+    }
     // Get firestore instance
     const db = getFirestoreInstance();
     const membersCollection = collection(db, 'c_miembros');
 
-    const constraints: QueryConstraint[] = [];
-
-    // Add barrioOrg filter if provided
-    if (barrioOrg) {
-      constraints.push(where('barrioOrg', '==', barrioOrg));
-    }
+    const constraints: QueryConstraint[] = [
+      where('barrioOrg', '==', barrioOrg),
+    ];
 
     // Filter by status if not including inactive members
     if (!includeInactive) {
@@ -780,6 +788,11 @@ export async function getMemberById(memberId: string): Promise<Member | null> {
 // Search for members by exact first name and last name (case insensitive)
 export async function searchMembersByName(firstName: string, lastName: string, barrioOrg?: string): Promise<Member[]> {
   try {
+    // Fail closed: never search members across all barrios
+    if (!barrioOrg) {
+      console.warn('searchMembersByName called without barrioOrg — returning empty');
+      return [];
+    }
     // Get firestore instance
     const db = getFirestoreInstance();
     const membersCollection = collection(db, 'c_miembros');
@@ -789,16 +802,16 @@ export async function searchMembersByName(firstName: string, lastName: string, b
     }
 
     const constraints1: QueryConstraint[] = [
+      where('barrioOrg', '==', barrioOrg),
       where('firstName', '==', firstName.trim()),
       where('lastName', '==', lastName.trim()),
     ];
-    if (barrioOrg) constraints1.splice(0, 0, where('barrioOrg', '==', barrioOrg));
 
     const constraints2: QueryConstraint[] = [
+      where('barrioOrg', '==', barrioOrg),
       where('firstName', '==', lastName.trim()),
       where('lastName', '==', firstName.trim()),
     ];
-    if (barrioOrg) constraints2.splice(0, 0, where('barrioOrg', '==', barrioOrg));
 
     const q1 = query(membersCollection, ...constraints1);
     const q2 = query(membersCollection, ...constraints2);

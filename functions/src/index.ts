@@ -822,7 +822,22 @@ async function buildAnnualReport(
         );
     }
 
-    const answersDoc = firestore.collection("c_reporte_anual").doc(String(req.year)).get();
+    // Report answers are multi-tenant: prefer doc id "year|barrioOrg", fall back to legacy "year"
+    const reportAnswersId = `${req.year}|${barrioOrg}`;
+    const answersDoc = firestore.collection("c_reporte_anual").doc(reportAnswersId).get()
+        .then(async (snap) => {
+            if (snap.exists) return snap;
+            // Legacy single-doc-per-year (may mix barrios) — only use if it matches barrioOrg
+            const legacy = await firestore.collection("c_reporte_anual").doc(String(req.year)).get();
+            if (legacy.exists) {
+                const legacyData = legacy.data() || {};
+                if (legacyData.barrioOrg && legacyData.barrioOrg !== barrioOrg) {
+                    // Wrong barrio — treat as empty answers
+                    return { exists: false, data: () => ({}) } as admin.firestore.DocumentSnapshot;
+                }
+            }
+            return legacy;
+        });
     const snapshotResults = await Promise.all([...baptismQueries, answersDoc]);
     const reportAnswersDoc = snapshotResults.pop() as admin.firestore.DocumentSnapshot;
     const [baptismsSnapshot, futureMembersSnapshot, convertsSnapshot, membersSnapshot] =
@@ -1015,18 +1030,27 @@ async function withAuthenticatedReport(
         throw new functions.https.HttpsError("unauthenticated", "The function must be called while authenticated.");
     }
 
-    // Resolve barrioOrg from c_users — never trust client for data filtering
+    // Resolve barrioOrg from c_users — never trust client for data filtering, never default ward
     const userDoc = await firestore.collection("c_users").doc(context.auth.uid).get();
     if (!userDoc.exists) {
         throw new functions.https.HttpsError("failed-precondition", "Usuario sin barrio asignado.");
     }
     const userData = userDoc.data() || {};
-    const barrio = typeof userData.barrio === "string" ? userData.barrio.trim() : "";
-    const organizacionField = typeof userData.organizacion === "string" ? userData.organizacion.trim() : "";
-    if (!barrio || !organizacionField) {
-        throw new functions.https.HttpsError("failed-precondition", "Usuario sin barrio asignado.");
+    let barrioOrg = "";
+    if (typeof userData.barrioOrg === "string") {
+        const explicit = userData.barrioOrg.trim();
+        if (explicit.includes("|") && !explicit.startsWith("|") && !explicit.endsWith("|")) {
+            barrioOrg = explicit;
+        }
     }
-    const barrioOrg = `${barrio}|${organizacionField}`;
+    if (!barrioOrg) {
+        const barrio = typeof userData.barrio === "string" ? userData.barrio.trim() : "";
+        const organizacionField = typeof userData.organizacion === "string" ? userData.organizacion.trim() : "";
+        if (!barrio || !organizacionField) {
+            throw new functions.https.HttpsError("failed-precondition", "Usuario sin barrio asignado.");
+        }
+        barrioOrg = `${barrio}|${organizacionField}`;
+    }
 
     const req: ReportRequest = {
         year: data.year || getYear(new Date()),
@@ -1658,11 +1682,28 @@ async function getAllUsersNotificationData(): Promise<UserNotificationData[]> {
     }
 
     const snapshot = await firestore.collection("c_users").get();
-    const data = snapshot.docs.map((doc) => {
+    const data: UserNotificationData[] = [];
+    for (const doc of snapshot.docs) {
         const d = doc.data();
-        const barrio = (d.barrio as string) || "Libertad";
-        const organizacion = (d.organizacion as string) || "Quórum de Élderes";
-        return {
+        // Resolve barrioOrg without production-ward defaults (no silent Libertad)
+        let barrioOrg: string | null = null;
+        if (typeof d.barrioOrg === "string") {
+            const explicit = d.barrioOrg.trim();
+            if (explicit.includes("|") && !explicit.startsWith("|") && !explicit.endsWith("|")) {
+                barrioOrg = explicit;
+            }
+        }
+        if (!barrioOrg) {
+            const barrio = typeof d.barrio === "string" ? d.barrio.trim() : "";
+            const organizacion = typeof d.organizacion === "string" ? d.organizacion.trim() : "";
+            if (barrio && organizacion) {
+                barrioOrg = `${barrio}|${organizacion}`;
+            }
+        }
+        // Users without barrio/org are excluded from scoped notifications (no cross-ward default)
+        if (!barrioOrg) continue;
+
+        data.push({
             userId: doc.id,
             visiblePages: Array.isArray(d.visiblePages) ? (d.visiblePages as string[]) : null,
             inAppEnabled: d.inAppNotificationsEnabled !== false,
@@ -1671,10 +1712,10 @@ async function getAllUsersNotificationData(): Promise<UserNotificationData[]> {
                 inApp: (d.notificationPrefs?.inApp as Record<string, boolean>) ?? {},
                 push: (d.notificationPrefs?.push as Record<string, boolean>) ?? {},
             },
-            barrioOrg: `${barrio}|${organizacion}`,
+            barrioOrg,
             role: typeof d.role === "string" ? d.role : null,
-        };
-    });
+        });
+    }
 
     _usersCache = { data, ts: now };
     return data;
@@ -1697,21 +1738,33 @@ function getActiveBarrioOrgs(users: UserNotificationData[]): string[] {
     return Array.from(set);
 }
 
-/**
- * Read a collection filtered by barrioOrg in chunks of 30 (Firestore `in` limit).
- * Returns a snapshot-like object with combined docs so call sites can keep
- * using .docs / .forEach as before.
- */
-async function getCollectionDocsForBarrios(
-    collectionName: string,
-    activeBarrioOrgs: string[]
-): Promise<{
+type SnapshotLike = {
     docs: admin.firestore.QueryDocumentSnapshot[];
     empty: boolean;
     forEach: (cb: (doc: admin.firestore.QueryDocumentSnapshot) => void) => void;
-}> {
+};
+
+function toSnapshotLike(docs: admin.firestore.QueryDocumentSnapshot[]): SnapshotLike {
+    return {
+        docs,
+        empty: docs.length === 0,
+        forEach: (cb) => {
+            docs.forEach(cb);
+        },
+    };
+}
+
+/**
+ * Read a collection filtered by barrioOrg in chunks of 30 (Firestore `in` limit).
+ * Optional `applyExtra` adds further where/orderBy after the barrioOrg filter.
+ */
+async function getCollectionDocsForBarrios(
+    collectionName: string,
+    activeBarrioOrgs: string[],
+    applyExtra?: (q: admin.firestore.Query) => admin.firestore.Query
+): Promise<SnapshotLike> {
     if (activeBarrioOrgs.length === 0) {
-        return { docs: [], empty: true, forEach: () => undefined };
+        return toSnapshotLike([]);
     }
 
     const chunks: string[][] = [];
@@ -1720,18 +1773,15 @@ async function getCollectionDocsForBarrios(
     }
 
     const snapshots = await Promise.all(
-        chunks.map((chunk) =>
-            firestore.collection(collectionName).where("barrioOrg", "in", chunk).get()
-        )
+        chunks.map((chunk) => {
+            let q: admin.firestore.Query = firestore
+                .collection(collectionName)
+                .where("barrioOrg", "in", chunk);
+            if (applyExtra) q = applyExtra(q);
+            return q.get();
+        })
     );
-    const docs = snapshots.flatMap((s) => s.docs);
-    return {
-        docs,
-        empty: docs.length === 0,
-        forEach: (cb) => {
-            docs.forEach(cb);
-        },
-    };
+    return toSnapshotLike(snapshots.flatMap((s) => s.docs));
 }
 
 type NotifCategory =
@@ -2045,10 +2095,14 @@ export const dailyNotifications = functions
         // ── Servicios – 14 días antes y el mismo día ─────────────────────────
         const serviceTrace = buildNotificationTrace("dailyNotifications", "service");
         {
-            const servicesSnap = await firestore.collection("c_servicios")
-                .where("date", ">=", admin.firestore.Timestamp.fromDate(today))
-                .where("date", "<=", admin.firestore.Timestamp.fromDate(in14Days))
-                .get();
+            const servicesSnap = await getCollectionDocsForBarrios(
+                "c_servicios",
+                activeBarrioOrgs,
+                (q) =>
+                    q
+                        .where("date", ">=", admin.firestore.Timestamp.fromDate(today))
+                        .where("date", "<=", admin.firestore.Timestamp.fromDate(in14Days))
+            );
             for (const doc of servicesSnap.docs) {
                 const svc = doc.data() as Service & { barrioOrg?: string };
                 const svcDate = svc.date.toDate();
@@ -2097,10 +2151,14 @@ export const dailyNotifications = functions
         // ── Actividades – 14 días antes y el mismo día ───────────────────────
         const activitiesTrace = buildNotificationTrace("dailyNotifications", "activities");
         {
-            const actSnap = await firestore.collection("c_actividades")
-                .where("date", ">=", admin.firestore.Timestamp.fromDate(today))
-                .where("date", "<=", admin.firestore.Timestamp.fromDate(in14Days))
-                .get();
+            const actSnap = await getCollectionDocsForBarrios(
+                "c_actividades",
+                activeBarrioOrgs,
+                (q) =>
+                    q
+                        .where("date", ">=", admin.firestore.Timestamp.fromDate(today))
+                        .where("date", "<=", admin.firestore.Timestamp.fromDate(in14Days))
+            );
             for (const doc of actSnap.docs) {
                 const act = doc.data() as Activity & { barrioOrg?: string };
                 const actDate = act.date.toDate();
@@ -2267,10 +2325,12 @@ export const weeklyNotifications = functions
 
         // ── Miembros Fallecidos sin Ordenanzas Completas (Solo Push, solo Lunes) ─
         {
-            const deceasedMembersQuery = await firestore.collection("c_miembros")
-                .where("status", "==", "deceased")
-                .get();
-            
+            const deceasedMembersQuery = await getCollectionDocsForBarrios(
+                "c_miembros",
+                activeBarrioOrgs,
+                (q) => q.where("status", "==", "deceased")
+            );
+
             const ALL_TEMPLE_ORDINANCES = [
                 'baptism', 'confirmation', 'initiatory', 'endowment',
                 'sealed_to_father', 'sealed_to_mother', 'sealed_to_spouse'
@@ -2340,9 +2400,11 @@ export const weeklyNotifications = functions
             const cutoffTs = admin.firestore.Timestamp.fromDate(cutoff);
 
             const [membersSnap, friendsSnap, convertInfoSnap] = await Promise.all([
-                firestore.collection("c_miembros")
-                    .where("baptismDate", ">=", cutoffTs)
-                    .get(),
+                getCollectionDocsForBarrios(
+                    "c_miembros",
+                    activeBarrioOrgs,
+                    (q) => q.where("baptismDate", ">=", cutoffTs)
+                ),
                 getCollectionDocsForBarrios("c_obra_misional_amigos_conversos", activeBarrioOrgs),
                 getCollectionDocsForBarrios("c_conversos_info", activeBarrioOrgs),
             ]);
@@ -2493,9 +2555,21 @@ export const weeklyNotifications = functions
             const mwCutoffTs = admin.firestore.Timestamp.fromDate(mwCutoff);
 
             const [assignmentsSnap, investigatorsSnap, recentConvertMembersSnap] = await Promise.all([
-                firestore.collection("c_obra_misional_asignaciones").where("isCompleted", "==", false).get(),
-                firestore.collection("c_obra_misional_investigadores").where("status", "==", "active").get(),
-                firestore.collection("c_miembros").where("baptismDate", ">=", mwCutoffTs).get(),
+                getCollectionDocsForBarrios(
+                    "c_obra_misional_asignaciones",
+                    activeBarrioOrgs,
+                    (q) => q.where("isCompleted", "==", false)
+                ),
+                getCollectionDocsForBarrios(
+                    "c_obra_misional_investigadores",
+                    activeBarrioOrgs,
+                    (q) => q.where("status", "==", "active")
+                ),
+                getCollectionDocsForBarrios(
+                    "c_miembros",
+                    activeBarrioOrgs,
+                    (q) => q.where("baptismDate", ">=", mwCutoffTs)
+                ),
             ]);
 
             interface MwStats {
@@ -2719,15 +2793,27 @@ export const requestDataSyncSignal = functions
         throw new functions.https.HttpsError("unauthenticated", "Auth required");
     }
 
-    // Resolve real barrioOrg from c_users — never trust client alone
+    // Resolve real barrioOrg from c_users — never trust client alone, never default to a ward
     const userDoc = await firestore.collection("c_users").doc(context.auth.uid).get();
     if (!userDoc.exists) {
         throw new functions.https.HttpsError("failed-precondition", "Usuario sin barrio asignado.");
     }
     const userData = userDoc.data() || {};
-    const barrio = (userData.barrio as string) || "Libertad";
-    const organizacion = (userData.organizacion as string) || "Quórum de Élderes";
-    const callerBarrioOrg = `${barrio}|${organizacion}`;
+    let callerBarrioOrg = "";
+    if (typeof userData.barrioOrg === "string") {
+        const explicit = userData.barrioOrg.trim();
+        if (explicit.includes("|") && !explicit.startsWith("|") && !explicit.endsWith("|")) {
+            callerBarrioOrg = explicit;
+        }
+    }
+    if (!callerBarrioOrg) {
+        const barrio = typeof userData.barrio === "string" ? userData.barrio.trim() : "";
+        const organizacion = typeof userData.organizacion === "string" ? userData.organizacion.trim() : "";
+        if (!barrio || !organizacion) {
+            throw new functions.https.HttpsError("failed-precondition", "Usuario sin barrio asignado.");
+        }
+        callerBarrioOrg = `${barrio}|${organizacion}`;
+    }
 
     const requestedBarrioOrg = typeof data?.barrioOrg === "string" ? data.barrioOrg.trim() : "";
     if (!requestedBarrioOrg) {

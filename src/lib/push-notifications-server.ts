@@ -112,11 +112,15 @@ async function getTargetUserIds(barrioOrg?: string | null): Promise<string[]> {
     return _targetUsersCache.userIds;
   }
 
-  const usersSnapshot = await usersCollection.get();
+  // Fail closed for unscoped broadcast: only send within a barrioOrg
+  if (!barrioOrg) {
+    console.warn('[push] getTargetUserIds called without barrioOrg — refusing global broadcast');
+    return [];
+  }
+  const usersSnapshot = await usersCollection.where('barrioOrg', '==', barrioOrg).get();
   const userIds: string[] = [];
   usersSnapshot.forEach((doc) => {
     const userData = doc.data();
-    if (barrioOrg && userData.barrioOrg !== barrioOrg) return;
     // Solo usuarios que han activado explícitamente push (consistente con Cloud Functions)
     if (userData.pushNotificationsEnabled === true) {
       userIds.push(doc.id);

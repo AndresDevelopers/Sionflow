@@ -9,6 +9,8 @@ import {
   doc,
   updateDoc,
   Timestamp,
+  query,
+  where,
 } from "firebase/firestore";
 import { getDocs } from "@/lib/firestore-query";
 import { useToast } from "@/hooks/use-toast";
@@ -137,13 +139,13 @@ export default function AdminUsersPage() {
     const load = async () => {
       try {
         setIsLoading(true);
-        const snap = await getDocs(usersCollection);
+        // Server-side filter — rules only allow same-barrioOrg (no global user dump)
+        const snap = await getDocs(
+          query(usersCollection, where("barrioOrg", "==", barrioOrg))
+        );
         const list: UserData[] = [];
         snap.forEach((d) => {
           const data = d.data();
-          const userBarrioOrg = data.barrioOrg as string || "";
-          // Solo usuarios del mismo barrio
-          if (userBarrioOrg !== barrioOrg) return;
           list.push({
             uid: d.id,
             name: data.name || t("admin.users.noName"),

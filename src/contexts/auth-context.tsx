@@ -147,15 +147,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       const permission = normalizePermission(data.permission);
       const nextMainPage = data.mainPage || '/';
       const nextVisible = Array.isArray(data.visiblePages) ? data.visiblePages : [];
+      // Never invent a production ward (Libertad) for incomplete profiles
       const barrioVal =
         typeof data.barrio === "string" && data.barrio.trim().length > 0
           ? data.barrio.trim()
-          : "Libertad";
+          : "";
       const orgVal =
         typeof data.organizacion === "string" && data.organizacion.trim().length > 0
           ? data.organizacion.trim()
-          : "Quórum de Élderes";
-      const nextBarrioOrg = `${barrioVal}|${orgVal}`;
+          : "";
+      const explicitBarrioOrg =
+        typeof data.barrioOrg === "string" && data.barrioOrg.includes("|")
+          ? data.barrioOrg.trim()
+          : "";
+      const nextBarrioOrg =
+        explicitBarrioOrg ||
+        (barrioVal && orgVal ? `${barrioVal}|${orgVal}` : "");
       const theme =
         data.theme === 'light' || data.theme === 'dark' || data.theme === 'system'
           ? data.theme

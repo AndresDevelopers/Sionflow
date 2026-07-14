@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import {
   getDocs,
   query,
+  where,
   limit as fbLimit,
   doc,
   writeBatch,
@@ -40,6 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/contexts/i18n-context";
+import { useAuth } from "@/contexts/auth-context";
 import logger from "@/lib/logger";
 import {
   Database,
@@ -87,6 +89,7 @@ const DATA_COLLECTIONS: { ref: ReturnType<typeof collection>; label: string }[] 
 export default function MigratePage() {
   const { toast } = useToast();
   const { t } = useI18n();
+  const { barrioOrg } = useAuth();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [migrationStatus, setMigrationStatus] = useState<string[]>([]);
@@ -95,13 +98,16 @@ export default function MigratePage() {
   const [migrationCounts, setMigrationCounts] = useState<Record<string, { total: number; missing: number }>>({});
 
   useEffect(() => {
+    if (!barrioOrg) return;
     loadUsers();
-  }, []);
+  }, [barrioOrg]);
 
   const loadUsers = async () => {
+    if (!barrioOrg) return;
     setIsLoadingUsers(true);
     try {
-      const snap = await getDocs(usersCollection);
+      // Same-barrio only (rules deny global user list)
+      const snap = await getDocs(query(usersCollection, where("barrioOrg", "==", barrioOrg)));
       const list: UserInfo[] = [];
       snap.forEach((d) => {
         const data = d.data();

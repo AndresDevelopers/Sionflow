@@ -1,36 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { unstable_cache } from 'next/cache';
-import { authAdmin, firestoreAdmin } from '@/lib/firebase-admin';
+import { firestoreAdmin } from '@/lib/firebase-admin';
 import { enforceRateLimit } from '@/lib/rate-limit';
-
-function getBearerToken(request: NextRequest): string | null {
-  const authorization = request.headers.get('authorization');
-  if (!authorization?.startsWith('Bearer ')) return null;
-  return authorization.slice('Bearer '.length).trim() || null;
-}
+import { getErrorStatus, requireUidAndBarrioOrg } from '@/lib/api-auth';
 
 async function resolveBarrioOrg(request: NextRequest): Promise<string | NextResponse> {
-  const token = getBearerToken(request);
-  if (!token) {
-    return NextResponse.json({ error: 'Missing bearer token' }, { status: 401 });
-  }
-
-  let decoded;
   try {
-    decoded = await authAdmin.verifyIdToken(token);
-  } catch {
-    return NextResponse.json({ error: 'Invalid or expired token' }, { status: 401 });
+    const { barrioOrg } = await requireUidAndBarrioOrg(request);
+    return barrioOrg;
+  } catch (error) {
+    const status = getErrorStatus(error, 401);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : 'Unauthorized' },
+      { status: status === 500 ? 401 : status }
+    );
   }
-
-  const userDoc = await firestoreAdmin.collection('c_users').doc(decoded.uid).get();
-  if (!userDoc.exists) {
-    return NextResponse.json({ error: 'User not found' }, { status: 403 });
-  }
-
-  const data = userDoc.data()!;
-  const barrio = data.barrio || 'Libertad';
-  const organizacion = data.organizacion || 'Quórum de Élderes';
-  return `${barrio}|${organizacion}`;
 }
 
 function serializeDoc(docData: Record<string, unknown>): Record<string, unknown> {

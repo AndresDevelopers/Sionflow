@@ -172,7 +172,11 @@ export default function FamilySearchPage() {
 
         startTransition(async () => {
             try {
-                await addDoc(familySearchTasksCollection, { task, createdAt: serverTimestamp() });
+                await addDoc(familySearchTasksCollection, {
+                  task,
+                  createdAt: serverTimestamp(),
+                  barrioOrg,
+                });
                 toast({ title: t("common.success"), description: t("familySearch.task.addedSuccess") });
                 setTaskOpen(false);
                 taskFormRef.current?.reset();

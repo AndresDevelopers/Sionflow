@@ -31,6 +31,30 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_obra_misional_asignaciones",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "isCompleted", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_obra_misional_investigadores",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_miembros",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
         { "fieldPath": "birthDate", "order": "ASCENDING" }
       ]
     },

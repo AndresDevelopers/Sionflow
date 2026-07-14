@@ -1,6 +1,9 @@
 /**
  * Shared API auth helpers for Next.js route handlers.
  * Pattern mirrors requireUid in /api/storage/upload (Bearer + verifyIdToken).
+ *
+ * IMPORTANT: never default barrio/organizacion to a production ward.
+ * Incomplete profiles must be rejected (403), not silently scoped to Libertad.
  */
 import { authAdmin, firestoreAdmin } from '@/lib/firebase-admin';
 import logger from '@/lib/logger';
@@ -15,11 +18,16 @@ export class AuthHttpError extends Error {
   }
 }
 
+export type VerifiedAuth = {
+  uid: string;
+  email: string | null;
+};
+
 /**
- * Extract Bearer token, verify with Firebase Admin, return uid.
+ * Extract Bearer token, verify with Firebase Admin, return uid + email.
  * Throws AuthHttpError with status 401 on missing/invalid token.
  */
-export async function requireUid(request: Request): Promise<string> {
+export async function requireAuth(request: Request): Promise<VerifiedAuth> {
   const authHeader = request.headers.get('authorization') || '';
   const match = authHeader.match(/^Bearer\s+(.+)$/i);
   if (!match) {
@@ -27,7 +35,10 @@ export async function requireUid(request: Request): Promise<string> {
   }
   try {
     const decoded = await authAdmin.verifyIdToken(match[1]);
-    return decoded.uid;
+    return {
+      uid: decoded.uid,
+      email: typeof decoded.email === 'string' ? decoded.email : null,
+    };
   } catch (error) {
     logger.warn({ error, message: 'Invalid ID token on API request' });
     throw new AuthHttpError('Token inválido o expirado. Cierra sesión y vuelve a entrar.', 401);
@@ -35,28 +46,60 @@ export async function requireUid(request: Request): Promise<string> {
 }
 
 /**
+ * Extract Bearer token, verify with Firebase Admin, return uid.
+ * Throws AuthHttpError with status 401 on missing/invalid token.
+ */
+export async function requireUid(request: Request): Promise<string> {
+  const { uid } = await requireAuth(request);
+  return uid;
+}
+
+/**
+ * Build barrioOrg from c_users fields without any ward defaults.
+ * Returns null if the profile has no usable barrio scope.
+ */
+export function buildBarrioOrgFromUserData(
+  data: FirebaseFirestore.DocumentData | undefined | null
+): string | null {
+  if (!data) return null;
+
+  if (typeof data.barrioOrg === 'string') {
+    const explicit = data.barrioOrg.trim();
+    if (explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')) {
+      return explicit;
+    }
+  }
+
+  const barrio = typeof data.barrio === 'string' ? data.barrio.trim() : '';
+  const organizacion = typeof data.organizacion === 'string' ? data.organizacion.trim() : '';
+  if (!barrio || !organizacion) return null;
+  return `${barrio}|${organizacion}`;
+}
+
+/**
  * Resolve barrioOrg from c_users/{uid} as "barrio|organizacion".
- * Same construction as getAllUsersNotificationData() in Cloud Functions.
- * Throws AuthHttpError 403 if the user document does not exist.
+ * Never defaults to a production ward — incomplete profiles are rejected.
+ * Throws AuthHttpError 403 if the user document is missing or has no barrio/org.
  */
 export async function getUserBarrioOrg(uid: string): Promise<string> {
   const userDoc = await firestoreAdmin.collection('c_users').doc(uid).get();
   if (!userDoc.exists) {
     throw new AuthHttpError('Usuario no encontrado.', 403);
   }
-  const data = userDoc.data()!;
-  const barrio = (data.barrio as string) || 'Libertad';
-  const organizacion = (data.organizacion as string) || 'Quórum de Élderes';
-  return `${barrio}|${organizacion}`;
+  const barrioOrg = buildBarrioOrgFromUserData(userDoc.data());
+  if (!barrioOrg) {
+    throw new AuthHttpError('Usuario sin barrio asignado.', 403);
+  }
+  return barrioOrg;
 }
 
 /** requireUid + getUserBarrioOrg in one call. */
 export async function requireUidAndBarrioOrg(
   request: Request
-): Promise<{ uid: string; barrioOrg: string }> {
-  const uid = await requireUid(request);
+): Promise<{ uid: string; barrioOrg: string; email: string | null }> {
+  const { uid, email } = await requireAuth(request);
   const barrioOrg = await getUserBarrioOrg(uid);
-  return { uid, barrioOrg };
+  return { uid, barrioOrg, email };
 }
 
 export function getErrorStatus(error: unknown, fallback = 500): number {

@@ -9,11 +9,10 @@ export async function GET(request: NextRequest) {
   const limited = await enforceRateLimit(request, 'api');
   if (limited) return limited;
 
-  // Verificación de autenticación para Vercel Cron
+  // Fail closed: cron secret required (do not open if env is missing)
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
-  
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
 
@@ -75,10 +74,11 @@ export async function GET(request: NextRequest) {
     // 3. Send notifications — usando función agrupada que cachea c_users entre llamadas
     const { totalPushSent, errors } = await sendBirthdayBatchNotifications(birthdaysToday);
 
+    // Do not return names of people from other barrios in the HTTP response
     return NextResponse.json({
       success: true,
       message: `Procesados ${birthdaysToday.length} cumpleaños.`,
-      birthdays: birthdaysToday.map(b => b.name),
+      count: birthdaysToday.length,
       totalPushSent,
       errors: errors.length > 0 ? errors : undefined,
     });
