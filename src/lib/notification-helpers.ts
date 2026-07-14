@@ -44,17 +44,31 @@ export async function createNotification(params: CreateNotificationParams): Prom
 
   // Create in-app notification if not push-only
   if (!pushOnly) {
+    // Firestore rules require barrioOrg on create (multi-tenant fail closed)
+    if (!barrioOrg || !String(barrioOrg).includes('|')) {
+      console.warn('createNotification: missing barrioOrg — skip in-app write');
+      if (!inAppOnly) {
+        await sendPushNotification({
+          userId,
+          title,
+          body,
+          url: actionUrl
+        });
+      }
+      return '';
+    }
+
     const notification: Omit<AppNotification, 'id'> = {
       userId,
       title,
       body,
       createdAt: Timestamp.now(),
       isRead: false,
+      barrioOrg,
       ...(contextType && { contextType }),
       ...(contextId && { contextId }),
       ...(actionUrl && { actionUrl }),
       ...(actionUrl && { actionType }),
-      ...(barrioOrg && { barrioOrg })
     };
 
     const docRef = await addDoc(notificationsCollection, notification);
@@ -303,56 +317,41 @@ export const NotificationCreators = {
 };
 
 /**
- * Get all user IDs from the system, optionally filtered by barrioOrg.
+ * Get user IDs for a single barrioOrg (fail closed — never list all tenants).
  *
- * When barrioOrg is provided, filters server-side to avoid downloading all users
- * (used by createNotificationsForAll and createNewConvertCouncilNotificationsForAll
- * which are called per-barrio from UI actions like council updates).
+ * Client Firestore rules only allow reading peers in the same barrioOrg; unscoped
+ * queries are denied. Callers (createNotificationsForAll, council, etc.) must pass
+ * the authenticated user's barrioOrg.
  *
- * When barrioOrg is NOT provided, fetches ALL users across all barrios.
- * This is intentional for batch/cron jobs (e.g., sendDeceasedMembersOrdinanceNotifications
- * which runs weekly via Cloud Functions and needs global scope).
- *
- * For production with many users, consider paginating with startAfter() + limit()
- * when barrioOrg is not provided and user count exceeds ~500.
- *
- * @param barrioOrg - Optional barrioOrg scope to filter users
+ * @param barrioOrg - Required multi-tenant scope
  * @param opts - Optional pagination options
- * @param opts.limit - Max users to return (default: no limit)
- * @param opts.startAfter - Cursor for pagination
- * @returns Promise<string[]> - Array of user IDs
+ * @returns Promise<string[]> - Array of user IDs in that barrioOrg
  */
 export async function getAllUserIds(
   barrioOrg?: string | null,
   opts?: { limit?: number; startAfter?: string }
 ): Promise<string[]> {
+  if (!barrioOrg || !barrioOrg.includes('|')) {
+    console.warn('getAllUserIds called without barrioOrg — returning empty (fail closed)');
+    return [];
+  }
+
   try {
     const firestore = await import('firebase/firestore');
 
-    let q: any;
-    if (barrioOrg) {
-      // Server-side filter by barrioOrg for per-barrio operations
-      q = firestore.query(
-        usersCollection,
-        firestore.where('barrioOrg', '==', barrioOrg)
-      );
-    } else {
-      // Global scan — used by batch jobs (cron, deceased members notifications).
-      // Intentional: these jobs need all users across all barrios.
-      // Consider paginating with opts.limit + opts.startAfter if user count grows beyond ~500.
-      q = firestore.query(usersCollection);
-    }
+    let q: any = firestore.query(
+      usersCollection,
+      firestore.where('barrioOrg', '==', barrioOrg)
+    );
 
     if (opts?.limit && opts.limit > 0) {
       q = firestore.query(q, firestore.limit(opts.limit));
     }
-    // Note: startAfter pagination requires a document snapshot, not a string ID.
-    // For now, this is a hook for future use; callers can pass the last doc snapshot.
 
     const snapshot = await firestore.getDocs(q);
     return snapshot.docs.map((doc: any) => doc.id);
   } catch (error) {
-    console.error('Error fetching all user IDs:', error);
+    console.error('Error fetching user IDs for barrioOrg:', error);
     return [];
   }
 }
@@ -385,6 +384,11 @@ export async function createNotificationsForAll(
   notificationParams: Omit<CreateNotificationParams, 'userId'>,
   barrioOrg?: string | null
 ): Promise<string[]> {
+  if (!barrioOrg || !barrioOrg.includes('|')) {
+    console.warn('createNotificationsForAll called without barrioOrg — aborting (fail closed)');
+    return [];
+  }
+
   const userIds = await getAllUserIds(barrioOrg);
 
   // Filter users to only include those with notifications enabled and matching barrioOrg
@@ -407,40 +411,27 @@ export async function createNotificationsForAll(
 
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
-        if (userData) {
-          // When barrioOrg was provided, user IDs are already scoped server-side.
-          // Still check barrioOrg match as defense in depth for edge cases.
-          if (barrioOrg) {
-            const explicit = typeof userData.barrioOrg === 'string' ? userData.barrioOrg.trim() : '';
-            const barrio = typeof userData.barrio === 'string' ? userData.barrio.trim() : '';
-            const organizacion = typeof userData.organizacion === 'string' ? userData.organizacion.trim() : '';
-            const userBarrioOrg =
-              explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')
-                ? explicit
-                : barrio && organizacion
-                  ? `${barrio}|${organizacion}`
-                  : '';
-            // No Libertad defaults — incomplete profiles are skipped
-            if (!userBarrioOrg || userBarrioOrg !== barrioOrg) continue;
-          }
+        if (!userData) continue;
 
-          // Por defecto las notificaciones in-app están activas (inAppNotificationsEnabled !== false)
-          if (userData.inAppNotificationsEnabled !== false) {
-            usersWithNotificationsEnabled.push(userId);
-          }
-        } else {
-          // Usuario nuevo sin preferencias, incluir por defecto (solo si no hay scope)
-          if (!barrioOrg) {
-            usersWithNotificationsEnabled.push(userId);
-          }
+        const explicit = typeof userData.barrioOrg === 'string' ? userData.barrioOrg.trim() : '';
+        const barrio = typeof userData.barrio === 'string' ? userData.barrio.trim() : '';
+        const organizacion = typeof userData.organizacion === 'string' ? userData.organizacion.trim() : '';
+        const userBarrioOrg =
+          explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')
+            ? explicit
+            : barrio && organizacion
+              ? `${barrio}|${organizacion}`
+              : '';
+        if (!userBarrioOrg || userBarrioOrg !== barrioOrg) continue;
+
+        // Por defecto las notificaciones in-app están activas (inAppNotificationsEnabled !== false)
+        if (userData.inAppNotificationsEnabled !== false) {
+          usersWithNotificationsEnabled.push(userId);
         }
       }
     } catch (error) {
       console.error(`Error checking notification preference for user chunk starting at index ${i}:`, error);
-      // En caso de error, incluir a los usuarios por defecto (solo si no hay scope)
-      if (!barrioOrg) {
-        usersWithNotificationsEnabled.push(...chunk);
-      }
+      // Fail closed: do not notify the chunk when preference checks fail
     }
   }
 
@@ -515,6 +506,13 @@ export async function createNewConvertCouncilNotificationsForAll(
   action: string = 'actualizado',
   barrioOrg?: string | null
 ): Promise<string[]> {
+  if (!barrioOrg || !barrioOrg.includes('|')) {
+    console.warn(
+      'createNewConvertCouncilNotificationsForAll called without barrioOrg — aborting (fail closed)'
+    );
+    return [];
+  }
+
   const userIds = await getAllUserIds(barrioOrg);
 
   // Filter users to only include those with in-app notifications enabled and matching barrioOrg
@@ -537,38 +535,25 @@ export async function createNewConvertCouncilNotificationsForAll(
 
       for (const userId of chunk) {
         const userData = userDocsMap.get(userId);
-        if (userData) {
-          // When barrioOrg was provided, user IDs are already scoped server-side.
-          // Still check barrioOrg match as defense in depth for edge cases.
-          if (barrioOrg) {
-            const explicit = typeof userData.barrioOrg === 'string' ? userData.barrioOrg.trim() : '';
-            const barrio = typeof userData.barrio === 'string' ? userData.barrio.trim() : '';
-            const organizacion = typeof userData.organizacion === 'string' ? userData.organizacion.trim() : '';
-            const userBarrioOrg =
-              explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')
-                ? explicit
-                : barrio && organizacion
-                  ? `${barrio}|${organizacion}`
-                  : '';
-            if (!userBarrioOrg || userBarrioOrg !== barrioOrg) continue;
-          }
+        if (!userData) continue;
 
-          // Check in-app notifications preference
-          if (userData.inAppNotificationsEnabled !== false) {
-            usersWithInAppEnabled.push(userId);
-          }
-        } else {
-          // New user, include by default (only if no scope)
-          if (!barrioOrg) {
-            usersWithInAppEnabled.push(userId);
-          }
+        const explicit = typeof userData.barrioOrg === 'string' ? userData.barrioOrg.trim() : '';
+        const barrio = typeof userData.barrio === 'string' ? userData.barrio.trim() : '';
+        const organizacion = typeof userData.organizacion === 'string' ? userData.organizacion.trim() : '';
+        const userBarrioOrg =
+          explicit.includes('|') && !explicit.startsWith('|') && !explicit.endsWith('|')
+            ? explicit
+            : barrio && organizacion
+              ? `${barrio}|${organizacion}`
+              : '';
+        if (!userBarrioOrg || userBarrioOrg !== barrioOrg) continue;
+
+        if (userData.inAppNotificationsEnabled !== false) {
+          usersWithInAppEnabled.push(userId);
         }
       }
     } catch (error) {
       console.error(`Error checking notification preference for convert council notification chunk:`, error);
-      if (!barrioOrg) {
-        usersWithInAppEnabled.push(...chunk);
-      }
     }
   }
 
@@ -615,10 +600,9 @@ export function getMissingTempleOrdinances(member: { templeOrdinances?: string[]
 }
 
 /**
- * Send push-only notification for deceased members with missing ordinances
- * This should be called on Mondays
- * @param members - Array of deceased members to check
- * @returns Promise<{ sent: number; skipped: number }> - Count of sent and skipped notifications
+ * Send push-only notification for deceased members with missing ordinances.
+ * Groups by member.barrioOrg — never mixes names across tenants.
+ * Prefer the cron route `/api/deceased-members-ordinances` (Admin SDK) in production.
  */
 export async function sendDeceasedMembersOrdinanceNotifications(
   members: Array<{
@@ -627,88 +611,91 @@ export async function sendDeceasedMembersOrdinanceNotifications(
     lastName: string;
     templeOrdinances?: string[];
     templeWorkCompletedAt?: unknown;
+    barrioOrg?: string | null;
   }>
 ): Promise<{ sent: number; skipped: number; membersNotified: string[] }> {
-  const userIds = await getAllUserIds();
-
-  // Filter users to only include those with push notifications enabled
-  const usersWithPushEnabled: string[] = [];
-
-  // Batch query in chunks of 30
-  const chunkSize = 30;
-  for (let i = 0; i < userIds.length; i += chunkSize) {
-    const chunk = userIds.slice(i, i + chunkSize);
-
-    try {
-      const firestore = await import('firebase/firestore');
-      const q = firestore.query(usersCollection, firestore.where(firestore.documentId(), 'in', chunk));
-      const snapshot = await firestore.getDocs(q);
-
-      const userDocsMap = new Map();
-      snapshot.forEach(doc => {
-        userDocsMap.set(doc.id, doc.data());
-      });
-
-      for (const userId of chunk) {
-        const userData = userDocsMap.get(userId);
-        if (userData) {
-          // Solo usuarios que han activado explícitamente push (consistente con Cloud Functions)
-          if (userData.pushNotificationsEnabled === true) {
-            usersWithPushEnabled.push(userId);
-          }
-        }
-        // Nota: El código original NO incluía a los usuarios por defecto en caso de no existir o de error
-        // para las notificaciones push.
-      }
-    } catch (error) {
-      console.error(`Error checking push preference for user chunk:`, error);
-    }
-  }
-
-  // Find deceased members with missing ordinances
-  const membersNeedingOrdinances = members.filter(member => {
-    // Skip if all ordinances are completed
-    if (hasAllTempleOrdinances(member)) {
-      return false;
-    }
-    return true;
-  });
+  const membersNeedingOrdinances = members.filter(
+    (member) => !hasAllTempleOrdinances(member)
+  );
 
   if (membersNeedingOrdinances.length === 0) {
     return { sent: 0, skipped: 0, membersNotified: [] };
   }
 
-  const missingCount = membersNeedingOrdinances.length;
-  const memberNames = membersNeedingOrdinances.map(m => `${m.firstName} ${m.lastName}`).join(', ');
-
-  const title = "⚰️ Miembros Fallecidos Sin Ordenanzas Completas";
-  const body = missingCount === 1
-    ? `Hay ${missingCount} miembro fallecido que necesita ordenanzas del templo: ${memberNames}`
-    : `Hay ${missingCount} miembros fallecidos que necesitan ordenanzas del templo: ${memberNames}`;
+  const byBarrio = new Map<string, typeof membersNeedingOrdinances>();
+  for (const m of membersNeedingOrdinances) {
+    const key = typeof m.barrioOrg === 'string' && m.barrioOrg.includes('|') ? m.barrioOrg : '';
+    if (!key) {
+      console.warn(
+        'sendDeceasedMembersOrdinanceNotifications: skipping member without barrioOrg',
+        m.id
+      );
+      continue;
+    }
+    if (!byBarrio.has(key)) byBarrio.set(key, []);
+    byBarrio.get(key)!.push(m);
+  }
 
   let sentCount = 0;
+  let skippedCount = 0;
   const membersNotified: string[] = [];
+  const chunkSize = 30;
 
-  for (const userId of usersWithPushEnabled) {
-    try {
-      await createNotification({
-        userId,
-        title,
-        body,
-        contextType: 'member',
-        actionUrl: '/council',
-        pushOnly: true // Only push, no in-app
-      });
-      sentCount++;
-      membersNotified.push(userId);
-    } catch (error) {
-      console.error(`Error sending deceased member notification to ${userId}:`, error);
+  for (const [barrioOrg, scopedMembers] of byBarrio) {
+    const userIds = await getAllUserIds(barrioOrg);
+    const usersWithPushEnabled: string[] = [];
+
+    for (let i = 0; i < userIds.length; i += chunkSize) {
+      const chunk = userIds.slice(i, i + chunkSize);
+      try {
+        const firestore = await import('firebase/firestore');
+        const q = firestore.query(
+          usersCollection,
+          firestore.where(firestore.documentId(), 'in', chunk)
+        );
+        const snapshot = await firestore.getDocs(q);
+        snapshot.forEach((docSnap) => {
+          const userData = docSnap.data();
+          if (userData.pushNotificationsEnabled === true) {
+            usersWithPushEnabled.push(docSnap.id);
+          }
+        });
+      } catch (error) {
+        console.error(`Error checking push preference for barrio ${barrioOrg}:`, error);
+      }
+    }
+
+    const missingCount = scopedMembers.length;
+    const memberNames = scopedMembers.map((m) => `${m.firstName} ${m.lastName}`).join(', ');
+    const title = '⚰️ Miembros Fallecidos Sin Ordenanzas Completas';
+    const body =
+      missingCount === 1
+        ? `Hay ${missingCount} miembro fallecido que necesita ordenanzas del templo: ${memberNames}`
+        : `Hay ${missingCount} miembros fallecidos que necesitan ordenanzas del templo: ${memberNames}`;
+
+    for (const userId of usersWithPushEnabled) {
+      try {
+        await createNotification({
+          userId,
+          title,
+          body,
+          contextType: 'member',
+          actionUrl: '/council',
+          pushOnly: true,
+          barrioOrg,
+        });
+        sentCount++;
+        membersNotified.push(userId);
+      } catch (error) {
+        skippedCount++;
+        console.error(`Error sending deceased member notification to ${userId}:`, error);
+      }
     }
   }
 
   return {
     sent: sentCount,
-    skipped: usersWithPushEnabled.length - sentCount,
-    membersNotified
+    skipped: skippedCount,
+    membersNotified,
   };
 }

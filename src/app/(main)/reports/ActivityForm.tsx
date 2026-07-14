@@ -177,7 +177,9 @@ export function ActivityForm({ activity }: ActivityFormProps) {
       if (selectedFiles.length > 0) {
         const uploadPromises = selectedFiles.map(async (file) => {
           const optimized = await compressGalleryImage(file);
-          const storageRef = ref(storage, `activity_images/${user.uid}/${Date.now()}_${optimized.name}`);
+          const { userScopedStoragePath } = await import('@/lib/storage-paths');
+          const path = userScopedStoragePath(user.uid, 'activity_images', optimized.name);
+          const storageRef = ref(storage, path);
           await uploadBytes(storageRef, optimized, { contentType: optimized.type });
           return getDownloadURL(storageRef);
         });

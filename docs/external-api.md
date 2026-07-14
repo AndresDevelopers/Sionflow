@@ -21,15 +21,15 @@ const decoded = await authAdmin.verifyIdToken(token);
 
 ### Capa 2: Resolución dinámica de barrio + organización
 
-Una vez verificado el token, la API usa el `uid` del usuario para leer su documento en `c_users` y extraer `barrio` y `organizacion`.
+Una vez verificado el token, la API resuelve el tenant con el helper compartido `requireUidAndBarrioOrg` (`src/lib/api-auth.ts`): lee `c_users/{uid}` y construye `barrioOrg` desde el campo canónico `barrioOrg` o, en su defecto, `barrio|organizacion`.
 
 ```ts
-const userDoc = await firestoreAdmin.collection('c_users').doc(decoded.uid).get();
-const { barrio, organizacion } = userDoc.data();
-const barrioOrg = `${barrio}|${organizacion}`;
+// Preferido (helpers actuales)
+const { barrioOrg, email } = await requireUidAndBarrioOrg(request);
+// Fail closed: sin barrio/org → 403 (no hay barrio por defecto)
 ```
 
-Esto significa que **no hay un `EXTERNAL_BARRIO_ORG` estático en `.env`** — el alcance de los datos se determina automáticamente según quién se autentica.
+Esto significa que **no hay un `EXTERNAL_BARRIO_ORG` estático en `.env`** — el alcance de los datos se determina automáticamente según quién se autentica. El cliente **no** puede pedir otro barrio por query/body.
 
 ### Capa 3: Aislamiento multi-tenant en Firestore
 

@@ -53,7 +53,8 @@ const uploadPhoto = async (file: File, userId: string): Promise<UploadResult> =>
   const { compressProfileImage } = await import('@/lib/image-compression');
   const optimized = await compressProfileImage(file);
   const safeName = sanitizeFileName(optimized.name || `salud-${Date.now()}.jpg`);
-  const storagePath = `health-concerns/${userId}/${Date.now()}-${safeName}`;
+  const { userScopedStoragePath } = await import('@/lib/storage-paths');
+  const storagePath = userScopedStoragePath(userId, 'health-concerns', safeName);
   const result = await uploadBytesOfflineAware(storagePath, optimized, {
     contentType: optimized.type,
   });

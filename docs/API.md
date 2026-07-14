@@ -131,3 +131,26 @@ Chat conversacional con DeepSeek (`deepseek-v4-flash`).
 ## Aislamiento Multi-tenant
 
 Todas las queries de la API filtran por `barrioOrg` (barrio + organización del usuario autenticado). Un usuario del barrio *Libertad* nunca verá datos del barrio *Los Chillos*.
+
+### Cómo se resuelve el scope
+
+1. El cliente envía `Authorization: Bearer <Firebase ID token>`.
+2. El servidor verifica el token y lee `c_users/{uid}`.
+3. Construye `barrioOrg` con `buildBarrioOrgFromUserData` (`barrioOrg` explícito o `barrio|organizacion`).
+4. **No** se confía en `?barrioOrg=` ni en body del cliente para filtrar datos.
+5. Si el perfil no tiene barrio/org → **403**.
+
+Helpers: `src/lib/api-auth.ts` (`requireAuth`, `requireUid`, `requireUidAndBarrioOrg`).
+
+### Endpoints que aplican el patrón
+
+| Ruta | Scope |
+|------|--------|
+| `GET/POST /api/members` | Solo miembros del `barrioOrg` del llamador |
+| `PUT/DELETE /api/members/[id]` | 403 si el miembro es de otro tenant |
+| `/api/external/*` | Ministración / actividades / servicios del tenant |
+| Push FCM / send-push | Solo usuarios del mismo `barrioOrg` |
+| Sugerencias IA | Actividades/servicios del mismo tenant |
+| `POST /api/admin/migrate-barrio-org` | Sella docs sin `barrioOrg` **solo** con el tenant del liderazgo autenticado |
+
+Detalle de amenazas y remediaciones: [`SECURITY_AUDIT.md`](../SECURITY_AUDIT.md). Políticas: [`docs/SEGURIDAD.md`](./SEGURIDAD.md).

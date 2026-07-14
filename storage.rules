@@ -3,29 +3,90 @@ rules_version = '2';
 
 service firebase.storage {
   match /b/{bucket}/o {
-    // Reglas para todos los archivos en el bucket
-    match /{allPaths=**} {
-      
-      // PERMISOS DE LECTURA
-      // Permite la lectura a usuarios autenticados O a cualquier imagen.
-      // Las fotos de perfil/miembro se cargan vía <img> en el navegador, cuyas
-      // peticiones NO envían el token de auth de Firebase. Por eso las imágenes
-      // deben ser legibles públicamente; con token de descarga ya lo eran, esto
-      // evita el 403 cuando la URL no trae token.
-      allow read: if request.auth != null || resource.contentType.matches('image/.*');
 
-      // PERMISOS DE ESCRITURA (Crear, Actualizar, Eliminar)
-      // Solo permite la escritura si se cumplen TODAS las siguientes condiciones:
-      // 1. El usuario debe estar autenticado (request.auth != null).
-      // 2. El tamaño del archivo debe ser menor a 20 MB.
-      // 3. El tipo de contenido del archivo debe ser una imagen (ej: 'image/jpeg', 'image/png').
-      allow write: if request.auth != null && (
-                      request.resource == null ||
-                      (
-                        request.resource.size < 20 * 1024 * 1024 &&
-                        request.resource.contentType.matches('image/.*')
-                      )
-                    );
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function isValidImageWrite() {
+      // delete: request.resource is null
+      return request.resource == null
+        || (
+          request.resource.size < 20 * 1024 * 1024
+          && request.resource.contentType.matches('image/.*')
+        );
+    }
+
+    // Images are often loaded via <img> without Firebase Auth headers; download
+    // tokens already gate permanent media URLs. Authenticated reads remain allowed.
+    function canReadImage() {
+      return signedIn()
+        || (resource != null && resource.contentType.matches('image/.*'));
+    }
+
+    // ── Canonical multi-tenant path: users/{userId}/{category}/… ──
+    // New uploads (client + server) must write under the caller's uid.
+    match /users/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+
+    // ── Legacy paths that already embed userId (read + owner write/delete) ──
+    match /members/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /baptism_photos/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /health-concerns/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /service_images/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /activity_images/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /profile_pictures/users/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /profile_pictures/birthdays/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /profile_pictures/future_members/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /baptism_photos/future_members/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+    match /baptisms/manual/{userId}/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if isOwner(userId) && isValidImageWrite();
+    }
+
+    // Server uploads via Admin SDK bypass rules. Client must not write flat folders.
+    match /missionary-images/{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if false;
+    }
+
+    // Default: public image read for legacy objects; no client writes outside scoped paths
+    match /{allPaths=**} {
+      allow read: if canReadImage();
+      allow write: if false;
     }
   }
 }

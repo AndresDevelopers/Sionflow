@@ -6,20 +6,20 @@
       "date": "2026-07-14",
       "changes": {
         "es": [
-          "Ahora los datos de tu barrio u organización están protegidos: solo tú y tu equipo pueden verlos.",
-          "Todas las funciones principales (búsqueda de miembros, sincronización de ministerio, informes y notificaciones) ahora requieren autenticación y respetan tu barrio.",
-          "Se agregaron índices en la base de datos para que las consultas por barrio sean más rápidas y confiables.",
-          "Las solicitudes a la API de DeepSeek ahora tienen un tiempo de espera máximo de 8 segundos, evitando que se queden colgadas.",
-          "La aplicación ya no asume un barrio incorrecto cuando tu perfil está incompleto: ahora maneja mejor esos casos.",
-          "Se mejoró la seguridad en la carga de archivos y en las operaciones de miembros, restringiendo el acceso solo a tu organización."
+          "Hemos mejorado la seguridad y el aislamiento entre barrios para que solo puedas ver y editar los datos de tu propia organización.",
+          "Ahora todas las rutas de almacenamiento son consistentes y seguras, usando una nueva función centralizada que genera las rutas correctas automáticamente.",
+          "Agregamos un endpoint de administración para migrar datos antiguos y asegurar que todos los registros tengan el campo de barrio correcto.",
+          "Las notificaciones ahora están filtradas por barrio, por lo que solo recibirás las que corresponden a tu organización.",
+          "Mejoramos la autenticación en todas las APIs públicas, requiriendo un token Bearer válido y verificando el ámbito del barrio.",
+          "Se añadieron índices en Firestore para que las consultas por barrio sean más rápidas y eficientes."
         ],
         "en": [
-          "Your ward or organization's data is now protected: only you and your team can see it.",
-          "All core features (member search, ministering sync, reports, and push notifications) now require authentication and respect your ward boundaries.",
-          "Database indexes have been added so queries by ward are faster and more reliable.",
-          "DeepSeek API requests now have a maximum timeout of 8 seconds, preventing them from hanging.",
-          "The app no longer defaults to a wrong ward when your profile is incomplete—it handles those cases better now.",
-          "Security has been improved for file uploads and member operations, restricting access to your own organization only."
+          "We've strengthened security and tenant isolation so you can only see and edit data from your own ward or organization.",
+          "All storage paths are now consistent and secure, using a new centralized helper that generates the correct paths automatically.",
+          "Added an admin endpoint to migrate old data and ensure all records have the correct barrioOrg field.",
+          "Notifications are now filtered by ward, so you'll only see the ones relevant to your organization.",
+          "Improved authentication on all public APIs, requiring a valid Bearer token and checking the barrio scope.",
+          "Added Firestore indexes to make queries by barrio faster and more efficient."
         ]
       }
     },

@@ -1,40 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  getDocs,
-  query,
-  where,
-  limit as fbLimit,
-  doc,
-  writeBatch,
-  collection,
-} from "firebase/firestore";
-import { firestore } from "@/lib/firebase";
-import {
-  usersCollection,
-  membersCollection,
-  convertsCollection,
-  activitiesCollection,
-  servicesCollection,
-  futureMembersCollection,
-  birthdaysCollection,
-  ministeringCollection,
-  ministeringDistrictsCollection,
-  ministeringHistoryCollection,
-  baptismsCollection,
-  annotationsCollection,
-  healthConcernsCollection,
-  annualReportsCollection,
-  newConvertFriendsCollection,
-  investigatorsCollection,
-  missionaryAssignmentsCollection,
-  missionaryImagesCollection,
-  familySearchTrainingsCollection,
-  familySearchTasksCollection,
-  familySearchAnnotationsCollection,
-  adminAuditCollection,
-} from "@/lib/collections";
+import { getDocs, query, where } from "firebase/firestore";
+import { usersCollection } from "@/lib/collections";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -42,6 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useI18n } from "@/contexts/i18n-context";
 import { useAuth } from "@/contexts/auth-context";
+import { auth } from "@/lib/firebase";
 import logger from "@/lib/logger";
 import {
   Database,
@@ -62,51 +31,33 @@ interface UserInfo {
   role: string;
 }
 
-const DATA_COLLECTIONS: { ref: ReturnType<typeof collection>; label: string }[] = [
-  { ref: membersCollection, label: "collection.members" },
-  { ref: convertsCollection, label: "collection.converts" },
-  { ref: activitiesCollection, label: "collection.activities" },
-  { ref: servicesCollection, label: "collection.services" },
-  { ref: futureMembersCollection, label: "collection.futureMembers" },
-  { ref: birthdaysCollection, label: "collection.birthdays" },
-  { ref: ministeringCollection, label: "collection.ministering" },
-  { ref: ministeringDistrictsCollection, label: "collection.ministeringDistricts" },
-  { ref: ministeringHistoryCollection, label: "collection.ministeringHistory" },
-  { ref: baptismsCollection, label: "collection.baptisms" },
-  { ref: annotationsCollection, label: "collection.annotations" },
-  { ref: healthConcernsCollection, label: "collection.health" },
-  { ref: annualReportsCollection, label: "collection.annualReport" },
-  { ref: newConvertFriendsCollection, label: "collection.newConvertFriends" },
-  { ref: investigatorsCollection, label: "collection.investigators" },
-  { ref: missionaryAssignmentsCollection, label: "collection.missionaryAssignments" },
-  { ref: missionaryImagesCollection, label: "collection.missionaryImages" },
-  { ref: familySearchTrainingsCollection, label: "collection.familySearchTrainings" },
-  { ref: familySearchTasksCollection, label: "collection.familySearchTasks" },
-  { ref: familySearchAnnotationsCollection, label: "collection.familySearchAnnotations" },
-  { ref: adminAuditCollection, label: "collection.audit" },
-];
+type CollectionStat = { totalScanned: number; missing: number; updated?: number };
 
+/**
+ * Migration UI: stamps barrioOrg on legacy documents that lack it.
+ * Uses Admin API (bypasses client rules that hide unscoped docs).
+ * Only assigns the caller's own barrioOrg — never cross-tenant.
+ */
 export default function MigratePage() {
   const { toast } = useToast();
   const { t } = useI18n();
-  const { barrioOrg } = useAuth();
+  const { barrioOrg, user } = useAuth();
   const [users, setUsers] = useState<UserInfo[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(true);
   const [migrationStatus, setMigrationStatus] = useState<string[]>([]);
   const [isMigrating, setIsMigrating] = useState(false);
-  const [selectedUserBarrioOrg, setSelectedUserBarrioOrg] = useState<string>("");
-  const [migrationCounts, setMigrationCounts] = useState<Record<string, { total: number; missing: number }>>({});
+  const [migrationCounts, setMigrationCounts] = useState<Record<string, CollectionStat>>({});
 
   useEffect(() => {
     if (!barrioOrg) return;
-    loadUsers();
+    void loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when barrioOrg changes
   }, [barrioOrg]);
 
   const loadUsers = async () => {
     if (!barrioOrg) return;
     setIsLoadingUsers(true);
     try {
-      // Same-barrio only (rules deny global user list)
       const snap = await getDocs(query(usersCollection, where("barrioOrg", "==", barrioOrg)));
       const list: UserInfo[] = [];
       snap.forEach((d) => {
@@ -130,104 +81,78 @@ export default function MigratePage() {
     }
   };
 
-  const analyzeCollection = async (
-    collectionRef: ReturnType<typeof collection>,
-    _barrioOrg: string
-  ): Promise<{ total: number; missing: number }> => {
-    try {
-      const snap = await getDocs(query(collectionRef, fbLimit(500)));
-      let total = 0;
-      let missing = 0;
-      snap.forEach((d) => {
-        total++;
-        const data = d.data();
-        if (!data.barrioOrg || data.barrioOrg === "") {
-          missing++;
-        }
+  const callMigrateApi = async (action: "analyze" | "migrate") => {
+    if (!barrioOrg || !user) {
+      toast({
+        title: t("admin.migrate.toast.selectUser"),
+        description: t("admin.migrate.toast.selectUserDesc"),
+        variant: "destructive",
       });
-      return { total, missing };
-    } catch {
-      return { total: 0, missing: 0 };
-    }
-  };
-
-  const handleAnalyze = async () => {
-    if (!selectedUserBarrioOrg) {
-      toast({ title: t("admin.migrate.toast.selectUser"), description: t("admin.migrate.toast.selectUserDesc"), variant: "destructive" });
       return;
     }
+
+    const idToken = await auth?.currentUser?.getIdToken();
+    if (!idToken) {
+      toast({
+        title: t("common.error"),
+        description: t("admin.migrate.toast.errorDesc"),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsMigrating(true);
     setMigrationStatus([]);
-    setIsMigrating(true);
-    const counts: Record<string, { total: number; missing: number }> = {};
-
     try {
-      for (const col of DATA_COLLECTIONS) {
-        const result = await analyzeCollection(col.ref, selectedUserBarrioOrg);
-        counts[col.label] = result;
-        setMigrationCounts({ ...counts });
+      const res = await fetch("/api/admin/migrate-barrio-org", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          action,
+          targetBarrioOrg: barrioOrg,
+        }),
+      });
+      const payload = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        totalMissing?: number;
+        totalUpdated?: number;
+        collections?: Record<string, CollectionStat>;
+      };
+
+      if (!res.ok) {
+        throw new Error(payload.error || `HTTP ${res.status}`);
       }
-      setMigrationCounts(counts);
-      toast({ title: t("admin.migrate.toast.analysisComplete"), description: t("admin.migrate.toast.analysisCompleteDesc") });
-    } catch (err) {
-      logger.error({ error: err, message: "Error analyzing collections" });
-    } finally {
-      setIsMigrating(false);
-    }
-  };
 
-  const handleMigrateAll = async () => {
-    if (!selectedUserBarrioOrg) return;
+      setMigrationCounts(payload.collections || {});
 
-    const totalMissing = Object.values(migrationCounts).reduce((sum, c) => sum + c.missing, 0);
-    if (totalMissing === 0) {
-      toast({ title: t("admin.migrate.toast.nothingToMigrate"), description: t("admin.migrate.toast.nothingToMigrateDesc") });
-      return;
-    }
-
-    setIsMigrating(true);
-    const log: string[] = [];
-
-    try {
-      for (const col of DATA_COLLECTIONS) {
-        const info = migrationCounts[col.label];
-        if (!info || info.missing === 0) continue;
-
-        const snap = await getDocs(query(col.ref, fbLimit(500)));
-        const batch = writeBatch(firestore);
-        let batchCount = 0;
-        let updatedCount = 0;
-
-        snap.forEach((d) => {
-          const data = d.data();
-          if (!data.barrioOrg || data.barrioOrg === "") {
-            batch.update(doc(col.ref, d.id), { barrioOrg: selectedUserBarrioOrg });
-            batchCount++;
-            updatedCount++;
-            if (batchCount >= 450) {
-              // Would need to commit and create new batch, but for simplicity we warn
-            }
-          }
+      if (action === "analyze") {
+        toast({
+          title: t("admin.migrate.toast.analysisComplete"),
+          description: t("admin.migrate.toast.analysisCompleteDesc"),
         });
-
-        if (batchCount > 0) {
-          await batch.commit();
-          log.push(`✅ ${t(col.label)}: ${t("admin.migrate.docsUpdated", { count: updatedCount })}`);
-        }
-        setMigrationStatus([...log]);
+      } else {
+        const log = [
+          `✅ Updated ${payload.totalUpdated ?? 0} documents with barrioOrg=${barrioOrg}`,
+          t("admin.migrate.separator"),
+          t("admin.migrate.completed"),
+        ];
+        setMigrationStatus(log);
+        toast({
+          title: t("admin.migrate.toast.migrationComplete"),
+          description: t("admin.migrate.toast.migrationCompleteDesc"),
+        });
       }
-
-      log.push(t("admin.migrate.separator"));
-      log.push(t("admin.migrate.completed"));
-      setMigrationStatus(log);
-      toast({ title: t("admin.migrate.toast.migrationComplete"), description: t("admin.migrate.toast.migrationCompleteDesc") });
-
-      // Reload analysis
-      await handleAnalyze();
     } catch (err) {
-      logger.error({ error: err, message: "Error migrating data" });
-      log.push(t("admin.migrate.errorDuring"));
-      setMigrationStatus(log);
-      toast({ title: t("common.error"), description: t("admin.migrate.toast.errorDesc"), variant: "destructive" });
+      logger.error({ error: err, message: "Error in migrate-barrio-org API" });
+      setMigrationStatus([t("admin.migrate.errorDuring")]);
+      toast({
+        title: t("common.error"),
+        description: err instanceof Error ? err.message : t("admin.migrate.toast.errorDesc"),
+        variant: "destructive",
+      });
     } finally {
       setIsMigrating(false);
     }
@@ -247,165 +172,112 @@ export default function MigratePage() {
         <p className="text-balance text-fluid-subtitle text-muted-foreground">
           {t("admin.migrate.subtitle")}
         </p>
+        {barrioOrg ? (
+          <p className="text-sm text-muted-foreground">
+            Scope: <Badge variant="outline">{barrioOrg}</Badge> (solo este tenant)
+          </p>
+        ) : null}
       </header>
 
-      {/* Users reference */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <UserCog className="h-4 w-4" />
-            {t("admin.migrate.registeredUsers")}
+          <CardTitle className="flex items-center gap-2">
+            <UserCog className="h-5 w-5" />
+            {t("admin.migrate.usersTitle") || "Usuarios del barrio"}
           </CardTitle>
           <CardDescription>
-            {t("admin.migrate.usersDescription")}
+            Referencia de usuarios en tu barrioOrg. La migración solo rellena documentos sin
+            barrioOrg con <strong>tu</strong> barrio actual (nunca otro tenant).
           </CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingUsers ? (
-            <div className="space-y-2">
-              {Array.from({ length: 3 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full" />
-              ))}
-            </div>
+            <Skeleton className="h-24 w-full" />
           ) : (
-            <div className="max-h-64 overflow-y-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="sticky top-0 bg-muted text-left">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">{t("admin.migrate.col.user")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin.migrate.col.barrio")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin.migrate.col.organizacion")}</th>
-                    <th className="px-3 py-2 font-medium">{t("admin.migrate.col.rol")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {users.map((u) => (
-                    <tr
-                      key={u.uid}
-                      className={`cursor-pointer border-t transition-colors hover:bg-muted/50 ${
-                        selectedUserBarrioOrg === u.barrioOrg ? "bg-primary/10" : ""
-                      }`}
-                      onClick={() => setSelectedUserBarrioOrg(u.barrioOrg)}
-                    >
-                      <td className="px-3 py-2">
-                        <div className="font-medium">{u.name}</div>
-                        <div className="text-xs text-muted-foreground">{u.email}</div>
-                      </td>
-                      <td className="px-3 py-2">{u.barrio}</td>
-                      <td className="px-3 py-2">{u.organizacion}</td>
-                      <td className="px-3 py-2">
-                        <Badge variant="secondary" className="text-xs">{u.role}</Badge>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          {selectedUserBarrioOrg && (
-            <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="flex-1">
-                <p className="text-sm">
-                  {t("admin.migrate.selectedBarrioOrg")}{" "}
-                  <Badge variant="secondary" className="ml-1 font-mono text-xs">
-                    {selectedUserBarrioOrg}
-                  </Badge>
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t("admin.migrate.selectedHint")}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={handleAnalyze} disabled={isMigrating}>
-                  {isMigrating ? (
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                  ) : (
-                    <RefreshCw className="mr-1 h-4 w-4" />
-                  )}
-                  {t("admin.migrate.analyze")}
-                </Button>
-                <Button onClick={handleMigrateAll} disabled={isMigrating || totalMissingAll === 0}>
-                  {isMigrating ? (
-                    <Loader2 className="mr-1 h-4 w-4 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="mr-1 h-4 w-4" />
-                  )}
-                  {t("admin.migrate.migrate", { count: totalMissingAll })}
-                </Button>
-              </div>
-            </div>
+            <ul className="max-h-48 space-y-1 overflow-y-auto text-sm">
+              {users.map((u) => (
+                <li key={u.uid} className="flex flex-wrap items-center gap-2">
+                  <span className="font-medium">{u.name}</span>
+                  <span className="text-muted-foreground">{u.email}</span>
+                  <Badge variant="secondary">{u.role}</Badge>
+                </li>
+              ))}
+              {users.length === 0 ? (
+                <li className="text-muted-foreground">—</li>
+              ) : null}
+            </ul>
           )}
         </CardContent>
       </Card>
 
-      {/* Analysis results */}
-      {Object.keys(migrationCounts).length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("admin.migrate.results")}</CardTitle>
-            <CardDescription>
-              {t("admin.migrate.resultsDescription")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-              {Object.entries(migrationCounts).map(([label, info]) => (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <AlertTriangle className="h-5 w-5 text-amber-500" />
+            Documentos sin barrioOrg
+          </CardTitle>
+          <CardDescription>
+            El análisis y la migración usan Admin SDK (servidor) porque las reglas de Firestore
+            ocultan documentos sin barrioOrg al cliente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isMigrating || !barrioOrg}
+              onClick={() => void callMigrateApi("analyze")}
+            >
+              {isMigrating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+              {t("admin.migrate.analyze") || "Analizar"}
+            </Button>
+            <Button
+              type="button"
+              disabled={isMigrating || !barrioOrg || totalMissingAll === 0}
+              onClick={() => void callMigrateApi("migrate")}
+            >
+              {isMigrating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <CheckCircle2 className="mr-2 h-4 w-4" />
+              )}
+              {t("admin.migrate.migrateAll") || "Migrar faltantes"}
+              {totalMissingAll > 0 ? ` (${totalMissingAll})` : ""}
+            </Button>
+          </div>
+
+          {Object.keys(migrationCounts).length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {Object.entries(migrationCounts).map(([name, stat]) => (
                 <div
-                  key={label}
-                  className={`flex items-center justify-between rounded-md border p-3 ${
-                    info.missing > 0 ? "border-amber-300 bg-amber-50/50 dark:border-amber-700 dark:bg-amber-950/20" : ""
-                  }`}
+                  key={name}
+                  className="flex items-center justify-between rounded-md border px-3 py-2 text-sm"
                 >
-                  <div>
-                    <p className="text-sm font-medium">{t(label)}</p>
-                    <p className="text-xs text-muted-foreground">{t("admin.migrate.docs", { count: info.total })}</p>
+                  <span className="truncate font-mono text-xs">{name}</span>
+                  <div className="flex gap-2">
+                    <Badge variant="outline">scan {stat.totalScanned}</Badge>
+                    <Badge variant={stat.missing > 0 ? "destructive" : "secondary"}>
+                      missing {stat.missing}
+                    </Badge>
+                    {typeof stat.updated === "number" ? (
+                      <Badge variant="default">upd {stat.updated}</Badge>
+                    ) : null}
                   </div>
-                  {info.missing > 0 ? (
-                    <Badge variant="outline" className="border-amber-300 text-amber-700 dark:text-amber-300">
-                      {info.missing} {t("admin.migrate.withoutBarrioOrg")}
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="text-emerald-600 dark:text-emerald-400">
-                      {t("admin.migrate.ok")}
-                    </Badge>
-                  )}
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : null}
 
-      {/* Migration log */}
-      {migrationStatus.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">{t("admin.migrate.log")}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="max-h-64 overflow-y-auto rounded bg-muted p-3 text-xs whitespace-pre-wrap">
+          {migrationStatus.length > 0 ? (
+            <pre className="max-h-40 overflow-auto rounded-md bg-muted p-3 text-xs">
               {migrationStatus.join("\n")}
             </pre>
-          </CardContent>
-        </Card>
-      )}
-
-      <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/30">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-amber-900 dark:text-amber-100">
-            <AlertTriangle className="h-5 w-5" />
-            {t("admin.migrate.instructions")}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2 text-sm text-amber-800 dark:text-amber-200">
-          <p>{t("admin.migrate.step1")}</p>
-          <p>{t("admin.migrate.step2")}</p>
-          <p>{t("admin.migrate.step3")}</p>
-          <p>{t("admin.migrate.step4")}</p>
-          <p className="font-medium">
-            {t("admin.migrate.step5")}
-          </p>
+          ) : null}
         </CardContent>
       </Card>
     </section>

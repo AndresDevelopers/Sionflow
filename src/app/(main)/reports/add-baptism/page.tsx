@@ -97,7 +97,9 @@ export default function AddBaptismPage() {
 
           const optimized = await compressGalleryImage(photo);
           const safeName = optimized.name.replace(/[^\w.\-]+/g, '_');
-          const storageRef = ref(storage, `baptisms/manual/${user.uid}/${Date.now()}_${safeName}`);
+          const { userScopedStoragePath } = await import('@/lib/storage-paths');
+          const path = userScopedStoragePath(user.uid, 'baptisms/manual', safeName);
+          const storageRef = ref(storage, path);
           await uploadBytes(storageRef, optimized, { contentType: optimized.type });
           const downloadURL = await getDownloadURL(storageRef);
           photoURLs.push(downloadURL);

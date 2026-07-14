@@ -4,6 +4,12 @@
 
 Security is fundamental to SionFlow's architecture. This document outlines our comprehensive security framework, implementation guidelines, and vulnerability management processes. Every component follows the principle of least privilege and defense in depth.
 
+**Related docs (keep these in sync when changing multi-tenant isolation):**
+
+- Technical findings & remediation checklist: [`SECURITY_AUDIT.md`](./SECURITY_AUDIT.md) (last reviewed 2026-07-14)
+- Operational security policies (ES): [`docs/SEGURIDAD.md`](./docs/SEGURIDAD.md)
+- Multi-tenant API scoping: [`docs/API.md`](./docs/API.md)
+
 ## 📋 Table of Contents
 
 1. [Supported Versions](#supported-versions)

@@ -21,15 +21,17 @@ export interface MigrationOptions {
   batchSize?: number;
   dryRun?: boolean;
   onProgress?: (current: number, total: number) => void;
+  /** Required multi-tenant scope — never migrate across barrios */
+  barrioOrg: string;
 }
 
 /**
  * Migra las asignaciones de ministración existentes en lotes paralelos
  */
 export async function migrateExistingMinisteringAssignments(
-  options: MigrationOptions = {}
+  options: MigrationOptions
 ): Promise<MigrationResult> {
-  const { batchSize = 10, dryRun = false, onProgress } = options;
+  const { batchSize = 10, dryRun = false, onProgress, barrioOrg: barrioOrgRaw } = options;
   const startTime = Date.now();
   
   console.log('🔄 Starting migration of existing ministering assignments...');
@@ -38,14 +40,24 @@ export async function migrateExistingMinisteringAssignments(
   }
   
   try {
-    // Obtener todos los miembros
-    const membersSnapshot = await getDocs(membersCollection);
+    // Fail closed: migration must never scan all tenants
+    const barrioOrg = typeof barrioOrgRaw === 'string' ? barrioOrgRaw.trim() : '';
+    if (!barrioOrg || !barrioOrg.includes('|')) {
+      throw new Error(
+        'barrioOrg es requerido para migrar ministración (evitar lectura cross-tenant)'
+      );
+    }
+
+    const { query, where } = await import('firebase/firestore');
+    const membersSnapshot = await getDocs(
+      query(membersCollection, where('barrioOrg', '==', barrioOrg))
+    );
     const allMembers = membersSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     } as Member));
 
-    console.log(`📋 Found ${allMembers.length} members`);
+    console.log(`📋 Found ${allMembers.length} members in ${barrioOrg}`);
 
     // Filtrar solo miembros con maestros ministrantes
     const membersToProcess = allMembers.filter(

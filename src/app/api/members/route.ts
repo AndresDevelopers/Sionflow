@@ -67,18 +67,19 @@ function coerceToTimestamp(value: unknown): Timestamp | null | undefined {
 }
 
 async function fetchMembers(
+  barrioOrg: string,
   status?: MemberStatus,
-  barrioOrg?: string,
   opts?: { limit?: number }
 ): Promise<Member[]> {
+  // Fail closed: never list members across all tenants via Admin SDK
+  if (!barrioOrg || !barrioOrg.includes('|')) {
+    throw new Error('barrioOrg is required to fetch members');
+  }
+
   const db = firestoreAdmin;
   const membersCollection = db.collection('c_miembros');
 
-  let query: FirebaseFirestore.Query = membersCollection;
-
-  if (barrioOrg) {
-    query = query.where('barrioOrg', '==', barrioOrg);
-  }
+  let query: FirebaseFirestore.Query = membersCollection.where('barrioOrg', '==', barrioOrg);
 
   if (status) {
     query = query.where('status', '==', status);
@@ -109,17 +110,12 @@ async function fetchMembers(
 }
 
 // Cache key must include barrioOrg so different wards/orgs don't share cached data
-function getMembersCached(status?: MemberStatus, barrioOrg?: string, limit?: number) {
-  const cacheKey = barrioOrg
-    ? `members-${barrioOrg}-${status || 'all'}-${limit || 'nolimit'}`
-    : `members-${status || 'all'}-${limit || 'nolimit'}`;
-  // Include base 'members' tag for revalidateTag compatibility, plus scoped tag for granular invalidation
-  const tags = barrioOrg
-    ? ['members', `members-${barrioOrg}`]
-    : ['members'];
+function getMembersCached(barrioOrg: string, status?: MemberStatus, limit?: number) {
+  const cacheKey = `members-${barrioOrg}-${status || 'all'}-${limit || 'nolimit'}`;
+  const tags = ['members', `members-${barrioOrg}`];
 
   return unstable_cache(
-    () => fetchMembers(status, barrioOrg, { limit }),
+    () => fetchMembers(barrioOrg, status, { limit }),
     [cacheKey],
     {
       revalidate: 3600, // 1 hour
@@ -143,7 +139,7 @@ export async function GET(request: Request) {
 
     // In development, always fetch fresh data without cache
     if (process.env.NODE_ENV !== 'production') {
-      const members = await fetchMembers(status || undefined, barrioOrg, { limit });
+      const members = await fetchMembers(barrioOrg, status || undefined, { limit });
       const response = NextResponse.json(members);
       response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
       response.headers.set('Pragma', 'no-cache');
@@ -152,7 +148,7 @@ export async function GET(request: Request) {
     }
 
     // Use cached version only in production
-    const members = await getMembersCached(status || undefined, barrioOrg, limit);
+    const members = await getMembersCached(barrioOrg, status || undefined, limit);
     return NextResponse.json(members);
   } catch (error) {
     const status = getErrorStatus(error, 500);

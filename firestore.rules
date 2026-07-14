@@ -247,21 +247,22 @@ service cloud.firestore {
     }
 
     match /c_notifications/{document} {
-      // Own notifications (any permission) or same-barrio operational access
-      allow read: if isOwnUserId(resource.data.userId)
-        || isSameBarrio(resource.data.barrioOrg);
-      allow create: if canCreateInBarrio()
-        || (isOwnUserId(request.resource.data.userId)
-          && isSameBarrio(request.resource.data.barrioOrg));
-      // Read-only users must still be able to mark their own notifications as read
-      allow update: if canUpdateInBarrio()
-        || (
-          isOwnUserId(resource.data.userId)
-          && request.resource.data.userId == resource.data.userId
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(['isRead'])
+      // Strict owner isolation on read: peers must not read others' notification PII
+      allow read: if isOwnUserId(resource.data.userId);
+      // Leadership may fan-out in-app notifs to same barrio; self-create also allowed.
+      // barrioOrg is required so docs are never unscoped (fail closed for multi-tenant).
+      allow create: if request.resource.data.userId != null
+        && request.resource.data.barrioOrg != null
+        && isSameBarrio(request.resource.data.barrioOrg)
+        && (
+          isOwnUserId(request.resource.data.userId)
+          || canWrite()
         );
-      allow delete: if canDeleteInBarrio()
-        || isOwnUserId(resource.data.userId);
+      // Read-only users must still be able to mark their own notifications as read
+      allow update: if isOwnUserId(resource.data.userId)
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.diff(resource.data).changedKeys().hasOnly(['isRead']);
+      allow delete: if isOwnUserId(resource.data.userId);
     }
 
     // ── User-scoped collections ──

@@ -679,9 +679,9 @@ export async function uploadMemberPhoto(file: File, userId: string): Promise<str
     getStorageInstance(); // ensure storage ready when online
     const optimized = await compressProfileImage(file);
 
-    const timestamp = new Date().getTime();
     const safeName = optimized.name.replace(/[^\w.\-]+/g, '_');
-    const fileName = `members/${userId}/${timestamp}_${safeName}`;
+    const { userScopedStoragePath } = await import('@/lib/storage-paths');
+    const fileName = userScopedStoragePath(userId, 'members', safeName);
 
     const result = await uploadBytesOfflineAware(fileName, optimized, {
       contentType: optimized.type,
@@ -713,9 +713,9 @@ export async function uploadBaptismPhotos(files: File[], userId: string): Promis
     const uploadPromises = files.map(async (file, index) => {
       assertValidImageFile(file);
       const optimized = await compressGalleryImage(file);
-      const timestamp = new Date().getTime();
       const safeName = optimized.name.replace(/[^\w.\-]+/g, '_');
-      const fileName = `baptism_photos/${userId}/${timestamp}_${index}_${safeName}`;
+      const { userScopedStoragePath } = await import('@/lib/storage-paths');
+      const fileName = userScopedStoragePath(userId, 'baptism_photos', `${index}_${safeName}`);
 
       const result = await uploadBytesOfflineAware(fileName, optimized, {
         contentType: optimized.type,

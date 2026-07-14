@@ -115,16 +115,21 @@ export default function EditBaptismPage() {
     }
   };
 
-  const uploadPhoto = async (file: File, path: string): Promise<string> => {
+  const uploadPhoto = async (file: File, category: string): Promise<string> => {
     if (file.size > MAX_FILE_SIZE) {
       throw new Error(t('reports.editBaptism.fileTooLarge', { name: file.name }));
     }
     if (!file.type || !file.type.startsWith('image/')) {
       throw new Error(t('reports.editBaptism.fileInvalid', { name: file.name }));
     }
+    if (!user?.uid) {
+      throw new Error(t('reports.editBaptism.loginRequiredUpload'));
+    }
 
     const optimized = await compressGalleryImage(file);
-    const storageRef = ref(storage, `${path}/${uuidv4()}_${optimized.name}`);
+    const { userScopedStoragePath } = await import('@/lib/storage-paths');
+    const path = userScopedStoragePath(user.uid, category, `${uuidv4()}_${optimized.name}`);
+    const storageRef = ref(storage, path);
     await uploadBytes(storageRef, optimized, { contentType: optimized.type });
     return getDownloadURL(storageRef);
   };
@@ -138,7 +143,7 @@ export default function EditBaptismPage() {
 
     try {
       setUploading(true);
-      const photoURL = await uploadPhoto(photoFile, `baptisms/${baptism.id}/profile`);
+      const photoURL = await uploadPhoto(photoFile, 'baptisms/profile');
 
       // Delete old photo if exists
       if (baptism.photoURL) {
@@ -179,7 +184,7 @@ export default function EditBaptismPage() {
     try {
       setUploadingBaptismPhotos(true);
       const uploadPromises = baptismPhotoFiles.map(file =>
-        uploadPhoto(file, `baptisms/${baptism.id}/baptism`)
+        uploadPhoto(file, 'baptisms/photos')
       );
 
       const newPhotoURLs = await Promise.all(uploadPromises);
@@ -248,7 +253,7 @@ export default function EditBaptismPage() {
       // If there is a new profile photo selected, upload it first
       let oldProfileToDelete: string | null = null;
       if (photoFile) {
-        const uploaded = await uploadPhoto(photoFile, `baptisms/${baptism.id}/profile`);
+        const uploaded = await uploadPhoto(photoFile, 'baptisms/profile');
         oldProfileToDelete = baptism.photoURL || null;
         nextPhotoURL = uploaded;
       }
@@ -256,7 +261,7 @@ export default function EditBaptismPage() {
       // If there are new baptism photos selected, upload and append
       if (baptismPhotoFiles.length > 0) {
         const uploadedList = await Promise.all(
-          baptismPhotoFiles.map(file => uploadPhoto(file, `baptisms/${baptism.id}/baptism`))
+          baptismPhotoFiles.map(file => uploadPhoto(file, 'baptisms/photos'))
         );
         nextBaptismPhotos = [...nextBaptismPhotos, ...uploadedList];
       }

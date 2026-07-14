@@ -38,7 +38,7 @@ Aplicación web moderna (PWA) diseñada para las presidencias del Quórum de Él
 | `other` | Lectura | Solo lectura de datos de tu organización |
 | `user` | Lectura | Estado por defecto al registrarse. Ve la página de acceso restringido hasta que un líder le asigne un rol |
 
-- **Aislamiento multi-tenant**: cada usuario pertenece a un barrio + organización (`barrioOrg`). Todas las consultas se limitan a ese scope.
+- **Aislamiento multi-tenant**: cada usuario pertenece a un barrio + organización (`barrioOrg`). Consultas, reglas Firestore, APIs y notificaciones se limitan a ese scope (detalle en [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) y checklist en [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md)).
 - **Control de visibilidad**: las páginas del menú lateral se pueden ocultar por usuario desde el panel de admin.
 - Las cuentas con rol `user` son redirigidas a `/no-permission` hasta que se les asigne un rol de liderazgo.
 

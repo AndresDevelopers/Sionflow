@@ -1,207 +1,260 @@
-# Auditoría de Seguridad — Quroumflow
+# Auditoría de Seguridad — SionFlow
 
 > Documento vivo con checklist para remediación asistida por IA.
 > Marca `[x]` los ítems conforme se resuelvan. Cada hallazgo incluye los pasos exactos de remediación como sub-checkboxes.
 
+**Última revisión de código:** 2026-07-14  
 **Leyenda de severidad:** 🔴 CRÍTICO · 🟠 ALTO · 🟡 MEDIO · 🟢 BAJO
 
-**Alcance:** `src/` (auth, API routes, server actions, UI), `functions/`, `firestore.rules`, `storage.rules`, configs de despliegue y repo hygiene.
+**Alcance:** `src/` (auth, API routes, UI), `functions/`, `firestore.rules`, `storage.rules`, configs de despliegue y repo hygiene.
 
-**Resumen ejecutivo:** El sistema es una app multi-tenant (por `barrioOrg`) sobre Next.js + Firebase. El mayor riesgo es la **ausencia de autorización server-side**: casi todos los endpoints Admin-SDK y varias Cloud Functions callable solo verifican que el usuario esté "logueado", sin comprobar su rol/ward, exfiltrando PII de todos los congregados. Además hay 2 credenciales vivas en el working tree y reglas de Storage/Firestore demasiado permisivas.
+---
+
+## Resumen ejecutivo (estado actual)
+
+SionFlow es multi-tenant por `barrioOrg` (`barrio|organización`) sobre Next.js + Firebase.
+
+**Ya remediado (código actual):**
+
+- Auth server-side en APIs de miembros, push, external y sugerencias vía `requireUid` / `requireUidAndBarrioOrg` (`src/lib/api-auth.ts`).
+- Queries Admin SDK de miembros **exigen** `barrioOrg` (fail closed; sin listado global).
+- Reportes callable resuelven `barrioOrg` desde `c_users` (no confían en el cliente).
+- Firestore: colecciones de negocio con `isSameBarrio()`; default deny; self-update no puede cambiar `barrioOrg`/`barrio`/`organizacion`/`role`/`permission`.
+- `c_notifications`: lectura solo del dueño; create exige `barrioOrg` + mismo tenant.
+- Storage: write acotado a `users/{userId}/**` (y paths legacy con `userId`); sin write global.
+- Cloud Functions `getEligibleUsers`: **no** notifica si el documento no tiene `barrioOrg` (evita fuga cross-tenant en legacy).
+- Crons (`birthday-notifications`, `deceased-members-ordinances`) exigen `CRON_SECRET` (fail closed si falta).
+- Push/FCM de API: solo destinatarios del `barrioOrg` del llamador.
+- Migración de docs sin `barrioOrg`: Admin API `/api/admin/migrate-barrio-org` (liderazgo, solo el tenant del llamador).
+
+**Riesgos abiertos prioritarios:** SSRF en `/api/download-qr` y `fetchImageBuffers`, falta de middleware edge, secrets en working tree local, CI/typecheck en build, y auth en church-chat (costo).
 
 ---
 
 ## 🔴 CRÍTICOS
 
-### C1. PII completa de todos los miembros sin autenticación
-- **Ubicación:** `src/app/api/members/route.ts:126`
-- **Problema:** `GET` no tiene auth y usa `firestoreAdmin` (bypasea reglas). Si se omite `barrioOrg`, `fetchMembers` devuelve todos los miembros de todas las congregaciones (nombres, teléfonos, emails, direcciones, fotos, observaciones de salud, ordenanzas).
-- [ ] Añadir verificación de token (`authAdmin.verifyIdToken`) en el handler `GET`.
-- [ ] Scopear la consulta por `barrioOrg` del usuario autenticado; nunca devolver PII cross-ward.
-- [ ] Rechazar la petición si `barrioOrg` del usuario es nulo/inválido.
+### C1. PII completa de todos los miembros sin autenticación — ✅ REMEDIADO
+- **Ubicación:** `src/app/api/members/route.ts`
+- **Problema (histórico):** `GET` sin auth + Admin SDK sin filtro → PII de todos los barrios.
+- [x] Verificación de token (`requireUidAndBarrioOrg` → `authAdmin.verifyIdToken`).
+- [x] Scope por `barrioOrg` del usuario autenticado (ignorando query string del cliente).
+- [x] Rechazo si el perfil no tiene barrio/org (`AuthHttpError` 403).
+- [x] `fetchMembers` lanza error si falta `barrioOrg` (nunca query global).
+- [x] PUT/DELETE en `members/[id]` comprueban `member.barrioOrg === callerBarrioOrg`.
 
-### C2. SSRF en `/api/download-qr`
-- **Ubicación:** `src/app/api/download-qr/route.ts:3-11`
-- **Problema:** Hace fetch de una URL arbitraria provista por el cliente desde el servidor, sin allowlist de host/esquema → puede apuntar a metadata de GCP (`169.254.169.254`) o redes internas.
+### C2. SSRF en `/api/download-qr` — ⬜ ABIERTO
+- **Ubicación:** `src/app/api/download-qr/route.ts`
+- **Problema:** Fetch de URL arbitraria del cliente sin allowlist de host/esquema.
 - [ ] Restringir esquema a `https:` únicamente.
 - [ ] Allowlist de hosts esperados (host del QR de donaciones).
 - [ ] Rechazar rangos IP privados/metadata (`10.x`, `172.16.x`, `192.168.x`, `169.254.x`).
 - [ ] Requerir auth o token firmado para el endpoint.
 
-### C3. Endpoint de ordenanzas de fallecidos sin autenticación
-- **Ubicación:** `src/app/api/deceased-members-ordinances/route.ts:45,148`
-- **Problema:** `GET`/`POST` sin auth; expone nombres de fallecidos + ordenanzas faltantes y dispara notificaciones.
-- [ ] Añadir `requireAuth()` / `requireLeadership()` en ambos handlers.
-- [ ] Scopear por `barrioOrg` del llamador.
-- [ ] Validar body con Zod antes de procesar.
+### C3. Endpoint de ordenanzas de fallecidos sin autenticación — ✅ REMEDIADO (cron)
+- **Ubicación:** `src/app/api/deceased-members-ordinances/route.ts`
+- **Problema (histórico):** sin auth; exposición de nombres + notificaciones.
+- [x] Auth por `CRON_SECRET` Bearer (fail closed si no está configurado).
+- [x] Push agrupado por `barrioOrg` del miembro; respuesta HTTP sin PII de nombres.
+- [x] Rate limiting en el route.
+- **Nota:** no es un endpoint de usuario final; es job de cron.
 
-### C4. Broadcast FCM a todos los usuarios sin autenticación
-- **Ubicación:** `src/app/api/send-fcm-notification/route.ts:52`
-- **Problema:** Sin auth, cualquiera puede enviar push a todos los usuarios (`pushNotificationsEnabled === true`) → spam/costo.
-- [ ] Añadir `requireLeadership()` (verificar `permission == 'all'` o rol).
-- [ ] Limitar destinatarios al `barrioOrg` del llamador salvo rol global explícito.
-- [ ] Añadir rate limiting por origen.
+### C4. Broadcast FCM a todos los usuarios sin autenticación — ✅ REMEDIADO
+- **Ubicación:** `src/app/api/send-fcm-notification/route.ts`, `send-push-notification/route.ts`
+- **Problema (histórico):** sin auth + broadcast global.
+- [x] `requireUidAndBarrioOrg`.
+- [x] Destinatarios limitados al `barrioOrg` del llamador (o un `userId` del mismo tenant).
+- [x] Rate limiting.
+- [x] `getTargetUserIds` en server push rechaza broadcast sin `barrioOrg`.
 
-### C5. Reportes callable exponen datos de todos los tenants
-- **Ubicación:** `functions/src/index.ts:625-633` (`generateCompleteReport`), `functions/src/index.ts:963-971` (`generateReport`)
-- **Problema:** Solo verifican `if (!context.auth)`; luego leen TODAS las colecciones de TODOS los `barrioOrg` con Admin SDK. `data.organizacion` es solo etiqueta, nunca filtro.
-- [ ] Tras `context.auth`, cargar `c_users` del llamador (`barrioOrg`, `permission`, `role`).
-- [ ] Scopear cada query Firestore con `.where("barrioOrg", "==", callerBarrioOrg)`.
-- [ ] Rechazar si el llamador no tiene `permission == 'all'` o rol secretario.
+### C5. Reportes callable exponen datos de todos los tenants — ✅ REMEDIADO
+- **Ubicación:** `functions/src/index.ts` (`generateCompleteReport`, `generateReport`, `withAuthenticatedReport`)
+- **Problema (histórico):** solo `context.auth`; queries sin filtro de ward.
+- [x] Tras auth, cargar `c_users` y resolver `barrioOrg` (sin default de barrio de producción).
+- [x] Queries de actividades/servicios/bautismos/etc. con `.where("barrioOrg", "==", barrioOrg)`.
+- [x] Respuestas de informe por doc id `year|barrioOrg` (legacy solo si coincide barrioOrg).
 
 ---
 
 ## 🟠 ALTOS
 
-### A1. Sin protección server-side (solo guardas client-side)
-- **Ubicación:** `src/app/(main)/layout.tsx:14-132`, `src/app/(main)/admin/layout.tsx:22-113` — no existe `middleware.ts`
-- **Problema:** La "auth" es solo client-side; cualquier API route/server action es alcanzable directamente por un cliente no navegador.
-- [ ] Crear `src/middleware.ts` que verifique session cookie / ID token en el edge.
-- [ ] Proteger `/api/*` y `(main)/*` a nivel edge; redirigir/no autorizar según corresponda.
-- [ ] Mantener las guardas client-side como UX, no como control de seguridad.
+### A1. Sin protección server-side de rutas de página (solo guardas client-side) — ⬜ PARCIAL
+- **Ubicación:** `src/app/(main)/layout.tsx`, admin layout — no hay `middleware.ts`
+- **Estado:** Las **API routes** de datos sensibles sí validan token + barrio. Las páginas `(main)/*` siguen confiando en auth client-side (UX).
+- [ ] Crear `src/middleware.ts` (session cookie / ID token en edge) para `(main)/*`.
+- [x] Proteger `/api/*` sensibles con `requireAuth` / `requireUidAndBarrioOrg` (members, external, push, suggestions, storage upload, migrate).
+- [ ] Mantener guardas client-side solo como UX.
 
-### A2. Storage write abierto a cualquier usuario autenticado
-- **Ubicación:** `storage.rules:20-26`
-- **Problema:** Cualquier auth puede escribir/sobrescribir/borrar en CUALQUIER path (no hay scope a `userId`/`barrioOrg`). `request.resource == null` permite borrado irrestricto.
-- [ ] Restringir write a `images/{userId}/**` validando `request.auth.uid == userId`.
-- [ ] Eliminar la rama `request.resource == null` que permite delete sin restricción.
-- [ ] Mantener límite de tamaño/tipo.
+### A2. Storage write abierto a cualquier path — ✅ REMEDIADO
+- **Ubicación:** `storage.rules`, `src/lib/storage-paths.ts`
+- **Problema (histórico):** write en cualquier path autenticado.
+- [x] Write canónico en `users/{userId}/**` con `request.auth.uid == userId`.
+- [x] Paths legacy con segmento `userId` (members, baptism_photos, etc.) solo owner.
+- [x] Carpetas planas (`missionary-images/**`) write `false` (solo Admin SDK).
+- [x] Límite de tamaño 20 MB e `image/*`.
+- [x] Uploads de cliente/servidor usan `userScopedStoragePath()`.
 
-### A3. `barrioOrg` auto-modificable → escalamiento horizontal
-- **Ubicación:** `firestore.rules:199-206` (`c_users` update)
-- **Problema:** Solo bloquea auto-edición de `role`/`permission`, pero un usuario puede cambiar su propio `barrioOrg` y leer/escribir datos de otro tenant vía `isSameBarrio()`.
-- [ ] Añadir `barrioOrg` y `organizacion` a `changedKeys().hasAny([...])` bloqueados en self-update.
-- [ ] Permitir cambio de `barrioOrg` solo vía `isSecretary()`.
+### A3. `barrioOrg` auto-modificable → escalamiento horizontal — ✅ REMEDIADO
+- **Ubicación:** `firestore.rules` (`c_users` update)
+- [x] Self-update bloquea `role`, `permission`, `barrioOrg`, `barrio`, `organizacion`.
+- [x] Leadership solo puede gestionar peers en el mismo `barrioOrg`.
 
-### A4. `c_nuevos_conversos` sin regla → lectura cross-barrio
-- **Ubicación:** `firestore.rules:224-226` (default `match /{document=**} { allow read: if signedIn(); }`)
-- **Problema:** La colección cae en la regla catch-all y cualquier auth la lee sin scope de ward.
-- [ ] Añadir `match /c_nuevos_conversos/{document}` con `isSameBarrio()` para read/write.
-- [ ] Auditar TODAS las colecciones usadas por la app y añadir reglas explícitas.
+### A4. Colecciones sin regla / catch-all permisivo — ✅ REMEDIADO (diseño actual)
+- **Ubicación:** `firestore.rules`
+- **Problema (histórico):** default `allow read if signedIn` o colecciones huérfanas.
+- [x] Default: `match /{document=**} { allow read, write: if false; }`.
+- [x] Colecciones de negocio con reglas explícitas + `isSameBarrio()`.
+- [x] `c_sync_signals` read solo mismo barrio; write false (solo Admin/CF).
+- **Nota:** no hay match a `c_nuevos_conversos` (si existiera en prod, quedaría deny-by-default).
 
-### A5. Cron abierto si `CRON_SECRET` no está set
-- **Ubicación:** `src/app/api/birthday-notifications/route.ts:11-14`
-- **Problema:** Auth solo se aplica `if (cronSecret && ...)`. Si `CRON_SECRET` no está definido en prod, el endpoint queda abierto.
-- [ ] Exigir `CRON_SECRET` incondicionalmente; fallar (500/401) si no está configurado.
-- [ ] Validar el header `Authorization: Bearer <CRON_SECRET>` en cada request.
-- [ ] Confirmar que está set en Vercel y en todos los entornos desplegados.
+### A5. Cron abierto si `CRON_SECRET` no está set — ✅ REMEDIADO
+- **Ubicación:** `birthday-notifications`, `deceased-members-ordinances`
+- [x] Exigir `CRON_SECRET` incondicionalmente; 401 si falta o no coincide.
+- [ ] Confirmar en Vercel/prod que la variable está set (operación, no código).
 
-### A6. Endpoint de IA pagado sin autenticación
-- **Ubicación:** `src/app/api/church-chat/route.ts:30`
-- **Problema:** Sin auth, cualquiera consume la API de DeepSeek (costo/DoS). (Bien: usa Zod).
-- [ ] Añadir `requireAuth()`.
-- [ ] Añadir rate limiting por usuario/IP.
+### A6. Endpoint de IA pagado sin autenticación — ⬜ ABIERTO
+- **Ubicación:** `src/app/api/church-chat/route.ts`
+- **Problema:** riesgo de costo/DoS sin Bearer. Tiene Zod + rate limit.
+- [ ] Añadir `requireAuth()` / `requireUid`.
+- [x] Rate limiting (`enforceRateLimit`).
 - [ ] (Opcional) Cachear respuestas comunes.
 
-### A7. Storage read abierto a cualquier usuario autenticado
-- **Ubicación:** `storage.rules:13`
-- **Problema:** `allow read: if request.auth != null` permite leer fotos/perfiles de otros usuarios y wards.
-- [ ] Scopear read por `barrioOrg`/path cuando sea posible.
-- [ ] Al menos restringir a `images/{userId}/**` o al `barrioOrg` del usuario.
+### A7. Storage read abierto — ✅ MEJORADO (residual aceptable)
+- **Ubicación:** `storage.rules`
+- **Estado:** Lectura de `image/*` permitida (necesario para `<img>` sin token de Auth). Las URLs de Firebase llevan download token. Write ya no es global.
+- [x] Write scopeado por `userId`.
+- [ ] (Opcional) Mover a URLs firmadas de corta vida y quitar read público de imágenes.
 
-### A8. `c_barrios` / `c_organizaciones` escritura por cualquier auth
-- **Ubicación:** `firestore.rules:212-220`
-- **Problema:** `allow write: if request.auth != null` permite a cualquier logueado crear/borrar estas claves de scoping multi-tenant.
-- [ ] Restringir write a `isSecretary()` (o rol admin).
-- [ ] Mantener `read: if true` para datos de referencia (aceptable).
+### A8. `c_barrios` / `c_organizaciones` escritura por cualquier auth — ✅ REMEDIADO
+- **Ubicación:** `firestore.rules`
+- [x] Write solo `isSecretary()`.
+- [x] Read público (nombres de referencia para registro) — aceptable.
 
-### A9. SSRF en `fetchImageBuffers` (axios sin allowlist)
-- **Ubicación:** `functions/src/index.ts:377-423` (`axios.get` en `:405`)
-- **Problema:** Las URLs de imagen vienen de campos editables por usuario con `permission == 'all'`; se hace `axios.get` desde el runtime de Cloud Functions sin allowlist de dominio/IP.
-- [ ] Allowlist de dominios (hosts de Storage de Firebase / CDN conocidos).
-- [ ] Bloquear rangos IP privados/metadata antes de `axios.get`.
-- [ ] Validar que la URL resuelva a host permitido (no solo string match).
+### A9. SSRF en `fetchImageBuffers` (axios sin allowlist) — ⬜ ABIERTO
+- **Ubicación:** `functions/src/index.ts` (`fetchImageBuffers` / axios)
+- [ ] Allowlist de dominios (Firebase Storage / CDN).
+- [ ] Bloquear IP privadas/metadata antes de `axios.get`.
+- [ ] Validar resolución DNS del host permitido.
 
 ---
 
 ## 🟡 MEDIOS
 
-### M1. Credenciales vivas en el working tree
-- **Ubicación:** `.env.local`, `quorumflow-dlqh0-d46b66e83c09.json` (raíz, gitignored pero en disco)
-- **Problema:** Clave de service-account Firebase y `DEEPSEEK_API_KEY` presentes en el repo. Riesgo si se clona/sincroniza/force-add.
-- [ ] Rotar inmediatamente la clave de service-account Firebase y la API key de DeepSeek (asumir exposición).
-- [ ] Mover secrets a Secret Manager / env de Vercel-Firebase; nunca en el working tree.
-- [ ] Eliminar ambos archivos del disco tras rotar.
-- [ ] Verificar que no se incluyan en el bundle de build/cliente.
+### M1. Credenciales vivas en el working tree — ⬜ OPERACIONAL
+- **Ubicación:** `.env.local`, service account JSON (gitignoreados)
+- [ ] Rotar service-account y API keys si hubo exposición.
+- [ ] Preferir Secret Manager / env de Vercel-Firebase.
+- [x] `.gitignore` excluye `.env.local` y `*-firebase-adminsdk-*.json`.
 
-### M2. `typescript.ignoreBuildErrors: true`
-- **Ubicación:** `next.config.ts:15-17`
-- **Problema:** Desactiva type-checking en build, permitiendo código type-unsafe (potencialmente inseguro) en producción.
+### M2. `typescript.ignoreBuildErrors: true` — ⬜ ABIERTO
+- **Ubicación:** `next.config.ts`
 - [ ] Quitar `ignoreBuildErrors`.
 - [ ] Añadir `tsc --noEmit` en CI antes de build.
 
-### M3. Sin CI / Dependabot / CodeQL
-- **Ubicación:** `.github/` (solo templates; no hay `workflows/`)
-- **Problema:** Cero automatización de seguridad (lint, typecheck, tests, SCA, SAST).
-- [ ] Crear `.github/workflows/ci.yml` con install + lint + typecheck + test en PRs.
-- [ ] Añadir Dependabot (`.github/dependabot.yml`) para deps y GH Actions.
-- [ ] (Opcional) Añadir CodeQL workflow.
+### M3. Sin CI / Dependabot / CodeQL — ⬜ ABIERTO
+- **Ubicación:** `.github/` (templates; sin workflows de CI)
+- [ ] `.github/workflows/ci.yml` (install + lint + typecheck + test).
+- [ ] Dependabot.
+- [ ] (Opcional) CodeQL.
 
-### M4. Logging verboso de request bodies
-- **Ubicación:** `src/app/api/members/[id]/route.ts:64-70`
-- **Problema:** El `PUT` loguea el body completo (PII) a consola.
-- [ ] Eliminar log del body completo; loguear solo IDs/campos no sensibles.
-- [ ] Usar nivel debug condicional a entorno no-prod.
+### M4. Logging verboso de request bodies — ⬜ REVISAR
+- **Ubicación:** `src/app/api/members/[id]/route.ts` (si aún loguea body)
+- [ ] Loguear solo IDs/campos no sensibles.
+- [ ] Nivel debug solo fuera de prod.
 
-### M5. CORS con orígenes de desarrollo
-- **Ubicación:** `cors.json:4-5`
-- **Problema:** Incluye `localhost:3000/9002` y método `DELETE`.
-- [ ] Quitar orígenes localhost del bucket de producción.
-- [ ] Restringir métodos a los necesarios (sin `DELETE` si no se usa).
+### M5. CORS con orígenes de desarrollo — ⬜ REVISAR
+- **Ubicación:** `cors.json`
+- [ ] Quitar localhost del bucket de producción.
+- [ ] Restringir métodos a los necesarios.
 
 ---
 
 ## 🟢 BAJOS
 
-### B1. `dangerouslySetInnerHTML` en componente de chart
-- **Ubicación:** `src/components/ui/chart.tsx:81`
-- **Problema:** Inyecta `<style>` con `id` de `React.useId()` y colores estáticos. Sin datos de usuario → riesgo actual BAJO, pero es un patrón a vigilar.
-- [ ] Mantener el valor interpolado siempre no controlado por usuario.
-- [ ] Añadir comentario de por qué es seguro para futuros mantenedores.
+### B1. `dangerouslySetInnerHTML` en chart — ⬜ VIGILAR
+- **Ubicación:** `src/components/ui/chart.tsx`
+- [ ] Mantener interpolación no controlada por usuario.
+- [ ] Comentario de por qué es seguro.
 
-### B2. Endpoints de sugerencias IA sin auth (costo)
-- **Ubicación:** `src/app/api/suggestions/route.ts:33`, `src/app/api/service-suggestions/route.ts:63`
-- **Problema:** Sin auth, consumen IA (cached/read-only, bajo riesgo).
-- [ ] Añadir `requireAuth()`.
-- [ ] Añadir rate limiting.
+### B2. Endpoints de sugerencias IA — ✅ REMEDIADO (auth)
+- **Ubicación:** `suggestions`, `service-suggestions`
+- [x] `requireUidAndBarrioOrg` + scope de actividades/servicios por barrio.
+- [x] Rate limiting.
+- [x] Cache keys incluyen `barrioOrg`.
 
-### B3. `c_push_subscriptions` requiere `canWrite()` para escribir
-- **Ubicación:** `firestore.rules:181-183`
-- **Problema:** Miembros normales no pueden registrar su token push (safe pero probablemente rompe notificaciones para no-admins). Confirmar intención.
-- [ ] Revisar si el write debe permitir `request.resource.data.userId == request.auth.uid` sin `canWrite()`.
-- [ ] Si es intencional, documentarlo.
+### B3. `c_push_subscriptions` write — ✅ REMEDIADO (intención documentada)
+- **Ubicación:** `firestore.rules`
+- [x] Write/read por `userId == auth.uid` (sin exigir `canWrite()`), para que cualquier rol registre su token push.
 
-### B4. Usuarios legacy con `barrioOrg == null` reciben notificaciones cross-org
-- **Ubicación:** `functions/src/index.ts:1716-1720` (`getEligibleUsers`)
-- **Problema:** Usuarios sin `barrioOrg` no se saltan, recibiendo notificaciones de todos los barrios.
-- [ ] Tratar `barrioOrg == null` como "sin ward" y excluirlos de notificaciones dirigidas.
-- [ ] O asignar un `barrioOrg` por defecto explícito.
+### B4. Notificaciones cross-org (legacy / sin barrioOrg) — ✅ REMEDIADO
+- **Ubicación:** `functions/src/index.ts` (`getEligibleUsers`), `notification-helpers.ts`, `notification-bell.tsx`
+- **Problema (histórico):** docs sin `barrioOrg` notificaban a todos los tenants; campanita mostraba legacy sin scope.
+- [x] `getEligibleUsers` fail closed sin `scope` (log warn, cero destinatarios).
+- [x] Helpers cliente: `getAllUserIds` / `createNotificationsForAll` exigen `barrioOrg`.
+- [x] Campanita filtra solo notificaciones con `barrioOrg` igual al del usuario.
+- [x] Create de `c_notifications` exige campo `barrioOrg` en rules.
+- [x] Tool de migración Admin para sellar docs legacy: `/api/admin/migrate-barrio-org` + UI admin.
 
 ---
 
-## ✅ Controles ya correctos (verificados)
+## ✅ Controles verificados (baseline multi-tenant)
 
-- [x] `c_admin_audit` bloqueado a `isSecretary()` (read/create), update/delete `false` — `firestore.rules:188-192`
-- [x] `c_users` bloquea auto-edición de `role`/`permission` — `firestore.rules:204`
-- [x] `c_anotaciones`/`c_fs_anotaciones` scopean a owner/secretary e `userId` inmutable — `firestore.rules:52-64,116-128`
-- [x] `c_push_subscriptions` read scopeado al owner — `firestore.rules:177-180`
-- [x] Rutas `/api/external/*` verifican token y scopean por `barrioOrg` del llamador
-- [x] `/api/push/diagnostics` verifica token + `hasLeadershipPrivileges` + Zod
-- [x] `church-chat`, `push/diagnostics`, y AI flows usan Zod
+### Auth API
+- [x] `requireAuth` / `requireUid` / `requireUidAndBarrioOrg` / `buildBarrioOrgFromUserData` en `src/lib/api-auth.ts`
+- [x] Nunca default a un barrio de producción (p. ej. Libertad) para perfiles incompletos
+- [x] `/api/members`, `/api/members/[id]`, `/api/external/*`, push, suggestions, storage upload, migrate-barrio-org
+
+### Firestore
+- [x] `isSameBarrio()` en colecciones de datos (`c_miembros`, `c_ministracion`, actividades, etc.)
+- [x] `c_users`: peers solo mismo barrio; self-update sin tocar tenant/roles
+- [x] `c_notifications`: read solo owner
+- [x] `c_admin_audit`: leadership mismo barrio; update/delete false
+- [x] `c_barrios` / `c_organizaciones`: write secretary; read público
+- [x] Default deny
+
+### Storage
+- [x] Write owner-scoped (`users/{userId}/…` + legacy con userId)
+- [x] Helper `userScopedStoragePath`
+
+### Cloud Functions / push
+- [x] Reportes scoped por `barrioOrg` del llamador
+- [x] Notificaciones CF fail closed sin `barrioOrg` del documento
+- [x] Push server sin `barrioOrg` → no broadcast global
+
+### Repo / config
 - [x] Sin `eval`/`exec`/`child_process`/`new Function` en `src/`
-- [x] Cloud Functions callable usan guard `context.auth` (functions apropiadamente protegidas en su superficie)
-- [x] `.gitignore` excluye `.env.local` y `*-firebase-adminsdk-*.json`; no hay secrets commiteados
-- [x] `firebaseConfig.ts` solo usa `NEXT_PUBLIC_*` (seguro para browser)
-- [x] `SECURITY.md` y `.github/SECURITY.md` presentes; docs sin instrucciones inseguras
+- [x] `.gitignore` de secrets; `firebaseConfig` solo `NEXT_PUBLIC_*`
+- [x] `SECURITY.md` y este audit presentes
 
 ---
 
-## Orden de remediación recomendado
+## Orden de remediación restante (recomendado)
 
-1. **C5, C1, C3, C4** — autorización server-side y scoping por `barrioOrg` (CRÍTICOS de exfiltración).
-2. **C2, A9** — cerrar SSRF (allowlist host/IP).
-3. **M1** — rotar y sacar credenciales del working tree.
-4. **A3, A4, A8, A7, A2** — endurecer reglas Firestore/Storage (aislamiento multi-tenant).
-5. **A1, A5, A6** — middleware edge + auth incondicional en cron/IA.
-6. **M2, M3** — type-check en build + CI/Dependabot/CodeQL.
-7. **Resto (MEDIOS/BAJOS)** — logging, CORS, ítems menores.
+1. **C2, A9** — cerrar SSRF (allowlist host/IP).
+2. **A6** — `requireAuth` en church-chat.
+3. **A1** — middleware edge para páginas `(main)`.
+4. **M1** — rotar secrets locales si aplica; no commitear.
+5. **M2, M3** — typecheck en build + CI/Dependabot.
+6. **M4, M5, B1** — logging, CORS, chart.
+
+---
+
+## Despliegue de reglas y functions
+
+Tras cambios en aislamiento multi-tenant, desplegar:
+
+```bash
+firebase deploy --only firestore:rules,storage
+firebase deploy --only functions
+# + deploy de la app (Vercel/hosting)
+```
+
+Migrar documentos legacy sin `barrioOrg` desde **Admin → Migrar** (solo sella con el `barrioOrg` del usuario autenticado).
+
+---
+
+## Historial de revisiones
+
+| Fecha | Cambio |
+|-------|--------|
+| 2026-07-14 | Re-auditoría: C1/C3/C4/C5, A2–A5/A8, B2–B4 marcados remediados; resumen y controles multi-tenant actualizados. |
+| (previo) | Auditoría inicial con hallazgos C1–C5 y A1–A9 abiertos. |

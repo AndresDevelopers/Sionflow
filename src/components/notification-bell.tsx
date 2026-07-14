@@ -58,9 +58,8 @@ export function NotificationBell() {
     try {
       const barrioOrgKey = barrio && organizacion ? `${barrio}|${organizacion}` : null;
 
-      // Query by user only, then filter client-side by barrioOrg.
-      // Firestore equality on barrioOrg would hide legacy notifications that
-      // were saved without the field (and Cloud Functions may still emit those).
+      // Query by user only (rules: owner read). Filter client-side by barrioOrg.
+      // Fail closed: hide unscoped legacy notifications (could be cross-tenant).
       // Offline: getDocs uses cache with timeout (never hangs the refresh spinner).
       const q = query(
         notificationsCollection,
@@ -72,9 +71,8 @@ export function NotificationBell() {
       const userNotifications = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() } as AppNotification))
         .filter((notification) => {
-          if (!barrioOrgKey) return true;
-          // Include same-scope notifications and legacy ones without barrioOrg
-          return !notification.barrioOrg || notification.barrioOrg === barrioOrgKey;
+          if (!barrioOrgKey) return false;
+          return Boolean(notification.barrioOrg) && notification.barrioOrg === barrioOrgKey;
         })
         .slice(0, 30);
 
@@ -90,8 +88,8 @@ export function NotificationBell() {
       const unreadSnapshot = await getDocs(unreadQuery);
       const unreadCount = unreadSnapshot.docs.filter((doc) => {
         const data = doc.data() as AppNotification;
-        if (!barrioOrgKey) return true;
-        return !data.barrioOrg || data.barrioOrg === barrioOrgKey;
+        if (!barrioOrgKey) return false;
+        return Boolean(data.barrioOrg) && data.barrioOrg === barrioOrgKey;
       }).length;
       setHasUnread(unreadCount > 0);
     } catch (error) {

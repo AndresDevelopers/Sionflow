@@ -215,10 +215,12 @@ export default function ProfilePage() {
 
             if (selectedFile) {
                 const optimized = await compressProfileImage(selectedFile);
-                const storageRef = ref(
-                    storage,
-                    `profile_pictures/users/${targetUid}/${Date.now()}_${optimized.name}`
-                );
+                // Path under the uploader's uid (Storage rules: owner write only).
+                // Secretary may set another user's photoURL; object lives under their own tree.
+                const uploaderUid = user?.uid ?? targetUid;
+                const { userScopedStoragePath } = await import('@/lib/storage-paths');
+                const path = userScopedStoragePath(uploaderUid, 'profile_pictures/users', optimized.name);
+                const storageRef = ref(storage, path);
                 await uploadBytes(storageRef, optimized, { contentType: optimized.type });
                 nextPhotoUrl = await getDownloadURL(storageRef);
 

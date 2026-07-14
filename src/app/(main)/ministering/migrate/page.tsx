@@ -8,9 +8,11 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Loader2, CheckCircle, AlertCircle } from 'lucide-react';
 import { migrateExistingMinisteringAssignments } from '@/lib/migrate-ministering';
 import { useI18n } from '@/contexts/i18n-context';
+import { useAuth } from '@/contexts/auth-context';
 
 export default function MigrateMinisteringPage() {
   const { t } = useI18n();
+  const { barrioOrg } = useAuth();
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -21,7 +23,10 @@ export default function MigrateMinisteringPage() {
     setError(null);
 
     try {
-      const migrationResult = await migrateExistingMinisteringAssignments();
+      if (!barrioOrg) {
+        throw new Error(t('ministering.migrate.unknownError'));
+      }
+      const migrationResult = await migrateExistingMinisteringAssignments({ barrioOrg });
       setResult(migrationResult);
     } catch (err) {
       setError(err instanceof Error ? err.message : t('ministering.migrate.unknownError'));
@@ -50,7 +55,7 @@ export default function MigrateMinisteringPage() {
 
           <Button 
             onClick={handleMigration} 
-            disabled={isRunning}
+            disabled={isRunning || !barrioOrg}
             className="w-full"
           >
             {isRunning ? (

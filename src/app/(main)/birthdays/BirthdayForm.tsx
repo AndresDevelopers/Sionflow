@@ -235,7 +235,9 @@ export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: B
 
   const uploadNewImage = async (file: File) => {
     const optimized = await compressProfileImage(file);
-    const storageRef = ref(storage, `profile_pictures/birthdays/${user?.uid}/${Date.now()}_${optimized.name}`);
+    const { userScopedStoragePath } = await import('@/lib/storage-paths');
+    const path = userScopedStoragePath(user?.uid || 'unknown', 'profile_pictures/birthdays', optimized.name);
+    const storageRef = ref(storage, path);
     await uploadBytes(storageRef, optimized, { contentType: optimized.type });
     return getDownloadURL(storageRef);
   };

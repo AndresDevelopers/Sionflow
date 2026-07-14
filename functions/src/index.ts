@@ -1850,11 +1850,13 @@ function normalizeDocBarrioOrg(docBarrioOrg?: string | null): string | null {
  * Given all users and a category, return those eligible to receive in-app
  * and/or push notifications for that category.
  *
+ * FAIL CLOSED multi-tenant: if the document has no real barrioOrg, nobody is
+ * notified. Broadcasting to all wards would leak PII (names, etc.) across tenants.
+ * Migrate legacy docs so they carry barrioOrg before expecting notifications.
+ *
  * @param users - All users with notification preferences
  * @param category - Notification category
- * @param docBarrioOrg - Optional barrioOrg from the triggering document. If provided
- *   (and not "unknown"), only users with matching barrioOrg will be eligible.
- *   If missing/legacy, all preference-eligible users receive the notification.
+ * @param docBarrioOrg - barrioOrg from the triggering document (required for any recipients)
  */
 function getEligibleUsers(
     users: UserNotificationData[],
@@ -1866,14 +1868,21 @@ function getEligibleUsers(
     const inAppUserIds: string[] = [];
     const pushUserIds: string[] = [];
 
+    // Fail closed: never cross-tenant notify for unscoped/legacy documents
+    if (!scope) {
+        functions.logger.warn("getEligibleUsers: skipped — document missing barrioOrg", {
+            category,
+            docBarrioOrg: docBarrioOrg ?? null,
+        });
+        return { inAppUserIds, pushUserIds };
+    }
+
     for (const u of users) {
         // null = visiblePages was never configured → all pages are visible (matches frontend default)
         const hasPage = u.visiblePages === null || u.visiblePages.includes(page);
         if (!hasPage) continue;
 
-        // Multi-tenant scope: only apply when the document has a real barrioOrg.
-        // Legacy docs without barrioOrg must still notify eligible users.
-        if (scope && u.barrioOrg !== scope) continue;
+        if (u.barrioOrg !== scope) continue;
 
         const inAppCat = u.notificationPrefs.inApp[category] !== false;
         const pushCat = u.notificationPrefs.push[category] !== false;

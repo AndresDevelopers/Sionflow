@@ -9,9 +9,10 @@ El sistema de notificaciones de SionFlow usa Firebase Cloud Messaging (FCM), PWA
 - **Horario fijo de producción**: `dailyNotifications` y `weeklyNotifications` corren a las `09:00` de Ecuador. `councilNotifications` corre martes y miércoles a las `18:00` de Ecuador.
 - **Push por dispositivo**: Cada móvil/PWA guarda un documento en `c_push_subscriptions` con trazabilidad de intentos.
 - **Control del usuario**: Cada usuario puede desactivar las notificaciones desde Settings
-- **Notificaciones in-app**: Todas las notificaciones se muestran en el header de la aplicación
-- **Filtrado inteligente**: Solo se envían notificaciones a usuarios que las tienen activadas
-- **Diagnóstico integrado**: Settings muestra el estado del service worker, permiso, device ID y el último intento del servidor.
+- **Notificaciones in-app**: Se muestran en la campana del header; solo el dueño puede leerlas (reglas Firestore)
+- **Filtrado inteligente**: Solo se envían a usuarios con preferencias activas
+- **Aislamiento multi-tenant**: envíos y elegibilidad se limitan por `barrioOrg`. Documentos o eventos sin `barrioOrg` **no** se difunden a todos los barrios (fail closed). Broadcast API solo al tenant del llamador.
+- **Diagnóstico integrado**: Settings / push diagnostics (liderazgo, mismo barrio) muestra estado del SW, permiso, device ID e intentos del servidor.
 
 ### Variables de Entorno Requeridas
 
@@ -35,9 +36,9 @@ NEXT_PUBLIC_VAPID_PUBLIC_KEY=tu-vapid-public-key
 
 - **Todos los usuarios nuevos** tienen las notificaciones **in-app activadas por defecto**
 - **Las notificaciones push móviles** requieren activación explícita por usuario/dispositivo
-- No se requiere ninguna acción del usuario para empezar a recibir notificaciones
-- Las notificaciones aparecen automáticamente en el header de la aplicación (campana)
-- **Las notificaciones push se envían automáticamente a dispositivos móviles** mediante Firebase Cloud Messaging (FCM)
+- No se requiere ninguna acción del usuario para empezar a recibir notificaciones in-app de su barrio
+- Las notificaciones aparecen en la campana del header; se filtran por el `barrioOrg` del usuario (legacy sin scope no se muestra)
+- **Las notificaciones push se envían automáticamente a dispositivos móviles** mediante Firebase Cloud Messaging (FCM), siempre scoped al `barrioOrg` del evento/usuario
 - Las notificaciones aparecen en la **barra de notificaciones del sistema operativo** (Android, iOS, etc.)
 
 ### Activar Notificaciones Push en Dispositivos

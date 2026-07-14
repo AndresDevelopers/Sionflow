@@ -10,6 +10,7 @@
 - [Dashboard Home](DASHBOARD_HOME.md)
 - [Notificaciones Push](PUSH_NOTIFICATIONS.md)
 - [Seguridad](SEGURIDAD.md)
+- [Auditoría de seguridad (checklist)](../SECURITY_AUDIT.md)
 - [Build Configuration](BUILD_CONFIGURATION.md)
 - [Sincronización de Ministración](SINCRONIZACION_MINISTRACION.md)
 - [Plantilla Word Bautismos](PLANTILLA_WORD_BAUTISMOS.md)

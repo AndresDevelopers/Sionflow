@@ -5,6 +5,7 @@ import { getAdminBucket } from '@/lib/firebase-admin';
 import logger from '@/lib/logger';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import { getErrorStatus, requireUid } from '@/lib/api-auth';
+import { userScopedStoragePath } from '@/lib/storage-paths';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -145,7 +146,8 @@ export async function POST(request: Request) {
       fileName = `${fileName}.${extFromMime === 'jpeg' ? 'jpg' : extFromMime}`;
     }
 
-    const objectPath = `${folder}/${Date.now()}-${randomUUID().slice(0, 8)}-${fileName}`;
+    // Scope under users/{uid}/… so Storage rules isolate writes by owner (Admin still sets token)
+    const objectPath = userScopedStoragePath(uid, folder, `${randomUUID().slice(0, 8)}-${fileName}`);
     const downloadToken = randomUUID();
 
     let bucket;

@@ -173,7 +173,9 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
     try {
       if (selectedFile) {
         const optimized = await compressProfileImage(selectedFile);
-        const storageRef = ref(storage, `profile_pictures/future_members/${user.uid}/${Date.now()}_${optimized.name}`);
+        const { userScopedStoragePath } = await import('@/lib/storage-paths');
+        const path = userScopedStoragePath(user.uid, 'profile_pictures/future_members', optimized.name);
+        const storageRef = ref(storage, path);
         await uploadBytes(storageRef, optimized, { contentType: optimized.type });
         finalPhotoURL = await getDownloadURL(storageRef);
 
@@ -193,7 +195,9 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
         baptismPhotos.map(async photo => {
           if (typeof photo === 'string') return photo;
           const optimized = await compressGalleryImage(photo);
-          const storageRef = ref(storage, `baptism_photos/future_members/${user.uid}/${Date.now()}_${optimized.name}`);
+          const { userScopedStoragePath } = await import('@/lib/storage-paths');
+          const path = userScopedStoragePath(user.uid, 'baptism_photos/future_members', optimized.name);
+          const storageRef = ref(storage, path);
           await uploadBytes(storageRef, optimized, { contentType: optimized.type });
           return getDownloadURL(storageRef);
         })

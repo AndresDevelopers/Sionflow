@@ -63,16 +63,18 @@ public/                          # PWA assets, service worker, changelog.json
 
 ## Patrones de Diseño
 - **Arquitectura por funcionalidad**: Organización del código por módulo de negocio
-- **Renderizado cliente**: Toda la app usa `"use client"`, datos leídos directamente de Firestore
-- **Aislamiento multi-tenant**: Datos filtrados por `barrioOrg` (barrio + organización) en cada consulta
+- **Renderizado cliente**: La app usa `"use client"` en páginas operativas; datos leídos de Firestore con filtros por tenant
+- **Aislamiento multi-tenant**: clave `barrioOrg` = `barrio|organización` en documentos, reglas, APIs y notificaciones (ver `docs/SEGURIDAD.md`)
+- **Fail closed**: sin `barrioOrg` no se listan ni se notifican datos entre tenants; APIs Admin no asumen un barrio por defecto
 - **RBAC**: Control de acceso basado en roles con permisos `read` y `all`
 
 ## Flujo de Datos
-1. **Frontend**: Componentes React que leen/escriben Firestore directamente
-2. **Auth**: Firebase Auth para identidad, Firestore para roles y permisos
-3. **API Routes**: Endpoints server-side para operaciones seguras (push, reportes, API externa)
-4. **Cloud Functions**: Tareas programadas (notificaciones de cumpleaños, reportes anuales)
-5. **IA**: DeepSeek API llamada desde el frontend para resúmenes, sugerencias y chat
+1. **Frontend**: Componentes React leen/escriben Firestore con `where('barrioOrg', '==', …)` (reglas refuerzan el scope)
+2. **Auth**: Firebase Auth para identidad; `c_users` para rol, permiso y `barrioOrg`
+3. **API Routes**: Bearer ID token + `requireUidAndBarrioOrg` para miembros, external API, push, storage, migración
+4. **Cloud Functions**: reportes anuales scoped al barrio del llamador; notificaciones solo si el doc tiene `barrioOrg`
+5. **IA**: DeepSeek desde API routes / UI (sugerencias scoped por barrio; church-chat con rate limit)
+6. **Storage**: objetos bajo `users/{uid}/…`; upload server en `/api/storage/upload`
 
 ## Funcionalidades Clave
 
