@@ -47,19 +47,23 @@ class NotificationRepository {
         if (records.length === 0) {
             return;
         }
+        // Include Ecuador calendar day so recurring tags (weekly-*, birthday-today-*, …)
+        // still create a fresh in-app doc each day while remaining idempotent on retries.
+        const dateKey = getEcuadorDateKey();
         await Promise.all(records.map(async (record) => {
             const tag = typeof record.notificationTag === "string" ? record.notificationTag : null;
             if (!tag) {
                 await this.collection.add(record);
                 return;
             }
-            const docId = buildDeterministicNotificationDocId(record.userId, tag);
+            const docId = buildDeterministicNotificationDocId(record.userId, tag, dateKey);
             try {
                 await this.collection.doc(docId).create(record);
             }
             catch (error) {
                 const code = typeof error === "object" && error && "code" in error ? error.code : undefined;
-                if (code === 6) {
+                // gRPC ALREADY_EXISTS = 6; Admin SDK may also surface the string form
+                if (code === 6 || code === "already-exists") {
                     return;
                 }
                 throw error;
@@ -67,10 +71,20 @@ class NotificationRepository {
         }));
     }
 }
-function buildDeterministicNotificationDocId(userId, tag) {
+/** YYYY-MM-DD in America/Guayaquil for idempotent daily notification docs. */
+function getEcuadorDateKey(date = new Date()) {
+    return new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Guayaquil",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+    }).format(date);
+}
+function buildDeterministicNotificationDocId(userId, tag, dateKey) {
     const safeUser = sanitizeDocIdPart(userId);
     const safeTag = sanitizeDocIdPart(tag);
-    const raw = `${safeUser}__${safeTag}`;
+    const safeDate = sanitizeDocIdPart(dateKey);
+    const raw = `${safeUser}__${safeTag}__${safeDate}`;
     if (raw.length <= 1400) {
         return raw;
     }

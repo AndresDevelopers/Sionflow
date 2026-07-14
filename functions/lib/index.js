@@ -812,7 +812,7 @@ exports.onActivityCreated = functions
         }
         const detailText = details.length > 0 ? ` ${details.join(" ")}` : "";
         const body = `Se programó la actividad "${activityTitle}"${detailText}.`;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "activities", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Nueva Actividad Programada",
@@ -849,7 +849,7 @@ exports.onActivityUpdated = functions
         const activityTitle = after.title?.trim() || "Actividad";
         const prevTitle = before?.title?.trim() || activityTitle;
         const docBarrioOrg = after.barrioOrg || before?.barrioOrg || null;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "activities", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Actividad Actualizada",
@@ -881,7 +881,7 @@ exports.onActivityDeleted = functions
         const activity = snapshot.data();
         const activityTitle = activity?.title?.trim() || "Actividad";
         const docBarrioOrg = activity?.barrioOrg || null;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "activities", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Actividad Eliminada",
@@ -916,7 +916,7 @@ exports.onServiceCreated = functions
             ? (0, date_fns_1.format)(svc.date.toDate(), "d MMM yyyy", { locale: locale_1.es })
             : "";
         const docBarrioOrg = svc.barrioOrg || null;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "service", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Nuevo Servicio Programado",
@@ -949,7 +949,7 @@ exports.onServiceUpdated = functions
         const serviceId = context.params.serviceId;
         const title = after.title?.trim() || before?.title?.trim() || "Servicio";
         const docBarrioOrg = after.barrioOrg || before?.barrioOrg || null;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "service", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Servicio Actualizado",
@@ -979,7 +979,7 @@ exports.onServiceDeleted = functions
         const title = svc?.title?.trim() || "Servicio";
         const serviceId = context.params.serviceId;
         const docBarrioOrg = svc?.barrioOrg || null;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "service", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Servicio Eliminado",
@@ -1020,7 +1020,7 @@ exports.onUrgentFamilyFlagged = functions
     if (newlyUrgent.length === 0) {
         return;
     }
-    const allUsers = await getAllUsersNotificationData();
+    const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
     const eligible = getEligibleUsers(allUsers, "council", docBarrioOrg);
     await Promise.all(newlyUrgent.map(async (family) => {
         const familyName = family.name || "Familia";
@@ -1067,7 +1067,7 @@ exports.onMissionaryAssignmentCreated = functions
             ? description
             : "Se registró una nueva asignación misional.";
         const docBarrioOrg = assignment?.barrioOrg || null;
-        const allUsers = await getAllUsersNotificationData();
+        const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
         const eligible = getEligibleUsers(allUsers, "missionaryWork", docBarrioOrg);
         await notificationDispatcher.broadcastToUsers(eligible.inAppUserIds, {
             title: "Nueva Asignación Misional",
@@ -1110,7 +1110,7 @@ async function notifySecretariesAboutCouncilAnnotation(params) {
     const { annotationId, annotation, action } = params;
     const docBarrioOrg = annotation.barrioOrg || null;
     const preview = truncateAnnotationText(annotation.text);
-    const allUsers = await getAllUsersNotificationData();
+    const allUsers = await getUsersForDocBarrioOrg(docBarrioOrg);
     const eligible = getEligibleSecretaries(allUsers, "council", docBarrioOrg);
     if (eligible.inAppUserIds.length === 0 && eligible.pushUserIds.length === 0) {
         functions.logger.log("Council annotation notification: no eligible secretaries", {
@@ -1250,61 +1250,136 @@ function getBirthdayDateInEcuador(birthDate, year) {
     const parts = getDatePartsInTimeZone(date, ECUADOR_TZ);
     return new Date(year, parts.month - 1, parts.day);
 }
-// ── Cache en memoria para getAllUsersNotificationData ──────────────────────
-// Evita leer c_users completo en cada trigger/función programada.
-// TTL corto (5 min) ya que los datos de usuarios cambian poco.
-let _usersCache = null;
+// ── Cache en memoria para preferencias de notificación de usuarios ──────────
+// TTL corto (5 min). Claves: "__all__" o un barrioOrg concreto.
+// Triggers por documento deben usar getUsersForDocBarrioOrg(scope) — O(users del barrio).
+// Crons diarios/semanales usan getAllUsersNotificationData() una vez.
+const _usersCacheByKey = new Map();
 const USERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
-/**
- * Fetch all users with their notification preferences and visible pages.
- * Defaults: inApp = true, push = false, all categories = true.
- * visiblePages = null means "never configured" → all pages are visible
- * (matches the frontend default in settings/page.tsx).
- *
- * Uses an in-memory cache with 5-minute TTL to avoid redundant reads
- * when multiple notification functions run in the same invocation.
- */
-async function getAllUsersNotificationData() {
-    const now = Date.now();
-    if (_usersCache && (now - _usersCache.ts) < USERS_CACHE_TTL_MS) {
-        return _usersCache.data;
+const USERS_CACHE_ALL_KEY = "__all__";
+/** Fields needed for notification eligibility (reduces bytes/read cost). */
+const USER_NOTIF_SELECT_FIELDS = [
+    "barrioOrg",
+    "barrio",
+    "organizacion",
+    "visiblePages",
+    "inAppNotificationsEnabled",
+    "pushNotificationsEnabled",
+    "notificationPrefs",
+    "role",
+];
+function resolveUserBarrioOrgFromData(d) {
+    if (typeof d.barrioOrg === "string") {
+        const explicit = d.barrioOrg.trim();
+        if (explicit.includes("|") && !explicit.startsWith("|") && !explicit.endsWith("|")) {
+            return explicit;
+        }
     }
-    const snapshot = await firestore.collection("c_users").get();
+    const barrio = typeof d.barrio === "string" ? d.barrio.trim() : "";
+    const organizacion = typeof d.organizacion === "string" ? d.organizacion.trim() : "";
+    if (barrio && organizacion) {
+        return `${barrio}|${organizacion}`;
+    }
+    return null;
+}
+function mapUserDocToNotificationData(doc) {
+    const d = doc.data();
+    const barrioOrg = resolveUserBarrioOrgFromData(d);
+    if (!barrioOrg)
+        return null;
+    return {
+        userId: doc.id,
+        visiblePages: Array.isArray(d.visiblePages) ? d.visiblePages : null,
+        inAppEnabled: d.inAppNotificationsEnabled !== false,
+        pushEnabled: d.pushNotificationsEnabled === true,
+        notificationPrefs: {
+            inApp: d.notificationPrefs?.inApp ?? {},
+            push: d.notificationPrefs?.push ?? {},
+        },
+        barrioOrg,
+        role: typeof d.role === "string" ? d.role : null,
+    };
+}
+function getCachedUsers(key) {
+    const entry = _usersCacheByKey.get(key);
+    if (entry && Date.now() - entry.ts < USERS_CACHE_TTL_MS) {
+        return entry.data;
+    }
+    return null;
+}
+function setCachedUsers(key, data) {
+    _usersCacheByKey.set(key, { data, ts: Date.now() });
+}
+/**
+ * Users of a single barrioOrg (indexed query). Preferred for Firestore triggers.
+ */
+async function getUsersNotificationDataByBarrio(barrioOrg) {
+    const key = barrioOrg.trim();
+    if (!key.includes("|"))
+        return [];
+    const cached = getCachedUsers(key);
+    if (cached)
+        return cached;
+    const snapshot = await firestore
+        .collection("c_users")
+        .where("barrioOrg", "==", key)
+        .select(...USER_NOTIF_SELECT_FIELDS)
+        .get();
     const data = [];
     for (const doc of snapshot.docs) {
-        const d = doc.data();
-        // Resolve barrioOrg without production-ward defaults (no silent Libertad)
-        let barrioOrg = null;
-        if (typeof d.barrioOrg === "string") {
-            const explicit = d.barrioOrg.trim();
-            if (explicit.includes("|") && !explicit.startsWith("|") && !explicit.endsWith("|")) {
-                barrioOrg = explicit;
-            }
-        }
-        if (!barrioOrg) {
-            const barrio = typeof d.barrio === "string" ? d.barrio.trim() : "";
-            const organizacion = typeof d.organizacion === "string" ? d.organizacion.trim() : "";
-            if (barrio && organizacion) {
-                barrioOrg = `${barrio}|${organizacion}`;
-            }
-        }
-        // Users without barrio/org are excluded from scoped notifications (no cross-ward default)
-        if (!barrioOrg)
-            continue;
-        data.push({
-            userId: doc.id,
-            visiblePages: Array.isArray(d.visiblePages) ? d.visiblePages : null,
-            inAppEnabled: d.inAppNotificationsEnabled !== false,
-            pushEnabled: d.pushNotificationsEnabled === true,
-            notificationPrefs: {
-                inApp: d.notificationPrefs?.inApp ?? {},
-                push: d.notificationPrefs?.push ?? {},
-            },
-            barrioOrg,
-            role: typeof d.role === "string" ? d.role : null,
-        });
+        const mapped = mapUserDocToNotificationData(doc);
+        if (mapped)
+            data.push(mapped);
     }
-    _usersCache = { data, ts: now };
+    setCachedUsers(key, data);
+    return data;
+}
+/**
+ * Load users for an event document's tenant only.
+ * Missing/invalid barrioOrg → empty (fail closed; never full project scan on triggers).
+ */
+async function getUsersForDocBarrioOrg(docBarrioOrg) {
+    if (!docBarrioOrg || docBarrioOrg === "unknown") {
+        return [];
+    }
+    const key = docBarrioOrg.trim();
+    if (!key.includes("|") || key.startsWith("|") || key.endsWith("|")) {
+        return [];
+    }
+    return getUsersNotificationDataByBarrio(key);
+}
+/**
+ * All users with notification prefs (scheduled jobs only — once per cron run).
+ * Prefer getUsersForDocBarrioOrg for event-driven notifications.
+ */
+async function getAllUsersNotificationData() {
+    const cached = getCachedUsers(USERS_CACHE_ALL_KEY);
+    if (cached)
+        return cached;
+    // Field mask: smaller docs → lower network/CPU; still 1 read per user doc
+    const snapshot = await firestore
+        .collection("c_users")
+        .select(...USER_NOTIF_SELECT_FIELDS)
+        .get();
+    const data = [];
+    for (const doc of snapshot.docs) {
+        const mapped = mapUserDocToNotificationData(doc);
+        if (mapped)
+            data.push(mapped);
+    }
+    setCachedUsers(USERS_CACHE_ALL_KEY, data);
+    // Warm per-barrio caches for subsequent getEligibleUsers filters in the same cron
+    const byBarrio = new Map();
+    for (const u of data) {
+        if (!u.barrioOrg)
+            continue;
+        const list = byBarrio.get(u.barrioOrg) ?? [];
+        list.push(u);
+        byBarrio.set(u.barrioOrg, list);
+    }
+    for (const [bo, list] of byBarrio) {
+        setCachedUsers(bo, list);
+    }
     return data;
 }
 /** Firestore `in` operator supports at most 30 values. */
@@ -1353,10 +1428,15 @@ async function getCollectionDocsForBarrios(collectionName, activeBarrioOrgs, app
     }));
     return toSnapshotLike(snapshots.flatMap((s) => s.docs));
 }
+/**
+ * Page paths used for visiblePages matching.
+ * Must match Settings `notificationCategories[].page` and navigation hrefs
+ * (no query strings — visiblePages stores bare paths like /missionary-work).
+ */
 const CATEGORY_PAGE = {
     observations: "/observations",
     converts: "/converts",
-    futureMembers: "/missionary-work?tab=future_members",
+    futureMembers: "/missionary-work",
     birthdays: "/birthdays",
     familySearch: "/family-search",
     missionaryWork: "/missionary-work",
@@ -1364,6 +1444,30 @@ const CATEGORY_PAGE = {
     council: "/council",
     activities: "/reports/activities",
 };
+/**
+ * Whether the user can see the page for a notification category.
+ * Aligns with frontend main-layout: null OR empty visiblePages ⇒ all pages.
+ * Strips query strings and maps legacy /future-members → /missionary-work.
+ */
+function userHasCategoryPage(visiblePages, page) {
+    // Frontend: empty/missing list shows all nav items
+    if (visiblePages === null || visiblePages.length === 0) {
+        return true;
+    }
+    const target = page.split("?")[0];
+    const normalizedVisible = visiblePages.map((p) => {
+        const path = p.split("?")[0];
+        return path === "/future-members" ? "/missionary-work" : path;
+    });
+    if (normalizedVisible.includes(target)) {
+        return true;
+    }
+    // /reports grants activities reminders when the dedicated activities page is not listed
+    if (target === "/reports/activities" && normalizedVisible.includes("/reports")) {
+        return true;
+    }
+    return false;
+}
 function getEcuadorNowLabel() {
     return new Intl.DateTimeFormat("es-EC", {
         timeZone: ECUADOR_TZ,
@@ -1421,9 +1525,7 @@ function getEligibleUsers(users, category, docBarrioOrg) {
         return { inAppUserIds, pushUserIds };
     }
     for (const u of users) {
-        // null = visiblePages was never configured → all pages are visible (matches frontend default)
-        const hasPage = u.visiblePages === null || u.visiblePages.includes(page);
-        if (!hasPage)
+        if (!userHasCategoryPage(u.visiblePages, page))
             continue;
         if (u.barrioOrg !== scope)
             continue;
@@ -1506,13 +1608,14 @@ exports.dailyNotifications = functions
             const memberStatus = b.memberId ? memberStatusMap.get(b.memberId) : undefined;
             const statusLabel = getBirthdayStatusLabel(memberStatus);
             const nameWithStatus = statusLabel ? `${b.name} (${statusLabel})` : b.name;
+            const yearTag = today.getFullYear();
             if ((0, date_fns_1.isSameDay)(nextBirthday, in14Days) && !sentBirthdays14.has(birthdayKey)) {
                 sentBirthdays14.add(birthdayKey);
                 await notificationDispatcher.broadcastToUsers(bdEligible.inAppUserIds, {
                     title: "Próximo Cumpleaños",
                     body: `Faltan 14 días para el cumpleaños de ${nameWithStatus}.`,
                     url: "/birthdays",
-                    tag: `birthday-14d-${doc.id}`,
+                    tag: `birthday-14d-${yearTag}-${doc.id}`,
                     barrioOrg: docBarrioOrg || null,
                     context: { contextType: "birthday", actionUrl: "/birthdays", actionType: "navigate" },
                 }, bdEligible.pushUserIds, birthdayTrace);
@@ -1523,7 +1626,7 @@ exports.dailyNotifications = functions
                     title: "¡Feliz Cumpleaños!",
                     body: `¡Hoy es el cumpleaños de ${nameWithStatus}! No olvides felicitarle.`,
                     url: "/birthdays",
-                    tag: `birthday-today-${doc.id}`,
+                    tag: `birthday-today-${yearTag}-${doc.id}`,
                     barrioOrg: docBarrioOrg || null,
                     context: { contextType: "birthday", actionUrl: "/birthdays", actionType: "navigate" },
                 }, bdEligible.pushUserIds, birthdayTrace);
@@ -1551,13 +1654,14 @@ exports.dailyNotifications = functions
                 continue;
             const statusLabel = getBirthdayStatusLabel(m.status);
             const nameWithStatus = statusLabel ? `${memberName} (${statusLabel})` : memberName;
+            const yearTag = today.getFullYear();
             if ((0, date_fns_1.isSameDay)(nextBirthday, in14Days) && !sentBirthdays14.has(memberBirthdayKey)) {
                 sentBirthdays14.add(memberBirthdayKey);
                 await notificationDispatcher.broadcastToUsers(bdEligible.inAppUserIds, {
                     title: "Próximo Cumpleaños",
                     body: `Faltan 14 días para el cumpleaños de ${nameWithStatus}.`,
                     url: "/birthdays",
-                    tag: `birthday-14d-member-${memberDoc.id}`,
+                    tag: `birthday-14d-${yearTag}-member-${memberDoc.id}`,
                     barrioOrg: memberDocBarrioOrg || null,
                     context: { contextType: "birthday", actionUrl: "/birthdays", actionType: "navigate" },
                 }, bdEligible.pushUserIds, birthdayTrace);
@@ -1568,7 +1672,7 @@ exports.dailyNotifications = functions
                     title: "¡Feliz Cumpleaños!",
                     body: `¡Hoy es el cumpleaños de ${nameWithStatus}! No olvides felicitarle.`,
                     url: "/birthdays",
-                    tag: `birthday-today-member-${memberDoc.id}`,
+                    tag: `birthday-today-${yearTag}-member-${memberDoc.id}`,
                     barrioOrg: memberDocBarrioOrg || null,
                     context: { contextType: "birthday", actionUrl: "/birthdays", actionType: "navigate" },
                 }, bdEligible.pushUserIds, birthdayTrace);
@@ -1702,6 +1806,9 @@ exports.weeklyNotifications = functions
     });
     const allUsers = await getAllUsersNotificationData();
     const activeBarrioOrgs = getActiveBarrioOrgs(allUsers);
+    // Ecuador date key so weekly tags are unique each week (in-app + FCM replacement)
+    const weekDateParts = getDatePartsInTimeZone(new Date(), ECUADOR_TZ);
+    const weekDateTag = `${weekDateParts.year}-${String(weekDateParts.month).padStart(2, "0")}-${String(weekDateParts.day).padStart(2, "0")}`;
     // ── Observaciones ────────────────────────────────────────────────────
     const observationsTrace = buildNotificationTrace("weeklyNotifications", "observations");
     {
@@ -1783,7 +1890,7 @@ exports.weeklyNotifications = functions
                     title: "Resumen Semanal – Observaciones",
                     body: bodyParts.join(", ") + ".",
                     url: "/observations",
-                    tag: `weekly-observations-${barrioOrg}`,
+                    tag: `weekly-observations-${weekDateTag}-${barrioOrg}`,
                     barrioOrg: barrioOrg || null,
                     context: { actionUrl: "/observations", actionType: "navigate" },
                 }, obsEligible.pushUserIds, observationsTrace);
@@ -1834,7 +1941,7 @@ exports.weeklyNotifications = functions
                     title,
                     body,
                     url: "/council",
-                    tag: `weekly-deceased-ordinances-${barrioOrg}`,
+                    tag: `weekly-deceased-ordinances-${weekDateTag}-${barrioOrg}`,
                     barrioOrg: barrioOrg || null,
                     context: { contextType: "member", actionUrl: "/council", actionType: "navigate" },
                 }, pushUserIds, buildNotificationTrace("weeklyNotifications", "deceased-members"));
@@ -1927,7 +2034,7 @@ exports.weeklyNotifications = functions
                     title: "Resumen Semanal – Conversos",
                     body: bodyParts.join(", ") + ".",
                     url: "/converts",
-                    tag: `weekly-converts-${barrioOrg}`,
+                    tag: `weekly-converts-${weekDateTag}-${barrioOrg}`,
                     barrioOrg: barrioOrg || null,
                     context: { contextType: "convert", actionUrl: "/converts", actionType: "navigate" },
                 }, convEligible.pushUserIds, convertsTrace);
@@ -1955,7 +2062,7 @@ exports.weeklyNotifications = functions
                 title: "FamilySearch – Familias por Capacitar",
                 body: `Hay ${fsCount} familia${fsCount !== 1 ? "s" : ""} pendiente${fsCount !== 1 ? "s" : ""} de capacitación en FamilySearch.`,
                 url: "/family-search",
-                tag: `weekly-family-search-${barrioOrg}`,
+                tag: `weekly-family-search-${weekDateTag}-${barrioOrg}`,
                 barrioOrg: barrioOrg || null,
                 context: { actionUrl: "/family-search", actionType: "navigate" },
             }, fsEligible.pushUserIds, familySearchTrace);
@@ -2015,7 +2122,7 @@ exports.weeklyNotifications = functions
                     title: "Resumen Semanal – Obra Misional",
                     body: bodyParts.join(", ") + ".",
                     url: "/missionary-work",
-                    tag: `weekly-missionary-work-${barrioOrg}`,
+                    tag: `weekly-missionary-work-${weekDateTag}-${barrioOrg}`,
                     barrioOrg: barrioOrg || null,
                     context: { contextType: "missionary_assignment", actionUrl: "/missionary-work", actionType: "navigate" },
                 }, mwEligible.pushUserIds, missionaryWorkTrace);

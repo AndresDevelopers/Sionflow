@@ -6,20 +6,20 @@
       "date": "2026-07-14",
       "changes": {
         "es": [
-          "Ahora los datos de tu barrio están completamente aislados: cada operación de escritura verifica que pertenezcas a la organización correcta, evitando mezclar información entre barrios.",
-          "Las rutas de almacenamiento se han estandarizado y protegido, garantizando que solo puedas acceder y subir archivos a tu propio espacio asignado.",
-          "Se ha reforzado la seguridad en todas las consultas a la base de datos para que solo veas los miembros y actividades de tu propio barrio, sin riesgos de filtraciones.",
-          "Todos los puntos finales de la API ahora requieren autenticación y verifican tu pertenencia al barrio, cerrando el acceso si falta la información necesaria.",
-          "Se agregaron índices y tiempos de espera configurables para mejorar el rendimiento y la estabilidad al trabajar con datos de tu organización.",
-          "La edición de actividades ahora protege el campo de barrio para que no puedas cambiarlo accidentalmente, manteniendo la integridad de los datos."
+          "Hemos mejorado la seguridad y privacidad de los datos al aislar la información de cada barrio, evitando que se mezclen datos entre diferentes organizaciones.",
+          "Ahora las notificaciones se muestran solo para tu barrio, y se ha corregido un error que causaba notificaciones duplicadas.",
+          "Las subidas de archivos ahora usan rutas estandarizadas y seguras, lo que hace que el sistema sea más confiable.",
+          "Se ha añadido protección a todas las API públicas con autenticación y verificación del barrio, para que solo usuarios autorizados accedan a los datos.",
+          "Las búsquedas de miembros, sincronización de ministros y reportes ahora respetan los límites de tu barrio, mejorando la precisión.",
+          "Se han agregado índices en la base de datos para que las consultas sean más rápidas y eficientes."
         ],
         "en": [
-          "Your ward's data is now fully isolated: every write operation checks that you belong to the correct organization, preventing data from mixing between wards.",
-          "Storage paths have been standardized and secured, ensuring you can only access and upload files to your own assigned space.",
-          "All database queries now enforce ward scoping so you only see members and activities from your own ward, with no risk of data leaks.",
-          "Every API endpoint now requires authentication and verifies your ward membership, blocking access if the necessary information is missing.",
-          "Added indexes and configurable timeouts to improve performance and stability when working with your organization's data.",
-          "Activity editing now protects the ward field so you cannot accidentally change it, keeping your data consistent."
+          "We've improved data security and privacy by isolating information for each ward, preventing data from being mixed between different organizations.",
+          "Notifications now show only for your ward, and we fixed a bug that caused duplicate notifications.",
+          "File uploads now use standardized and secure paths, making the system more reliable.",
+          "All public APIs are now protected with authentication and ward verification, so only authorized users can access the data.",
+          "Member searches, ministering sync, and reports now respect your ward's boundaries, improving accuracy.",
+          "We added database indexes to make queries faster and more efficient."
         ]
       }
     },

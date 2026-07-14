@@ -1,9 +1,46 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { birthdaysCollection, membersCollection } from '@/lib/collections-server';
+import {
+  birthdaysCollection,
+  membersCollection,
+  usersCollection,
+} from '@/lib/collections-server';
 import { getEcuadorDateParts } from '@/lib/date-utils';
 import { sendBirthdayBatchNotifications } from '@/lib/push-notifications-server';
 import { enforceRateLimit } from '@/lib/rate-limit';
+
+/** Firestore `in` operator limit */
+const FIRESTORE_IN_LIMIT = 30;
+
+/** Non-deceased member statuses (avoids full-collection scan with status !=) */
+const LIVING_STATUSES = ['active', 'less_active', 'inactive'] as const;
+
+/**
+ * Distinct barrioOrg values that have at least one user.
+ * Field mask only — much cheaper than loading full user docs.
+ */
+async function listActiveBarrioOrgs(): Promise<string[]> {
+  const snap = await usersCollection.select('barrioOrg').get();
+  const set = new Set<string>();
+  snap.forEach((docSnap) => {
+    const raw = docSnap.data()?.barrioOrg;
+    if (typeof raw === 'string') {
+      const bo = raw.trim();
+      if (bo.includes('|') && !bo.startsWith('|') && !bo.endsWith('|')) {
+        set.add(bo);
+      }
+    }
+  });
+  return Array.from(set);
+}
+
+function chunkArray<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    out.push(arr.slice(i, i + size));
+  }
+  return out;
+}
 
 export async function GET(request: NextRequest) {
   const limited = await enforceRateLimit(request, 'api');
@@ -18,8 +55,6 @@ export async function GET(request: NextRequest) {
 
   try {
     const today = new Date();
-    // Get date parts in Ecuador timezone (UTC-5)
-    // Using Intl.DateTimeFormat to be consistent with getEcuadorDateParts
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: 'America/Guayaquil',
       month: '2-digit',
@@ -29,37 +64,79 @@ export async function GET(request: NextRequest) {
     const currentMonth = Number(parts.find((part) => part.type === 'month')?.value);
     const currentDay = Number(parts.find((part) => part.type === 'day')?.value);
 
-    console.log(`[Birthdays] Checking for birthdays on ${currentDay}/${currentMonth} (Ecuador Time)`);
+    console.log(
+      `[Birthdays] Checking for birthdays on ${currentDay}/${currentMonth} (Ecuador Time)`
+    );
+
+    const activeBarrioOrgs = await listActiveBarrioOrgs();
+    if (activeBarrioOrgs.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: 'No hay barrios activos con usuarios.',
+        count: 0,
+        barriosScanned: 0,
+      });
+    }
+
+    console.log(`[Birthdays] Scoping to ${activeBarrioOrgs.length} barrioOrg(s)`);
 
     const birthdaysToday: { name: string; id: string; barrioOrg?: string | null }[] = [];
+    const seenNames = new Set<string>();
 
-    // 1. Fetch from c_birthdays
-    const birthdaysSnapshot = await birthdaysCollection.get();
-    birthdaysSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.birthDate) {
-        const birthParts = getEcuadorDateParts(data.birthDate);
-        if (birthParts && birthParts.month === currentMonth && birthParts.day === currentDay) {
-          birthdaysToday.push({ name: data.name, id: doc.id, barrioOrg: data.barrioOrg || null });
-        }
-      }
-    });
+    // Per-tenant reads (chunks of 30) — never full c_cumpleanos / c_miembros project scan
+    for (const chunk of chunkArray(activeBarrioOrgs, FIRESTORE_IN_LIMIT)) {
+      const [birthdaysSnap, membersSnap] = await Promise.all([
+        birthdaysCollection.where('barrioOrg', 'in', chunk).get(),
+        membersCollection
+          .where('barrioOrg', 'in', chunk)
+          .where('status', 'in', [...LIVING_STATUSES])
+          .get(),
+      ]);
 
-    // 2. Fetch from c_miembros (excluding deceased)
-    const membersSnapshot = await membersCollection.where('status', '!=', 'deceased').get();
-    membersSnapshot.forEach((doc) => {
-      const data = doc.data();
-      if (data.birthDate) {
+      birthdaysSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.birthDate) return;
         const birthParts = getEcuadorDateParts(data.birthDate);
-        if (birthParts && birthParts.month === currentMonth && birthParts.day === currentDay) {
-          const name = `${data.firstName} ${data.lastName}`;
-          // Avoid duplicates if they are already in birthdaysToday
-          if (!birthdaysToday.find(b => b.name === name)) {
-            birthdaysToday.push({ name, id: doc.id, barrioOrg: data.barrioOrg || null });
-          }
+        if (
+          birthParts &&
+          birthParts.month === currentMonth &&
+          birthParts.day === currentDay
+        ) {
+          const name = typeof data.name === 'string' ? data.name : '';
+          if (!name) return;
+          const key = `${data.barrioOrg || ''}|${name}`;
+          if (seenNames.has(key)) return;
+          seenNames.add(key);
+          birthdaysToday.push({
+            name,
+            id: docSnap.id,
+            barrioOrg: typeof data.barrioOrg === 'string' ? data.barrioOrg : null,
+          });
         }
-      }
-    });
+      });
+
+      membersSnap.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (!data.birthDate) return;
+        const birthParts = getEcuadorDateParts(data.birthDate);
+        if (
+          birthParts &&
+          birthParts.month === currentMonth &&
+          birthParts.day === currentDay
+        ) {
+          const name = `${data.firstName || ''} ${data.lastName || ''}`.trim();
+          if (!name) return;
+          const key = `${data.barrioOrg || ''}|${name}`;
+          if (seenNames.has(key)) return;
+          seenNames.add(key);
+          birthdaysToday.push({
+            name,
+            id: docSnap.id,
+            barrioOrg: typeof data.barrioOrg === 'string' ? data.barrioOrg : null,
+          });
+        }
+      });
+    }
 
     console.log(`[Birthdays] Found ${birthdaysToday.length} birthdays today`);
 
@@ -67,29 +144,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         message: 'No hay cumpleaños registrados para el día de hoy.',
-        count: 0
+        count: 0,
+        barriosScanned: activeBarrioOrgs.length,
       });
     }
 
-    // 3. Send notifications — usando función agrupada que cachea c_users entre llamadas
+    // Grouped push: sendBirthdayBatchNotifications scopes by birthday.barrioOrg
     const { totalPushSent, errors } = await sendBirthdayBatchNotifications(birthdaysToday);
 
-    // Do not return names of people from other barrios in the HTTP response
     return NextResponse.json({
       success: true,
       message: `Procesados ${birthdaysToday.length} cumpleaños.`,
       count: birthdaysToday.length,
+      barriosScanned: activeBarrioOrgs.length,
       totalPushSent,
       errors: errors.length > 0 ? errors : undefined,
     });
-
   } catch (error) {
     console.error('[Birthdays] Critical error in birthday notifications API:', error);
     return NextResponse.json(
-      { 
-        success: false, 
+      {
+        success: false,
         error: 'Failed to process birthday notifications',
-        details: error instanceof Error ? error.message : 'Unknown error'
+        details: error instanceof Error ? error.message : 'Unknown error',
       },
       { status: 500 }
     );

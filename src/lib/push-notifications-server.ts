@@ -274,8 +274,8 @@ export async function sendServerSidePushNotification(
 }
 
 /**
- * Envía notificaciones de cumpleaños para múltiples personas en un solo batch.
- * Evita leer c_users completo por cada cumpleañero individual.
+ * Envía notificaciones de cumpleaños agrupando por barrioOrg.
+ * Un solo lookup de destinatarios por barrio (cache getTargetUserIds), no full project scan.
  */
 export async function sendBirthdayBatchNotifications(
   birthdays: { name: string; id: string; barrioOrg?: string | null }[]
@@ -284,24 +284,39 @@ export async function sendBirthdayBatchNotifications(
     return { totalPushSent: 0, errors: [] };
   }
 
+  // Group by tenant so we reuse the same target-user cache entry
+  const byBarrio = new Map<string, typeof birthdays>();
+  for (const b of birthdays) {
+    const key =
+      typeof b.barrioOrg === 'string' && b.barrioOrg.includes('|') ? b.barrioOrg : '';
+    if (!key) {
+      // Fail closed: no unscoped birthday broadcast
+      continue;
+    }
+    if (!byBarrio.has(key)) byBarrio.set(key, []);
+    byBarrio.get(key)!.push(b);
+  }
+
   let totalPushSent = 0;
   const errors: string[] = [];
 
-  for (const birthday of birthdays) {
-    try {
-      const result = await sendServerSidePushNotification({
-        title: '\uD83C\uDF82 ¡Feliz Cumpleaños!',
-        body: `Hoy es el cumpleaños de ${birthday.name}. ¡No olvides felicitarlo!`,
-        url: '/birthdays',
-        tag: 'birthday-notification',
-        barrioOrg: birthday.barrioOrg,
-      });
-      if (result.success) {
-        totalPushSent += result.sentCount || 0;
+  for (const [barrioOrg, list] of byBarrio) {
+    for (const birthday of list) {
+      try {
+        const result = await sendServerSidePushNotification({
+          title: '\uD83C\uDF82 ¡Feliz Cumpleaños!',
+          body: `Hoy es el cumpleaños de ${birthday.name}. ¡No olvides felicitarlo!`,
+          url: '/birthdays',
+          tag: 'birthday-notification',
+          barrioOrg,
+        });
+        if (result.success) {
+          totalPushSent += result.sentCount || 0;
+        }
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        errors.push(`Error for ${birthday.name}: ${msg}`);
       }
-    } catch (error) {
-      const msg = error instanceof Error ? error.message : 'Unknown error';
-      errors.push(`Error for ${birthday.name}: ${msg}`);
     }
   }
 

@@ -126,6 +126,14 @@ Documentos antiguos sin `barrioOrg` se sellan desde **Admin → Migrar** usando
 - Checklist vivo: [`SECURITY_AUDIT.md`](../SECURITY_AUDIT.md)
 - Revisiones de acceso periódicas por barrio/organización
 
+## Costes al escalar barrios
+
+- **UI/APIs**: lecturas filtradas por el `barrioOrg` del usuario (no leen otros tenants).
+- **Triggers CF (actividad, servicio, etc.)**: cargan solo usuarios del barrio del documento (`getUsersForDocBarrioOrg`), no `c_users` completo.
+- **Crons CF diarios/semanales**: una pasada de usuarios por ejecución (con field mask) + datos por barrios activos.
+- **Cron Vercel cumpleaños / fallecidos**: barrios activos vía `c_users.select('barrioOrg')` + queries por `barrioOrg in […]` (sin `.get()` global de miembros).
+- **Reportes**: coste por generación, scoped al tenant del llamador.
+
 ## Despliegue de controles de seguridad
 
 ```bash

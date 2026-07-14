@@ -46,7 +46,7 @@ function deduplicateNotifications(items: AppNotification[]): AppNotification[] {
 }
 
 export function NotificationBell() {
-  const { user, barrio, organizacion } = useAuth();
+  const { user, barrio, organizacion, barrioOrg } = useAuth();
   const { t } = useI18n();
   const router = useRouter();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -56,7 +56,12 @@ export function NotificationBell() {
     if (!user) return;
     setLoading(true);
     try {
-      const barrioOrgKey = barrio && organizacion ? `${barrio}|${organizacion}` : null;
+      // Prefer canonical barrioOrg from profile; fall back to barrio|org composition.
+      // Using only barrio+organizacion hid all notifs when those fields were empty
+      // but barrioOrg was present (common after multi-tenant migration).
+      const barrioOrgKey =
+        (typeof barrioOrg === "string" && barrioOrg.includes("|") ? barrioOrg.trim() : "") ||
+        (barrio && organizacion ? `${barrio}|${organizacion}` : "");
 
       // Query by user only (rules: owner read). Filter client-side by barrioOrg.
       // Fail closed: hide unscoped legacy notifications (could be cross-tenant).
@@ -98,7 +103,7 @@ export function NotificationBell() {
     } finally {
       setLoading(false);
     }
-  }, [user, barrio, organizacion]);
+  }, [user, barrio, organizacion, barrioOrg]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -256,7 +261,9 @@ export function NotificationBell() {
                                     </p>
                                     <p className="text-muted-foreground text-xs">{notif.body}</p>
                                     <p className="text-muted-foreground text-xs mt-1">
-                                        {formatRelative(notif.createdAt.toDate(), new Date(), { locale: getDateFnsLocale() })}
+                                        {notif.createdAt && typeof notif.createdAt.toDate === "function"
+                                          ? formatRelative(notif.createdAt.toDate(), new Date(), { locale: getDateFnsLocale() })
+                                          : ""}
                                     </p>
                                 </div>
                                 {isClickable && (
