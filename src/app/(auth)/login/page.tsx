@@ -2,11 +2,12 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { signInWithEmailAndPassword } from "firebase/auth";
+import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ const loginSchema = z.object({
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
   const { t } = useI18n();
 
@@ -50,6 +52,27 @@ export default function LoginPage() {
     },
   });
 
+  // If Firebase already has a session but the Edge cookie is missing/expired,
+  // re-mint the cookie and continue (avoids forcing a second password entry).
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = onAuthStateChanged(auth, async (user) => {
+      if (!user) return;
+      try {
+        const token = await user.getIdToken();
+        const { syncServerSession } = await import("@/lib/auth-session-client");
+        await syncServerSession(token);
+        const next = searchParams.get("next");
+        const safeNext =
+          next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+        router.replace(safeNext);
+      } catch {
+        // stay on login
+      }
+    });
+    return () => unsub();
+  }, [router, searchParams]);
+
   const onSubmit = async (values: z.infer<typeof loginSchema>) => {
     try {
       const cred = await signInWithEmailAndPassword(
@@ -57,6 +80,15 @@ export default function LoginPage() {
         values.email,
         values.password
       );
+
+      // Edge middleware session cookie (defense-in-depth)
+      try {
+        const token = await cred.user.getIdToken();
+        const { syncServerSession } = await import("@/lib/auth-session-client");
+        await syncServerSession(token);
+      } catch {
+        // non-fatal; onIdTokenChanged will retry
+      }
 
       // Super admin solo usa el panel /app-admin
       try {
@@ -83,7 +115,10 @@ export default function LoginPage() {
           title: t('login.toastSuccessTitle'),
           description: t('login.toastSuccessDescription'),
       });
-      router.push("/");
+      const next = searchParams.get("next");
+      const safeNext =
+        next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+      router.push(safeNext);
     } catch (error: any) {
       console.error("Login Error:", error);
       

@@ -1,6 +1,12 @@
 [
   {
     "origin": [
+      "http://localhost:9001",
+      "http://localhost:9002",
+      "http://localhost:3000",
+      "http://127.0.0.1:9001",
+      "http://127.0.0.1:9002",
+      "http://127.0.0.1:3000",
       "https://quorumflow-dlqh0.web.app",
       "https://quorumflow-dlqh0.firebaseapp.com",
       "https://sionflow-dev.web.app",

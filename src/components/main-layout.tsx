@@ -93,6 +93,8 @@ function UserNav() {
      try {
        // Mark intentional logout so offline sticky auth does not rehydrate session
        window.dispatchEvent(new Event('sionflow:intent-sign-out'));
+       const { syncServerSession } = await import('@/lib/auth-session-client');
+       await syncServerSession(null);
        await signOut(auth);
        toast({
          title: t("settings.security.passwordUpdatedTitle"),

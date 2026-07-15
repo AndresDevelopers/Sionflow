@@ -216,6 +216,14 @@ export default function RegisterPage() {
           displayName: values.name
       });
 
+      try {
+        const token = await user.getIdToken();
+        const { syncServerSession } = await import("@/lib/auth-session-client");
+        await syncServerSession(token);
+      } catch {
+        // non-fatal; onIdTokenChanged will retry
+      }
+
       const barrioOrg = `${values.barrio}|${values.organizacion}`;
 
       // Re-check after auth (user is signed in) to avoid racing past the public API.

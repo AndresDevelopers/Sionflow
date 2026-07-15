@@ -260,6 +260,8 @@ export type Member = {
     id: string;
     firstName: string;
     lastName: string;
+    /** Multi-tenant scope key: "barrio|organización" */
+    barrioOrg?: string;
     photoURL?: string;
     birthDate?: Timestamp;
     baptismDate?: Timestamp; // Fecha de bautismo del miembro

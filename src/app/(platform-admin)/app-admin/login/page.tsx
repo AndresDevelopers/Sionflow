@@ -87,9 +87,17 @@ export default function AppAdminLoginPage() {
         values.password
       );
       const token = await cred.user.getIdToken(true);
+      try {
+        const { syncServerSession } = await import("@/lib/auth-session-client");
+        await syncServerSession(token);
+      } catch {
+        // non-fatal
+      }
       const ok = await verifyAppAdmin(token);
 
       if (!ok) {
+        const { syncServerSession } = await import("@/lib/auth-session-client");
+        await syncServerSession(null);
         await signOut(auth);
         toast({
           title: "Acceso denegado",

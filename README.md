@@ -1,55 +1,379 @@
 # 🕊️ SionFlow — Sistema de Gestión para la Presidencia del Quórum y la Sociedad de Socorro
 
-Aplicación web moderna (PWA) diseñada para las presidencias del Quórum de Élderes y la Sociedad de Socorro — presidente, consejeros y secretario — en la Iglesia de Jesucristo de los Santos de los Últimos Días. Digitaliza y centraliza las responsabilidades administrativas y pastorales de ambas organizaciones.
+Aplicación web moderna (PWA) diseñada para las **presidencias del Quórum de Élderes y la Sociedad de Socorro** — presidente, consejeros y secretario — en la Iglesia de Jesucristo de los Santos de los Últimos Días. Digitaliza y centraliza las responsabilidades administrativas y pastorales de ambas organizaciones.
 
 > **White-label + multi-organización**: El nombre, logo e ícono de la app son configurables mediante variables de entorno (`NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_LOGO`, `NEXT_PUBLIC_APP_ICON`). La app soporta múltiples organizaciones por barrio (Quórum de Élderes, Sociedad de Socorro, etc.) con datos aislados por `barrioOrg`. "SionFlow" es el nombre por defecto en este repositorio.
 
+> **Aviso**: Esta aplicación **no es oficial** de La Iglesia de Jesucristo de los Santos de los Últimos Días. Es una herramienta de apoyo para líderes en sus llamamientos.
+
+### Contenido
+
+1. [Cómo ayuda a las presidencias](#cómo-ayuda-a-las-presidencias)
+2. [Quién usa qué (por rol)](#quién-usa-qué-por-rol)
+3. [Flujos de trabajo recomendados](#flujos-de-trabajo-recomendados)
+4. [Páginas de la aplicación](#páginas-de-la-aplicación)
+5. [Roles y permisos](#roles-y-permisos)
+6. [Stack, instalación y desarrollo](#stack-tecnológico)
+
+Visión de producto ampliada: [`docs/VISION.md`](docs/VISION.md).
+
 ---
 
-## 📱 Módulos
+## Cómo ayuda a las presidencias
 
-| Módulo | Qué hace |
+Las presidencias del Quórum de Élderes y de la Sociedad de Socorro deben cuidar a los miembros, coordinar la ministración, seguir a conversos e investigadores, planificar servicio y actividades, y preparar el consejo de la organización — a menudo con información dispersa en hojas, chats y memoria.
+
+SionFlow concentra esa operación en un solo lugar, con alcance por **barrio + organización**:
+
+| Necesidad de la presidencia | Cómo lo resuelve SionFlow |
 |---|---|
-| **Dashboard** | KPIs, resumen generado por IA, actividades próximas, cumpleaños, miembros fallecidos con obra vicaria pendiente |
-| **Miembros** | CRUD de miembros, incluyendo estados (activo/menos activo/inactivo/fallecido), ordenanzas, asignaciones ministeriales |
-| **Observaciones** | Preocupaciones de salud con helpers asignados |
-| **Conversos** | Seguimiento de conversos recientes (ventana de 24 meses), acciones del consejo |
-| **Futuros Miembros** | Fechas de bautismo programadas, marcar como bautizado, fotos de bautismo |
-| **Ministración** | Compañerismos, distritos, familias asignadas, historial de visitas, sincronización bidireccional miembros↔compañerismos |
-| **Cumpleaños** | Tracking con notificaciones push automáticas (Vercel cron diario a las 13:00) |
-| **FamilySearch** | Registros de capacitación, tareas y anotaciones |
-| **Obra Misional** | Investigadores, asignaciones, amigos para nuevos conversos, preguntas frecuentes |
-| **Servicio** | Proyectos de servicio con notificaciones al consejo |
-| **Chat Iglesia** | Chat con IA impulsado por DeepSeek |
-| **Consejo** | Acciones del consejo, anotaciones y decisiones |
-| **Actividades** | Actividades registradas de tu organización por año |
-| **Admin** | Panel de administración: gestión de usuarios, roles, logs de auditoría, migración de datos |
+| Ver el estado de la organización de un vistazo | Dashboard con KPIs, miembros por estado, actividades próximas y cumpleaños |
+| Llevar el padrón y el cuidado pastoral | Miembros con estados (activo / menos activo / inactivo / fallecido), ordenanzas y asignaciones |
+| Detectar quién necesita atención especial | Observaciones: lagunas de ordenanzas/sacerdocio/ministración, salud y foco familiar |
+| Fortalecer a los conversos recientes | Seguimiento 24 meses, amigos, maestros ministrantes y alertas de menos activos |
+| Organizar la ministración | Compañerismos, distritos, familias asignadas, urgencias y sync bidireccional |
+| Coordinar la obra misional | Investigadores, asignaciones, futuros bautismos, amigos de nuevos conversos |
+| Preparar y ejecutar el consejo | Página Consejo: acciones, urgentes, inactivos, servicios, bautismos y anotaciones |
+| No olvidar fechas clave | Cumpleaños con notificaciones push (cron diario) |
+| Planificar servicio y actividades | Registro por año, sugerencias con IA, transferencia servicio ↔ actividad |
+| Capacitar en historia familiar | FamilySearch: capacitaciones, tareas y notas |
+| Consultar deberes y recursos | Chat Iglesia con IA (DeepSeek + visión con Gemini) |
+| Administrar el acceso del equipo | Roles, permisos, visibilidad de páginas y bitácora de auditoría |
+
+### Antes y después
+
+| Sin SionFlow | Con SionFlow |
+|---|---|
+| El secretario arma un Excel o WhatsApp antes de cada consejo | La presidencia abre **Consejo** y ve la agenda consolidada |
+| Cada consejero “recuerda” a sus familias urgentes | Las urgencias se marcan una vez y llegan a todos con rol de liderazgo |
+| Conversos se pierden tras el bautismo | Lista de 24 meses con amigos, maestros y alertas de actividad |
+| Padrón y ministración no coinciden | Sync bidireccional miembros ↔ compañerismos |
+| Cumpleaños en una hoja olvidada | Push automático el día del cumpleaños |
+| Ideas de servicio/actividad en blanco | Sugerencias con IA + historial del año |
+| Cuentas nuevas ven datos sin control | Rol `user` bloqueado hasta asignación de rol |
+
+### Qué **no** intenta ser
+
+- No es un sistema oficial de la Iglesia ni sustituye LCR u otras herramientas corporativas.
+- No gestiona finanzas del barrio ni el obispado como producto principal.
+- No toma decisiones doctrinales: **apoya** a la presidencia; no habla en nombre de la Iglesia.
+- No mezcla datos entre barrios u organizaciones: el aislamiento por `barrioOrg` es intencional.
 
 ---
 
-## 🔐 Roles y Permisos
+## Quién usa qué (por rol)
+
+| Rol | Páginas que más usa | Responsabilidad típica en la app |
+|---|---|---|
+| **Presidente** | Dashboard, Consejo, Observaciones, Conversos, Chat Iglesia | Priorizar, decidir en el consejo, ver el panorama pastoral |
+| **Consejero** | Ministración, Conversos, Obra misional, Servicio, FamilySearch, Miembros | Ejecutar seguimiento semanal y actualizar estados/asignaciones |
+| **Secretario** | Miembros, Ministración, Admin (usuarios/auditoría), Cumpleaños, Actividades | Calidad de datos, alta de usuarios, coherencia del padrón |
+| **Other** | Lectura de módulos visibles | Consulta sin editar |
+| **User** | `/no-permission` | Espera asignación de rol |
+
+---
+
+## Flujos de trabajo recomendados
+
+### A. Consejo semanal de la organización
+
+1. **Durante la semana**: cada líder anota en Dashboard o marca urgentes en Ministración/Miembros.
+2. **Antes del consejo**: abrir **Consejo** (`/council`).
+3. **Orden sugerido de revisión**:
+   - Anotaciones / acciones del consejo
+   - Miembros y familias urgentes
+   - Conversos recientes (especialmente menos activos)
+   - Menos activos e inactivos
+   - Bautismos (próximos 7 días)
+   - Servicios y actividades próximas
+   - Fallecidos con obra vicaria pendiente
+4. **Cierre**: resolver anotaciones, asignar responsables y actualizar estados en Miembros si cambió la situación.
+
+### B. Fortalecer a un converso nuevo
+
+1. Registrar o editar el miembro con **fecha de bautismo** en **Miembros**.
+2. Verificar que aparece en **Conversos** (ventana de 24 meses).
+3. Asignar **amigos** y alinear **maestros ministrantes** (Conversos u Obra misional).
+4. Revisar en el consejo si aparece como menos activo/inactivo.
+5. Usar **Observaciones** si faltan ordenanzas, investidura o asignación de ministración.
+
+### C. Reorganizar la ministración
+
+1. En **Ministración**, crear o editar **distritos** y **compañerismos**.
+2. Asignar familias a cada pareja; revisar el detalle en `/ministering/[id]`.
+3. Confirmar que los maestros se reflejan en las fichas de **Miembros** (sync).
+4. Si una familia necesita atención inmediata: marcar **urgente** → llega al consejo y por notificación.
+
+### D. Coordinar un bautismo
+
+1. En **Obra misional → Futuros miembros**, registrar nombre y fecha de bautismo (y foto si aplica).
+2. Verificar el KPI en **Dashboard** y la lista de bautismos en **Consejo**.
+3. El día del bautismo (o después): marcar como bautizado y asegurar el alta en **Miembros**.
+4. Continuar el flujo **B** (conversos + amigos).
+
+### E. Planificar servicio y actividades del mes
+
+1. Revisar **Servicio** y **Actividades** del año en curso.
+2. Usar **sugerencias con IA** si la presidencia necesita ideas.
+3. Registrar fecha, descripción e imágenes.
+4. Si un servicio se convierte en actividad social de la organización (o al revés), usar la **transferencia** entre módulos.
+5. Confirmar que aparecen en el resumen del Dashboard y en la agenda del Consejo.
+
+### F. Incorporar a un nuevo líder de la presidencia
+
+1. La persona se registra en `/register` (queda como `user`).
+2. El **secretario** en `/admin/users` le asigna rol (`president`, `counselor` o `secretary`) y permiso.
+3. Opcionalmente limita **visibilidad** de páginas del menú.
+4. El nuevo líder completa **Perfil** y **Ajustes** (idioma, notificaciones, contraseña).
+
+---
+
+## Páginas de la aplicación
+
+Guía de cada pantalla: **qué hace**, **cómo ayuda a la presidencia** y **ejemplo de uso**.
+
+### Menú principal (navegación lateral)
+
+#### 1. Dashboard (`/`)
+
+**Qué hace**
+
+- KPIs clicables: conversos recientes, futuros miembros, acciones del consejo.
+- **Resumen de actividades**: total del año, próximas 14 días, próxima y última actividad.
+- **Miembros por estado**: activos, menos activos, inactivos y total.
+- **Fallecidos** con checklist de ordenanzas del templo (obra vicaria pendiente).
+- **Cumpleaños** de hoy y de los próximos 14 días.
+- **Anotaciones** (texto o voz) que pueden marcarse para el consejo.
+
+**Cómo ayuda:** es el “tablero de mando” al abrir la app: prioriza la semana sin saltar entre módulos.
+
+**Ejemplo:** el domingo por la mañana el presidente ve 2 bautismos próximos, 1 familia urgente y 3 cumpleaños de la semana → ya tiene el esqueleto del consejo.
+
+#### 2. Miembros (`/members`, `/members/[id]`)
+
+**Qué hace**
+
+- Alta, edición y baja lógica del padrón de la organización.
+- Datos de contacto, foto, fechas (nacimiento, bautismo), estado, ordenanzas, maestros ministrantes, notas.
+- Búsqueda y filtros por estado; ficha individual con historial relevante.
+- Integración con conversos (fecha de bautismo) y ministración (asignaciones).
+
+**Cómo ayuda:** es la **fuente de verdad** del quórum o de la Sociedad de Socorro. Todo lo demás (conversos, consejo, observaciones) se apoya en este padrón.
+
+**Ejemplo:** un consejero marca a un hermano como “menos activo” tras varias visitas fallidas; al instante impacta Dashboard, Observaciones y Consejo.
+
+#### 3. Observaciones (`/observations`)
+
+**Qué hace**
+
+Panel de atención especial con indicadores calculados, entre otros:
+
+| Indicador | Para qué sirve en la presidencia |
+|---|---|
+| Sin investidura / ordenanzas pendientes | Priorizar preparación del templo |
+| Sin oficio de élder / sin sacerdocio mayor | Enfoque de progreso del sacerdocio (QE) |
+| Sin ministración | Nadie asignado a cuidar a esa persona/familia |
+| Conversos inactivos / miembros inactivos | Recuperación y retención |
+| Foco familiar | Familias que requieren plan conjunto |
+| Compañerismos problemáticos | Revisar parejas de ministración |
+| Preocupaciones de salud | Helpers, fotos, seguimiento de cuidado temporal |
+
+**Cómo ayuda:** responde “¿a quién debemos mirar esta semana?” con datos, no solo con impresiones.
+
+**Ejemplo:** el consejero de ministración abre Observaciones y ve 5 miembros sin asignación → reorganiza en Ministración el mismo día.
+
+#### 4. Conversos (`/converts`)
+
+**Qué hace**
+
+- Lista automática de miembros bautizados en los **últimos 24 meses** (no es un padrón paralelo: se deriva de Miembros).
+- Alertas visuales de **menos activo** e **inactivo**.
+- Ficha de información del converso, asignación de **amigos** y **maestros ministrantes**.
+- Alta/edición reutilizando el formulario de miembros.
+
+**Cómo ayuda:** materializa el mandato de fortalecer a los conversos: amistad, ministración y seguimiento de retención en un solo listado.
+
+**Ejemplo:** en el consejo revisan solo los conversos con alerta roja/amarilla y asignan un amigo adicional esa misma reunión.
+
+#### 5. Ministración (`/ministering`)
+
+**Qué hace**
+
+- **Compañerismos** (parejas), **distritos**, familias asignadas.
+- Notas / seguimiento por compañerismo (`/ministering/[id]`).
+- Marcar **necesidad urgente** de una familia → notifica y alimenta Consejo.
+- Herramientas de sync/migración de maestros ministrantes (coherencia con Miembros).
+- Ruta de urgentes: `/ministering/urgent`.
+
+**Cómo ayuda:** convierte la ministración en un sistema vivo: se reorganiza, se audita y se escala lo urgente sin depender de un solo líder.
+
+**Ejemplo:** se reasigna una familia a un nuevo compañerismo; el nombre de los maestros se actualiza en la ficha del miembro sin doble carga manual.
+
+#### 6. Cumpleaños (`/birthdays`)
+
+**Qué hace**
+
+- Registro de cumpleaños (manual o ligado a miembros).
+- Listado y edición (`/birthdays/[id]/edit`).
+- **Notificaciones push** automáticas (cron diario en Vercel, ~13:00).
+
+**Cómo ayuda:** el contacto personal (un mensaje, una visita breve) es pastoral y simple; la app evita que se olvide.
+
+**Ejemplo:** el secretario recibe el push del día y avisa al compañerismo de ministración para que salude a la familia.
+
+#### 7. FamilySearch (`/family-search`)
+
+**Qué hace**
+
+- Registro de **capacitaciones** a familias (quién ya recibió ayuda).
+- **Tareas** de historia familiar pendientes o en curso.
+- **Anotaciones** (texto/voz) y FAQ de apoyo.
+
+**Cómo ayuda:** da trazabilidad al trabajo de historia familiar/templo a nivel de organización: no se capacita dos veces a la misma familia ni se pierde el seguimiento.
+
+**Ejemplo:** un consejero filtra familias sin capacitación y programa 3 visitas del mes con tarea registrada.
+
+#### 8. Obra misional (`/missionary-work`)
+
+**Qué hace** — módulo con pestañas:
+
+| Pestaña | Contenido | Uso en la presidencia |
+|---|---|---|
+| **Asignaciones** | Tareas misionales de la organización | Quién hace qué con los misioneros / referencias |
+| **Investigadores** | Personas en proceso, misioneros a cargo, vínculo al bautismo | Correlación misional |
+| **Imágenes** | Fotos de obra misional (descripción con IA de visión) | Memoria y reportes visuales |
+| **Nuevos conversos** | Amigos y apoyo post-bautismal | Puente con el módulo Conversos |
+| **Futuros miembros** | Fechas de bautismo, marcar bautizado, fotos | Calendario de bautismos |
+
+> La ruta legacy `/future-members` redirige a `/missionary-work?tab=future_members`.
+
+**Cómo ayuda:** alinea a la presidencia con los misioneros de tiempo completo y el plan de bautismos en un solo módulo.
+
+**Ejemplo:** el jueves revisan “Futuros miembros” y confirman quién del quórum/SS asistirá al bautismo del sábado; el lunes marcan bautizado y asignan amigos.
+
+#### 9. Servicio (`/service`)
+
+**Qué hace**
+
+- Proyectos de servicio del año y **próximos** a corto plazo.
+- Imágenes, alta (`/service/add`) y edición (`/service/[id]/edit`).
+- **Sugerencias con IA** (cuidado del quórum/SS e impacto comunitario).
+- Transferencia servicio → actividad cuando el evento cambia de naturaleza.
+
+**Cómo ayuda:** planifica el servicio cristiano y deja historial usable para el consejo y la revisión anual.
+
+**Ejemplo:** la presidencia pide sugerencias de IA, elige “ayuda a familia con mudanza”, registra fecha y notifica en el consejo.
+
+#### 10. Chat Iglesia (`/church-chat`)
+
+**Qué hace**
+
+- Chat con **DeepSeek** sobre llamamientos, deberes y recursos eclesiásticos.
+- Imagen adjunta (visión **Gemini**), voz, copiar respuestas e historial.
+
+**Cómo ayuda:** orienta a líderes nuevos o con dudas sobre el “por qué” del llamamiento. **No** decide sobre datos del barrio ni sustituye a la presidencia.
+
+**Ejemplo:** un consejero nuevo pregunta “¿qué responsabilidades tiene el primer consejero del quórum?” y obtiene una explicación orientativa antes de la entrevista con el presidente.
+
+#### 11. Consejo (`/council`)
+
+**Qué hace** — mesa de trabajo unificada:
+
+| Bloque | Contenido |
+|---|---|
+| Anotaciones del consejo | Notas de la semana a resolver |
+| Servicios próximos | Próximos 7 días + futuros; marcar notificado |
+| Miembros urgentes | Marcados en el padrón como prioritarios |
+| Urgencias de ministración | Familias reportadas desde Ministración |
+| Conversos | Seguimiento reciente para el consejo |
+| Menos activos / inactivos | Listas de recuperación |
+| Bautismos (7 días) | Futuros miembros con fecha cercana |
+| Actividades (14 días) | Eventos que requieren coordinación |
+| Fallecidos | Obra vicaria del templo pendiente |
+
+> `/consejo` redirige a `/council` (enlaces y notificaciones antiguas).
+
+**Cómo ayuda:** es **la página de la reunión de la presidencia**. Reduce el tiempo de juntar información y enfoca la agenda en personas y acciones.
+
+**Ejemplo:** la reunión entera se conduce con la app en el proyector o en el celular del secretario; al final no quedan “puntos sueltos” sin dueño.
+
+#### 12. Actividades (`/reports/activities`)
+
+**Qué hace**
+
+- Actividades registradas **por año**, con fotos y detalle.
+- Sugerencias con IA, alta y edición (`/reports/add`, `/reports/[id]/edit`).
+- Transferencia hacia/desde **Servicio**.
+
+**Cómo ayuda:** documenta la vida de la organización (actividades del quórum o de la Sociedad de Socorro) y alimenta Dashboard y Consejo.
+
+**Ejemplo:** al cerrar el año exportan mentalmente el historial: cuántas actividades hubo, cuándo fue la última y qué falta planificar para el trimestre.
+
+---
+
+### Páginas de cuenta, administración y soporte
+
+| Página | Ruta | Qué hace | Cómo ayuda a la presidencia |
+|---|---|---|---|
+| **Perfil** | `/profile` | Nombre, foto, vínculo a ficha de miembro | Cada líder se identifica y puede enlazarse al padrón |
+| **Ajustes** | `/settings` | Tema, idioma, email/contraseña, preferencias | Uso cómodo y cuenta segura |
+| **Administración** | `/admin` | Stats del tenant y accesos a submódulos | El secretario gobierna el sistema sin tocar Firebase a mano |
+| **Usuarios** | `/admin/users` | Roles, permisos, visibilidad de menú, cupos, borrar usuarios | Solo la presidencia correcta ve/edita lo necesario |
+| **Auditoría** | `/admin/audit` | Bitácora de cambios admin (roles, permisos, miembros…) | Trazabilidad si algo se cambió por error |
+| **Migración** | `/admin/migrate` | Asigna `barrioOrg` a docs legacy | Activa multi-barrio sin perder datos viejos |
+| **Seed** | `/admin/seed` | Siembra barrios/organizaciones del registro | Altas de usuarios con barrio/org correctos |
+| **Donar** | `/donate` | Enlace/QR voluntario de apoyo a costos | Sostenibilidad opcional de la herramienta |
+| **Login / Registro / Recuperar** | `/login`, `/register`, `/forgot-password` | Acceso y alta | Entrada controlada al tenant |
+| **Sin permiso** | `/no-permission` | Bloqueo para rol `user` | Evita fugas de datos a cuentas sin rol |
+| **Offline** | `/~offline` | Fallback PWA | Continuidad básica sin red |
+| **App Admin (plataforma)** | `/app-admin/*` | Super-admin global | Operación multi-tenant del producto (no de un barrio) |
+
+---
+
+## Resumen rápido de módulos
+
+| Módulo | Qué hace | Página clave |
+|---|---|---|
+| **Dashboard** | KPIs, actividades, cumpleaños, fallecidos, anotaciones | `/` |
+| **Miembros** | Padrón, estados, ordenanzas, asignaciones | `/members` |
+| **Observaciones** | Indicadores de atención + salud | `/observations` |
+| **Conversos** | 24 meses, amigos, maestros, alertas | `/converts` |
+| **Ministración** | Compañerismos, distritos, urgencias, sync | `/ministering` |
+| **Cumpleaños** | Tracking + push diario | `/birthdays` |
+| **FamilySearch** | Capacitaciones, tareas, notas | `/family-search` |
+| **Obra misional** | Investigadores, bautismos, amigos, imágenes | `/missionary-work` |
+| **Servicio** | Proyectos, IA, transferencia a actividades | `/service` |
+| **Chat Iglesia** | IA DeepSeek + visión Gemini | `/church-chat` |
+| **Consejo** | Agenda consolidada de la presidencia | `/council` |
+| **Actividades** | Registro anual de la organización | `/reports/activities` |
+| **Admin** | Usuarios, roles, auditoría, migración | `/admin` |
+
+---
+
+## Roles y permisos
 
 | Rol | Permiso por defecto | Descripción |
 |---|---|---|
 | `secretary` | Todo | Acceso total: administración, ajustes y gestión de roles |
-| `president` | Todo | Acceso estratégico: todos los módulos operativos + panel de admin |
+| `president` | Todo | Acceso estratégico: módulos operativos + panel de admin según configuración |
 | `counselor` | Todo | Herramientas operativas para seguimiento de familias y asignaciones |
 | `other` | Lectura | Solo lectura de datos de tu organización |
-| `user` | Lectura | Estado por defecto al registrarse. Ve la página de acceso restringido hasta que un líder le asigne un rol |
+| `user` | Lectura | Estado por defecto al registrarse. Ve `/no-permission` hasta que un líder le asigne un rol |
 
 - **Aislamiento multi-tenant**: cada usuario pertenece a un barrio + organización (`barrioOrg`). Consultas, reglas Firestore, APIs y notificaciones se limitan a ese scope (detalle en [`docs/SEGURIDAD.md`](docs/SEGURIDAD.md) y checklist en [`SECURITY_AUDIT.md`](SECURITY_AUDIT.md)).
 - **Control de visibilidad**: las páginas del menú lateral se pueden ocultar por usuario desde el panel de admin.
 - Las cuentas con rol `user` son redirigidas a `/no-permission` hasta que se les asigne un rol de liderazgo.
+- **Permisos**: `all` (escribir) y `read` (solo lectura). Un consejero puede quedar en lectura si el secretario lo configura así.
 
 ---
 
-## 🛠️ Stack Tecnológico
+## Stack tecnológico
 
 | Capa | Tecnología |
 |---|---|
 | **Framework** | Next.js 16 (App Router, webpack) |
-| **Lenguaje** | TypeScript 6.0 |
-| **UI** | React 19, Tailwind CSS 3.4, Radix UI (20+ primitivos), shadcn/ui |
+| **Lenguaje** | TypeScript 6 |
+| **UI** | React 19, Tailwind CSS 3.4, Radix UI, shadcn/ui |
 | **Base de datos** | Firebase Firestore |
 | **Autenticación** | Firebase Auth (client + admin SDK) |
 | **Funciones serverless** | Firebase Cloud Functions (Node 22) |
@@ -63,7 +387,7 @@ Aplicación web moderna (PWA) diseñada para las presidencias del Quórum de Él
 
 ---
 
-## 📋 Instalación
+## Instalación
 
 ### Requisitos
 - Node.js v22+
@@ -121,7 +445,7 @@ pnpm dev          # Next.js en puerto 9001
 
 ---
 
-## 🔧 Scripts
+## Scripts
 
 | Comando | Descripción |
 |---|---|
@@ -129,68 +453,64 @@ pnpm dev          # Next.js en puerto 9001
 | `pnpm build` | Build de producción con inyección de config FCM |
 | `pnpm start` | Servidor de producción |
 | `pnpm lint` | ESLint |
-| `pnpm typecheck` | Verificación de tipos (tsc --noEmit) |
+| `pnpm typecheck` | Verificación de tipos (`tsc --noEmit`) |
 | `pnpm test:roles` | Tests del sistema de roles |
+| `pnpm check:i18n` | Verifica claves de i18n entre `es.json` y `en.json` |
 | `pnpm changelog` | Generar changelog |
 | `pnpm setup-hooks` | Configurar git hooks |
+| `pnpm firebase:use:prod` | Seleccionar proyecto Firebase de producción |
+| `pnpm firebase:use:dev` | Seleccionar proyecto Firebase de desarrollo |
 
 ---
 
-## 📁 Estructura del Proyecto
+## Estructura del proyecto
 
 ```
 src/
 ├── app/
 │   ├── (auth)/                  # login, register, forgot-password
-│   ├── (main)/                  # Rutas protegidas (dashboard, members, ministering, etc.)
+│   ├── (main)/                  # Rutas protegidas
 │   │   ├── admin/               # Panel de administración
 │   │   ├── birthdays/           # Cumpleaños
 │   │   ├── church-chat/         # Chat con IA
 │   │   ├── converts/            # Conversos recientes
-│   │   ├── council/             # Consejo
+│   │   ├── council/             # Consejo ( /consejo redirige aquí )
 │   │   ├── donate/              # Donaciones
 │   │   ├── family-search/       # FamilySearch
-│   │   ├── future-members/      # Futuros miembros
+│   │   ├── future-members/      # Redirect → obra misional (tab)
 │   │   ├── members/             # Miembros
 │   │   ├── ministering/         # Ministración
-│   │   ├── missionary-work/     # Obra misional
-│   │   ├── observations/        # Observaciones de salud
+│   │   ├── missionary-work/     # Obra misional (+ futuros miembros)
+│   │   ├── observations/        # Observaciones de salud y atención
 │   │   ├── profile/             # Perfil de usuario
-│   │   ├── reports/             # Reportes y actividades
+│   │   ├── reports/             # Actividades
 │   │   ├── service/             # Servicio
 │   │   └── settings/            # Ajustes
+│   ├── (platform-admin)/        # App-admin de plataforma
 │   ├── api/                     # API routes + cron endpoints
 │   └── manifest/                # PWA manifest
-├── components/
-│   ├── ui/                      # shadcn/ui (auto-generados)
-│   ├── dashboard/               # Widgets del dashboard
-│   ├── members/                 # Componentes de miembros
-│   └── shared/                  # Voice annotations, sync status, etc.
-├── contexts/                    # auth-context, i18n-context
-├── hooks/                       # use-members, use-permissions, etc.
-├── lib/                         # firebase, collections, roles, deepseek, push, types
-├── ai/flows/                    # Flujos Genkit (dashboard summary, suggestions)
+├── components/                  # UI, dashboard, members, shared, offline…
+├── contexts/                    # auth, i18n, members, refresh
+├── hooks/                       # permisos, offline, members local…
+├── lib/                         # firebase, roles, deepseek, push, types…
+├── ai/flows/                    # Sugerencias de actividades y servicio
 └── locales/                     # es.json, en.json
 
 functions/                       # Firebase Cloud Functions (Node 22)
-├── src/index.ts                 # Notificaciones, sync de datos, limpieza de Storage
-└── src/modules/                 # notification-dispatcher, image-module
-
-worker/                          # Service Worker bridge para Firebase Messaging
-scripts/                         # update-fcm-config, generate-changelog, setup-hooks, migración
-public/                          # PWA assets, service worker, changelog.json
+worker/                          # Service Worker bridge para FCM
+scripts/                         # FCM config, changelog, hooks, tests
+public/                          # PWA assets, service worker, changelog
+docs/                            # Documentación técnica
 ```
 
 ---
 
-## 📊 IA y Genkit
-
-### Claves de IA: para qué sirve cada una
+## IA
 
 | Variable | Proveedor | Para qué es |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | DeepSeek | **Todo** lo de IA en **texto**: resumen del dashboard, sugerencias de actividades/servicio, Chat Iglesia, reescritura de textos. Es la IA principal de la app. |
-| `GEMINI_API_KEY` | Gemini | **Solo imágenes**: descripción automática al subir fotos en Obra misional, y entender una imagen adjunta en el Chat Iglesia. **No** se usa para chat, resúmenes ni sugerencias. |
+| `DEEPSEEK_API_KEY` | DeepSeek | **Todo** lo de IA en **texto**: sugerencias de actividades/servicio, Chat Iglesia, reescrituras. Es la IA principal de la app. |
+| `GEMINI_API_KEY` | Gemini | **Solo imágenes**: descripción automática al subir fotos (obra misional) y entender una imagen adjunta en el Chat Iglesia. |
 
 DeepSeek no acepta fotos en su API de chat; por eso la visión va aparte con Gemini.
 
@@ -199,24 +519,25 @@ DeepSeek no acepta fotos en su API de chat; por eso la visión va aparte con Gem
 
 ---
 
-## 📖 Documentación
+## Documentación
 
 - [Arquitectura](docs/ARQUITECTURA.md)
 - [Visión del proyecto](docs/VISION.md)
+- [API](docs/API.md)
 - [API Externa](docs/external-api.md)
 - [Notificaciones Push](docs/PUSH_NOTIFICATIONS.md)
 - [Chat Iglesia](docs/CHURCH_CHAT.md)
 - [Dashboard Home](docs/DASHBOARD_HOME.md)
 - [Sincronización de Ministración](docs/SINCRONIZACION_MINISTRACION.md)
+- [Sincronización de datos en la nube](docs/DATA_SYNC_CLOUD.md)
 - [Build Configuration](docs/BUILD_CONFIGURATION.md)
 - [Seguridad](docs/SEGURIDAD.md)
 - [Cumplimiento](docs/COMPLIANCE.md)
-- [Plantilla Word Bautismos](docs/PLANTILLA_WORD_BAUTISMOS.md)
-- [Instrucciones Plantilla Word](docs/INSTRUCCIONES_PLANTILLA_WORD.md)
+- [Auditoría de seguridad](SECURITY_AUDIT.md)
 
 ---
 
-## 📱 PWA
+## PWA
 
 - Instalable en dispositivos móviles y escritorio
 - Funciona offline con sincronización al reconectar
@@ -225,7 +546,7 @@ DeepSeek no acepta fotos en su API de chat; por eso la visión va aparte con Gem
 
 ---
 
-## 🤝 Contribuir
+## Contribuir
 
 1. Fork del repositorio
 2. Crear rama (`git checkout -b feature/nueva-funcionalidad`)
@@ -237,12 +558,12 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md) para estándares de código.
 
 ---
 
-## 📄 Licencia
+## Licencia
 
 MIT — ver [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
-  <p>Desarrollado con ❤️ para apoyar la obra de tu organización</p>
+  <p>Desarrollado con ❤️ para apoyar a las presidencias del Quórum de Élderes y la Sociedad de Socorro</p>
 </div>

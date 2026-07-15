@@ -54,10 +54,18 @@ service cloud.firestore {
       return canWrite() && isSameBarrio(request.resource.data.barrioOrg);
     }
 
-    // update parcial: aceptar barrio del doc existente o del request
+    // update: el doc existente debe ser del mismo barrio Y barrioOrg es inmutable.
+    // Fail closed: no reasignar docs de otro tenant (el OR antiguo permitía robar
+    // un docId ajeno y poner request.resource.barrioOrg = el del atacante).
+    // Re-sellado de legacy sin barrioOrg: solo Admin SDK (/api/admin/migrate-barrio-org).
+    function barrioOrgUnchanged() {
+      return request.resource.data.barrioOrg == resource.data.barrioOrg;
+    }
+
     function canUpdateInBarrio() {
       return canWrite()
-        && (isSameBarrio(resource.data.barrioOrg) || isSameBarrio(request.resource.data.barrioOrg));
+        && isSameBarrio(resource.data.barrioOrg)
+        && barrioOrgUnchanged();
     }
 
     // delete no tiene request.resource; validar barrio del documento existente
@@ -94,7 +102,8 @@ service cloud.firestore {
       allow update: if (isSecretary() || isAnnotationOwner())
         && canWrite()
         && request.resource.data.userId == resource.data.userId
-        && isSameBarrio(resource.data.barrioOrg);
+        && isSameBarrio(resource.data.barrioOrg)
+        && barrioOrgUnchanged();
       allow delete: if (isSecretary() || isAnnotationOwner())
         && canWrite()
         && isSameBarrio(resource.data.barrioOrg);
@@ -178,7 +187,8 @@ service cloud.firestore {
       allow update: if (isSecretary() || isAnnotationOwner())
         && canWrite()
         && request.resource.data.userId == resource.data.userId
-        && isSameBarrio(resource.data.barrioOrg);
+        && isSameBarrio(resource.data.barrioOrg)
+        && barrioOrgUnchanged();
       allow delete: if (isSecretary() || isAnnotationOwner())
         && canWrite()
         && isSameBarrio(resource.data.barrioOrg);

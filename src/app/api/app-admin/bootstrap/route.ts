@@ -71,17 +71,36 @@ export async function POST(request: Request) {
 
     let uid: string;
     let created = false;
+    /** Password reset on re-bootstrap is dangerous if the secret leaks. */
+    const allowReset =
+      process.env.APP_ADMIN_BOOTSTRAP_ALLOW_RESET === "true" ||
+      process.env.APP_ADMIN_BOOTSTRAP_ALLOW_RESET === "1";
 
     try {
       const existing = await authAdmin.getUserByEmail(email);
       uid = existing.uid;
-      // Actualizar password si se re-ejecuta bootstrap (recuperación)
-      await authAdmin.updateUser(uid, {
-        password,
-        emailVerified: true,
-        displayName: "Admin General",
-        disabled: false,
-      });
+      if (allowReset) {
+        // Explicit recovery mode only
+        await authAdmin.updateUser(uid, {
+          password,
+          emailVerified: true,
+          displayName: "Admin General",
+          disabled: false,
+        });
+      } else {
+        // Re-run without ALLOW_RESET: repair profile/claims only, never rotate password
+        await authAdmin.updateUser(uid, {
+          emailVerified: true,
+          displayName: "Admin General",
+          disabled: false,
+        });
+        logger.info({
+          message:
+            "[app-admin/bootstrap] existing admin — password NOT changed (set APP_ADMIN_BOOTSTRAP_ALLOW_RESET=true to allow)",
+          uid,
+          email,
+        });
+      }
     } catch (err: unknown) {
       const code =
         typeof err === "object" && err !== null && "code" in err
@@ -139,13 +158,16 @@ export async function POST(request: Request) {
     return NextResponse.json({
       ok: true,
       created,
+      passwordUpdated: created || allowReset,
       uid,
       email,
       loginUrl: "/app-admin/login",
       panelUrl: "/app-admin/panel",
       message: created
         ? "Admin general creado. Inicia sesión en /app-admin/login."
-        : "Admin general actualizado. Inicia sesión en /app-admin/login.",
+        : allowReset
+          ? "Admin general actualizado (password incluido). Inicia sesión en /app-admin/login."
+          : "Admin general reparado (perfil/claims). Password NO cambiado. Usa APP_ADMIN_BOOTSTRAP_ALLOW_RESET=true solo para recuperación.",
     });
   } catch (error) {
     logger.error({ error, message: "[app-admin/bootstrap] unexpected error" });

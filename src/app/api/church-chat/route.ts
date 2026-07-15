@@ -4,6 +4,13 @@ import logger from '@/lib/logger';
 import { fetchLatestChurchNews } from '@/lib/church-news';
 import { getAppName } from '@/lib/app-config';
 import { enforceRateLimit } from '@/lib/rate-limit';
+import { AuthHttpError, requireUid } from '@/lib/api-auth';
+import {
+  buildCatalogCallingsAnswer,
+  formatCallingsContextBlock,
+  isFullCallingsListRequest,
+  resolveOrganizationCallings,
+} from '@/lib/church-organization-callings';
 
 const bodySchema = z.object({
   message: z.string().min(2).max(3000).optional(),
@@ -18,9 +25,40 @@ const bodySchema = z.object({
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEEPSEEK_CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? 'deepseek-v4-flash';
-const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 800;
-const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 8000;
-const FALLBACK_MODELS = ['deepseek-chat'];
+/** Listing all callings needs more tokens than a short Q&A (default was 800 and truncated). */
+const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 1600;
+/** Full pastoral lists often exceed 8s on DeepSeek; default 30s. */
+const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 30_000;
+/** Public model ids (deepseek-chat aliases to v4-flash). */
+const FALLBACK_MODELS = ['deepseek-chat', 'deepseek-v4-pro'];
+
+type DeepSeekMessageContent = string | Array<{ text?: string }>;
+
+type DeepSeekChoiceMessage = {
+  content?: DeepSeekMessageContent;
+  /** Present when thinking mode is on and final content may be empty. */
+  reasoning_content?: string;
+};
+
+function extractDeepSeekAnswer(message: DeepSeekChoiceMessage | undefined): string {
+  if (!message) return '';
+
+  const rawContent = message.content;
+  if (typeof rawContent === 'string' && rawContent.trim()) {
+    return rawContent.trim();
+  }
+  if (Array.isArray(rawContent)) {
+    const joined = rawContent.map((item) => item.text ?? '').join(' ').trim();
+    if (joined) return joined;
+  }
+
+  const reasoning = message.reasoning_content;
+  if (typeof reasoning === 'string' && reasoning.trim()) {
+    return reasoning.trim();
+  }
+
+  return '';
+}
 
 type ChatLanguage = 'en' | 'es';
 
@@ -35,6 +73,17 @@ function buildSystemPrompt(
   appName: string,
 ): string {
   const org = organizacion.trim() || DEFAULT_ORG_BY_LANGUAGE[language];
+  const resolvedCallings = resolveOrganizationCallings(organizacion, language);
+  const callingsBlock = resolvedCallings
+    ? formatCallingsContextBlock(resolvedCallings, language)
+    : language === 'es'
+      ? `LLAMAMIENTOS_Y_ASIGNACIONES: no hay un catálogo exacto para "${org}". Responde solo con llamamientos típicos oficiales de esa organización auxiliar o quórum según el Manual General, indícalo con claridad y no inventes cargos ajenos a esa organización.`
+      : `CALLINGS_AND_ASSIGNMENTS: no exact catalog for "${org}". Answer only with typical official callings for that auxiliary or quorum per the General Handbook, state that clearly, and do not invent callings outside that organization.`;
+
+  const leadershipHintEs = resolvedCallings?.catalog.feminineLeadershipEs
+    ? 'presidenta, consejeras y secretaria'
+    : 'presidente, consejeros y secretario';
+  const leadershipHintEn = 'president, counselors, and secretary';
 
   if (language === 'es') {
     return `Eres un asistente especializado exclusivamente en temas de La Iglesia de Jesucristo de los Santos de los Últimos Días.
@@ -42,7 +91,9 @@ function buildSystemPrompt(
 Contexto de la sesión:
 - Organización del usuario: ${org}
 - Nombre de la aplicación de gestión: ${appName}
-- ${appName} es una herramienta administrativa para la presidencia de ${org} (presidente, consejeros y secretario). No es un canal oficial de la Iglesia ni sustituye los manuales, LDS Tools ni la Biblioteca del Evangelio.
+- ${appName} es una herramienta administrativa para la presidencia de ${org} (${leadershipHintEs}). No es un canal oficial de la Iglesia ni sustituye los manuales, LDS Tools ni la Biblioteca del Evangelio.
+
+${callingsBlock}
 
 Reglas obligatorias:
 1) Solo puedes responder temas del evangelio de Jesucristo desde fuentes oficiales de la Iglesia (manuales, discursos, sitio oficial, Biblioteca del Evangelio, Biblia y obras canónicas) y su interpretación oficial.
@@ -53,11 +104,16 @@ Reglas obligatorias:
 6) Debes mantener continuidad con el historial ("history"): no pierdas el contexto conversacional, evita contradicciones y reconoce seguimiento de preguntas previas.
 7) Si la información de actualidad no pudo verificarse o está potencialmente desactualizada, dilo explícitamente antes de responder y luego comparte lo último disponible en CONTEXT_NEWS.
 8) Siempre explica con claridad el "por qué" o la razón de lo que describes (llamamientos, deberes, prácticas del evangelio, o el propósito de una función de la app). No te limites a listar qué es; di para qué existe y por qué importa en el servicio a los demás, con palabras naturales y sin jerga innecesaria.
-9) Si la pregunta es sobre la aplicación ${appName}, sus módulos, datos, permisos, configuración, errores, o cómo usarla:
+9) Si el usuario pregunta por "otros cargos", llamamientos, asignaciones o cargos de la organización:
+   a) Responde SOLO para la organización del usuario (${org}), no mezcles cargos de otras organizaciones.
+   b) Enumera TODOS los ítems del bloque LLAMAMIENTOS_Y_ASIGNACIONES (si existe), cada uno con una breve explicación del porqué.
+   c) Usa títulos con el género y nombre correctos de ${org} (p. ej. presidenta en Sociedad de Socorro, presidente en Quórum de Élderes).
+   d) Aclara que es la estructura típica según el Manual General; en un barrio concreto el obispado decide qué especialistas se llaman.
+10) Si la pregunta es sobre la aplicación ${appName}, sus módulos, datos, permisos, configuración, errores, o cómo usarla:
    a) Puedes explicar de forma general el propósito de la función (por qué existe y para qué sirve en el trabajo de la presidencia).
    b) Debes indicar con claridad que el control y la administración de esta app corresponden a la presidencia de ${org}, y que cualquier solicitud, duda operativa, cambio de acceso o asunto de la app debe dirigirse a la presidencia de ${org}.
    c) No inventes datos del barrio, listas de miembros ni configuraciones internas; no tienes acceso a la base de datos de la app.
-10) Adapta el lenguaje a la organización del usuario (${org}): usa su nombre de forma natural al hablar de su presidencia y de la app.`;
+11) Adapta el lenguaje a la organización del usuario (${org}): usa su nombre de forma natural al hablar de su presidencia y de la app.`;
   }
 
   return `You are an assistant specialized exclusively in topics related to The Church of Jesus Christ of Latter-day Saints.
@@ -65,7 +121,9 @@ Reglas obligatorias:
 Session context:
 - User's organization: ${org}
 - Management app name: ${appName}
-- ${appName} is an administrative tool for the presidency of ${org} (president, counselors, and secretary). It is not an official Church channel and does not replace handbooks, LDS Tools, or Gospel Library.
+- ${appName} is an administrative tool for the presidency of ${org} (${leadershipHintEn}). It is not an official Church channel and does not replace handbooks, LDS Tools, or Gospel Library.
+
+${callingsBlock}
 
 Mandatory rules:
 1) You may only answer gospel topics using official Church sources (handbooks, talks, the official website, Gospel Library, the Bible and other standard works) and their official interpretation.
@@ -76,11 +134,16 @@ Mandatory rules:
 6) Maintain continuity with the conversation history ("history"): do not lose conversational context, avoid contradictions, and acknowledge follow-up questions.
 7) If current information could not be verified or may be outdated, say so explicitly before answering and then share the latest available items in CONTEXT_NEWS.
 8) Always clearly explain the "why" or reason behind what you describe (callings, duties, gospel practices, or the purpose of an app feature). Do not only list what something is; say why it exists and why it matters in serving others, in natural language without unnecessary jargon.
-9) If the question is about the ${appName} application, its modules, data, permissions, settings, errors, or how to use it:
+9) If the user asks about "other callings", callings, assignments, or positions in the organization:
+   a) Answer ONLY for the user's organization (${org}); do not mix callings from other organizations.
+   b) List ALL items from the CALLINGS_AND_ASSIGNMENTS block (when present), each with a brief explanation of why it exists.
+   c) Use titles appropriate to ${org}.
+   d) Clarify this is the typical structure per the General Handbook; in a given ward the bishopric decides which specialists are called.
+10) If the question is about the ${appName} application, its modules, data, permissions, settings, errors, or how to use it:
    a) You may briefly explain the general purpose of the feature (why it exists and what it is for in the presidency's work).
    b) You must clearly state that control and administration of this app belong to the presidency of ${org}, and that any request, operational question, access change, or app-related matter should be directed to the presidency of ${org}.
    c) Do not invent ward data, member lists, or internal settings; you do not have access to the app's database.
-10) Adapt your language to the user's organization (${org}): use its name naturally when referring to their presidency and the app.`;
+11) Adapt your language to the user's organization (${org}): use its name naturally when referring to their presidency and the app.`;
 }
 
 const apiMessages = {
@@ -95,7 +158,8 @@ const apiMessages = {
       `Noticias verificadas. Última publicación reportada: ${latest}. Consulta realizada: ${iso}.`,
     unknownDate: 'fecha desconocida',
     analyzeImage: 'Analiza esta imagen dentro del contexto oficial de la Iglesia.',
-    deepseekFailed: 'No se pudo obtener respuesta de DeepSeek.',
+    deepseekFailed: 'No se pudo obtener respuesta de DeepSeek. Intenta de nuevo en unos segundos.',
+    deepseekTimeout: 'La respuesta tardó demasiado. Intenta de nuevo o formula una pregunta más breve.',
     unexpectedError: 'Error inesperado al consultar la IA.',
   },
   en: {
@@ -109,13 +173,14 @@ const apiMessages = {
       `News verified. Latest reported publication: ${latest}. Request made: ${iso}.`,
     unknownDate: 'unknown date',
     analyzeImage: 'Analyze this image within the official Church context.',
-    deepseekFailed: 'Could not get a response from DeepSeek.',
+    deepseekFailed: 'Could not get a response from DeepSeek. Please try again in a few seconds.',
+    deepseekTimeout: 'The response took too long. Try again or ask a shorter question.',
     unexpectedError: 'Unexpected error while querying the AI.',
   },
 } as const;
 
 export async function POST(request: Request) {
-  // DeepSeek is the main variable cost — 10 req/min per authenticated uid (or IP fallback).
+  // DeepSeek is the main variable cost — require auth, then 10 req/min per uid.
   const limited = await enforceRateLimit(request, 'churchChat');
   if (limited) return limited;
 
@@ -123,10 +188,15 @@ export async function POST(request: Request) {
   const preLanguage: ChatLanguage =
     raw && typeof raw === 'object' && (raw as { language?: string }).language === 'en' ? 'en' : 'es';
 
-  if (!process.env.DEEPSEEK_API_KEY) {
+  try {
+    await requireUid(request);
+  } catch (error) {
+    if (error instanceof AuthHttpError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     return NextResponse.json(
-      { error: apiMessages[preLanguage].missingApiKey },
-      { status: 500 }
+      { error: apiMessages[preLanguage].invalidRequest },
+      { status: 401 }
     );
   }
 
@@ -150,6 +220,32 @@ export async function POST(request: Request) {
   const { message, imageDataUrl, history, language, organizacion } = parsed.data;
   const messages_i18n = apiMessages[language];
   const appName = getAppName();
+  const userText = message?.trim() || '';
+
+  // Fast path: "Otros cargos" / full callings list from the org catalog (no DeepSeek).
+  // Avoids timeouts when listing every calling with a long system prompt.
+  const resolvedCallings = resolveOrganizationCallings(organizacion, language);
+  if (
+    !imageDataUrl &&
+    userText &&
+    resolvedCallings &&
+    isFullCallingsListRequest(userText)
+  ) {
+    const answer = buildCatalogCallingsAnswer(resolvedCallings, language);
+    return NextResponse.json({
+      answer,
+      contextNews: messages_i18n.noVerifiedNews,
+      source: 'organization-callings-catalog',
+    });
+  }
+
+  if (!process.env.DEEPSEEK_API_KEY) {
+    return NextResponse.json(
+      { error: apiMessages[language].missingApiKey },
+      { status: 500 }
+    );
+  }
+
   const systemPrompt = buildSystemPrompt(language, organizacion ?? '', appName);
 
   const nowIso = new Date().toISOString();
@@ -168,7 +264,7 @@ export async function POST(request: Request) {
     logger.warn({ error, message: 'No fue posible obtener noticias oficiales para church-chat.' });
   }
 
-  const userText = message?.trim() || messages_i18n.analyzeImage;
+  const promptUserText = userText || messages_i18n.analyzeImage;
 
   // DeepSeek chat rejects multimodal image_url payloads. When an image is present,
   // describe it with Gemini first and pass a text-only prompt to DeepSeek.
@@ -190,7 +286,7 @@ export async function POST(request: Request) {
     ...history.map((item) => ({ role: item.role, content: item.content })),
     {
       role: 'user',
-      content: `${userText}${imageContext}`,
+      content: `${promptUserText}${imageContext}`,
     },
   ];
 
@@ -228,18 +324,17 @@ export async function POST(request: Request) {
         }
 
         const data = (await response.json()) as {
-          choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+          choices?: Array<{ message?: DeepSeekChoiceMessage }>;
         };
-        const rawContent = data.choices?.[0]?.message?.content;
-        answer = typeof rawContent === 'string'
-          ? rawContent.trim()
-          : Array.isArray(rawContent)
-            ? rawContent.map((item) => item.text ?? '').join(' ').trim()
-            : '';
+        answer = extractDeepSeekAnswer(data.choices?.[0]?.message);
 
         if (answer) {
           break;
         }
+
+        lastStatus = 502;
+        lastErrorText = 'empty content from model';
+        logger.warn({ message: 'DeepSeek returned empty content', model });
       } catch (error) {
         const isTimeout =
           (error instanceof Error && error.name === 'AbortError') ||
@@ -264,13 +359,29 @@ export async function POST(request: Request) {
       }
     }
 
+    // Last resort: if DeepSeek failed but the user asked for all callings, use the catalog.
+    if (!answer && resolvedCallings && userText && isFullCallingsListRequest(userText)) {
+      logger.warn({
+        message: 'DeepSeek failed; serving organization callings catalog fallback',
+        lastStatus,
+        lastErrorText,
+      });
+      return NextResponse.json({
+        answer: buildCatalogCallingsAnswer(resolvedCallings, language),
+        contextNews,
+        source: 'organization-callings-catalog-fallback',
+      });
+    }
+
     if (!answer) {
       logger.error({
         message: 'DeepSeek request failed in church-chat route after all model candidates',
         status: lastStatus,
         errorText: lastErrorText,
       });
-      return NextResponse.json({ error: messages_i18n.deepseekFailed }, { status: 502 });
+      const errorMessage =
+        lastStatus === 504 ? messages_i18n.deepseekTimeout : messages_i18n.deepseekFailed;
+      return NextResponse.json({ error: errorMessage }, { status: lastStatus === 504 ? 504 : 502 });
     }
 
     return NextResponse.json({ answer, contextNews });

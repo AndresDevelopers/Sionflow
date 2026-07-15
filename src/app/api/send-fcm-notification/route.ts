@@ -5,7 +5,9 @@ import { enforceRateLimit } from '@/lib/rate-limit';
 import {
   getErrorStatus,
   getUserBarrioOrg,
+  requireLeadership,
   requireUidAndBarrioOrg,
+  sanitizeAppRelativeUrl,
 } from '@/lib/api-auth';
 
 // Firestore 'in' operator supports max 30 items
@@ -62,7 +64,9 @@ export async function POST(request: NextRequest) {
   if (limited) return limited;
 
   try {
-    const { barrioOrg: callerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    const { uid, barrioOrg: callerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    // Broadcast / targeted push can spam the whole ward — leadership only.
+    await requireLeadership(uid);
 
     const { title, body, url, userId } = await request.json() as {
       title?: string;
@@ -77,6 +81,9 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Only same-app relative paths (block open redirects / phishing via push deep links).
+    const safeUrl = sanitizeAppRelativeUrl(url, '/');
 
     let targetUserIds: string[] = [];
 
@@ -146,7 +153,7 @@ export async function POST(request: NextRequest) {
       const message = {
         notification: { title, body },
         data: {
-          url: url ?? '/',
+          url: safeUrl,
           title,
           body,
         },
@@ -162,7 +169,7 @@ export async function POST(request: NextRequest) {
             tag: getAppNotificationTag(),
           },
           fcmOptions: {
-            link: url ?? '/',
+            link: safeUrl,
           },
         },
         tokens: tokenBatch,
@@ -231,10 +238,7 @@ export async function POST(request: NextRequest) {
     }
     console.error('[FCM] Error in send-fcm-notification API:', error);
     return NextResponse.json(
-      {
-        error: 'Failed to send push notifications',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
+      { error: 'Failed to send push notifications' },
       { status: 500 }
     );
   }

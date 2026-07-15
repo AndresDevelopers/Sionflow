@@ -7,6 +7,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import {
   getErrorStatus,
+  requireCanWrite,
   requireUidAndBarrioOrg,
 } from '@/lib/api-auth';
 
@@ -159,20 +160,13 @@ export async function GET(request: Request) {
       );
     }
 
-    console.error('❌ Detailed error in /api/members:', {
+    console.error('[members] GET failed', {
       message: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined,
-      name: error instanceof Error ? error.name : undefined,
-      code: (error as any)?.code,
-      details: (error as any)?.details
+      code: (error as { code?: unknown })?.code,
     });
 
     return NextResponse.json(
-      {
-        error: 'Failed to fetch members',
-        details: error instanceof Error ? error.message : 'Unknown error',
-        code: (error as any)?.code || 'UNKNOWN'
-      },
+      { error: 'Failed to fetch members' },
       { status: 500 }
     );
   }
@@ -184,6 +178,8 @@ export async function POST(request: Request) {
 
   try {
     const { barrioOrg, uid } = await requireUidAndBarrioOrg(request);
+    // Admin SDK bypasses Firestore rules — enforce write permission here.
+    await requireCanWrite(uid);
 
     const data = await request.json();
 

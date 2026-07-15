@@ -32,6 +32,7 @@ import {
 import type { AppNotification } from "@/lib/types";
 import { formatRelative } from "date-fns";
 import { getDateFnsLocale } from "@/lib/i18n-date";
+import { sanitizeNotificationActionUrl } from "@/lib/url-safety";
 import { Skeleton } from "./ui/skeleton";
 import { useOnManualRefresh } from "@/contexts/refresh-context";
 
@@ -253,14 +254,17 @@ export function NotificationBell() {
     }
   };
 
-  // Generate navigation URL based on notification context
+  // Generate navigation URL based on notification context (safe paths only)
   const getNavigationUrl = (notification: AppNotification): string | null => {
-    // If explicit actionUrl is provided, use it
+    // Explicit actionUrl — sanitize (block javascript:, open redirects, random hosts)
     if (notification.actionUrl) {
-      return notification.actionUrl;
+      return sanitizeNotificationActionUrl(
+        notification.actionUrl,
+        notification.actionType
+      );
     }
 
-    // Generate URL based on contextType and contextId
+    // Generate URL based on contextType and contextId (always relative)
     if (!notification.contextType) {
       return null;
     }
@@ -322,10 +326,13 @@ export function NotificationBell() {
         }
       }
 
-      // Navigate based on action type
-      if (notification.actionType === 'external' && url.startsWith('http')) {
-        window.open(url, '_blank');
-      } else {
+      // External only for sanitized https allowlist; otherwise in-app navigation
+      if (
+        notification.actionType === 'external' &&
+        url.startsWith('https://')
+      ) {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else if (url.startsWith('/')) {
         router.push(url);
       }
     }

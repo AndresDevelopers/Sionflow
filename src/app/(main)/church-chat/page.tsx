@@ -15,6 +15,7 @@ import { useAuth } from '@/contexts/auth-context';
 import { useI18n } from '@/contexts/i18n-context';
 import { firestore } from '@/lib/firebase';
 import { compressImageForUpload } from '@/lib/image-compression';
+import { getLeadershipLabels } from '@/lib/church-organization-callings';
 import logger from '@/lib/logger';
 import enTranslations from '@/locales/en.json';
 import esTranslations from '@/locales/es.json';
@@ -148,44 +149,63 @@ const getOrgArticle = (
 
 type QuickOption = {
   key: string;
+  /** i18n key for the button label; leadership keys may be overridden by gender-aware labels */
+  labelKey: string;
   generateMessage: (
     org: string,
     language: string,
     t: TranslateFn,
   ) => string;
+  /** Optional dynamic label (e.g. Presidente / Presidenta by organization) */
+  resolveLabel?: (org: string, language: string, t: TranslateFn) => string;
 };
 
 const QUICK_OPTIONS: QuickOption[] = [
   {
     key: 'presidente',
+    labelKey: 'churchChat.option.presidente',
+    resolveLabel: (org, language) =>
+      getLeadershipLabels(org, language === 'en' ? 'en' : 'es').president,
     generateMessage: (org, language, t) => {
       const { deArticle } = getOrgArticle(org, language);
-      return t('churchChat.prompt.presidente', { deArticle, org });
+      const { president } = getLeadershipLabels(org, language === 'en' ? 'en' : 'es');
+      return t('churchChat.prompt.presidente', { deArticle, org, role: president });
     },
   },
   {
     key: 'consejero',
+    labelKey: 'churchChat.option.consejero',
+    resolveLabel: (org, language) =>
+      getLeadershipLabels(org, language === 'en' ? 'en' : 'es').counselor,
     generateMessage: (org, language, t) => {
       const { deArticle } = getOrgArticle(org, language);
-      return t('churchChat.prompt.consejero', { deArticle, org });
+      const { counselor } = getLeadershipLabels(org, language === 'en' ? 'en' : 'es');
+      return t('churchChat.prompt.consejero', { deArticle, org, role: counselor });
     },
   },
   {
     key: 'secretario',
+    labelKey: 'churchChat.option.secretario',
+    resolveLabel: (org, language) =>
+      getLeadershipLabels(org, language === 'en' ? 'en' : 'es').secretary,
     generateMessage: (org, language, t) => {
       const { deArticle } = getOrgArticle(org, language);
-      return t('churchChat.prompt.secretario', { deArticle, org });
+      const { secretary } = getLeadershipLabels(org, language === 'en' ? 'en' : 'es');
+      return t('churchChat.prompt.secretario', { deArticle, org, role: secretary });
     },
   },
   {
     key: 'otrosCargos',
+    labelKey: 'churchChat.option.otrosCargos',
     generateMessage: (org, language, t) => {
-      const { article } = getOrgArticle(org, language);
-      return t('churchChat.prompt.otrosCargos', { article, org });
+      const { deArticle } = getOrgArticle(org, language);
+      const orgName = org.trim() || (language === 'en' ? 'my organization' : 'mi organización');
+      return t('churchChat.prompt.otrosCargos', { deArticle, org: orgName });
     },
   },
   {
     key: 'novedades',
+    labelKey: 'churchChat.option.novedades',
     generateMessage: (org, language, t) => {
       const { deArticle } = getOrgArticle(org, language);
       return t('churchChat.prompt.novedades', { deArticle, org });
@@ -724,13 +744,16 @@ export default function ChurchChatPage() {
           content: resolveMessageContent(message, t),
         }));
 
-      // Prefer authenticated uid for server-side rate limiting (10 req/min).
+      // Required: server rejects unauthenticated chat (DeepSeek cost control).
       const idToken = await firebaseUser?.getIdToken().catch(() => null);
+      if (!idToken) {
+        throw new Error(t('churchChat.sendErrorDefault'));
+      }
       const response = await fetch('/api/church-chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           ...(trimmed.length >= 2 ? { message: trimmed } : {}),
@@ -868,7 +891,9 @@ export default function ChurchChatPage() {
                       disabled={loading}
                       onClick={() => handleQuickOption(option)}
                     >
-                      {t(`churchChat.option.${option.key}`)}
+                      {option.resolveLabel
+                        ? option.resolveLabel(organizacion, language, t)
+                        : t(option.labelKey)}
                     </Button>
                   ))}
                 </div>

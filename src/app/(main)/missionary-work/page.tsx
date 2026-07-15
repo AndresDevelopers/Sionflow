@@ -743,7 +743,11 @@ function InvestigatorsTab({
                               </DialogTitle>
                             </DialogHeader>
                             <div className="py-4 space-y-4">
-                              <p dangerouslySetInnerHTML={{ __html: t('missionaryWork.investigators.linkDialogDescription', { name: item.name }) }} />
+                              <p>
+                                {t('missionaryWork.investigators.linkDialogDescription', {
+                                  name: item.name,
+                                })}
+                              </p>
                               <Label htmlFor="convertId">{t('missionaryWork.investigators.linkDialog.convertLabel')}</Label>
                               <Select
                                 name="convertId"
@@ -784,7 +788,11 @@ function InvestigatorsTab({
                         <AlertDialogContent>
                             <AlertDialogHeader>
                             <AlertDialogTitle>{t('missionaryWork.investigators.deleteDialogTitle')}</AlertDialogTitle>
-                            <AlertDialogDescription dangerouslySetInnerHTML={{ __html: t('missionaryWork.investigators.deleteDialogDescription', { name: item.name }) }} />
+                            <AlertDialogDescription>
+                              {t('missionaryWork.investigators.deleteDialogDescription', {
+                                name: item.name,
+                              })}
+                            </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                             <AlertDialogCancel>{t('missionaryWork.investigators.cancelButton')}</AlertDialogCancel>

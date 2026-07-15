@@ -63,7 +63,10 @@ async function fileToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
-async function fetchImageDescriptionHttp(imageDataUrl: string): Promise<string> {
+async function fetchImageDescriptionHttp(
+  imageDataUrl: string,
+  idToken: string
+): Promise<string> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 60_000);
   try {
@@ -72,6 +75,7 @@ async function fetchImageDescriptionHttp(imageDataUrl: string): Promise<string> 
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
+        Authorization: `Bearer ${idToken}`,
       },
       cache: 'no-store',
       body: JSON.stringify({ imageData: imageDataUrl }),
@@ -261,6 +265,10 @@ export function MissionaryImagesTab({
 
         // AI is best-effort; upload already succeeded.
         try {
+          const idToken = await firebaseUser?.getIdToken().catch(() => null);
+          if (!idToken) {
+            throw new Error('No autenticado para analizar la imagen');
+          }
           const forAi = await compressImageForUpload(uploadBlob, {
             maxDimension: 1024,
             quality: 0.72,
@@ -269,7 +277,7 @@ export function MissionaryImagesTab({
             force: true,
           });
           const base64 = await fileToDataUrl(forAi);
-          const description = await fetchImageDescriptionHttp(base64);
+          const description = await fetchImageDescriptionHttp(base64, idToken);
           updatePending(id, { description, status: 'ready' });
         } catch (error: unknown) {
           console.error(

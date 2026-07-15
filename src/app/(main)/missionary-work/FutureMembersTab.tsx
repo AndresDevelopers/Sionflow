@@ -334,7 +334,6 @@ export function FutureMembersTab() {
                                 mode="single"
                                 selected={field.value}
                                 onSelect={field.onChange}
-                                initialFocus
                               />
                             </PopoverContent>
                           </Popover>
@@ -483,13 +482,11 @@ export function FutureMembersTab() {
                               <AlertDialogTitle>
                                 {t('futureMembers.deleteDialogTitle')}
                               </AlertDialogTitle>
-                              <AlertDialogDescription
-                                dangerouslySetInnerHTML={{
-                                  __html: t('futureMembers.deleteDialogDescription', {
-                                    name: `${item.firstName} ${item.lastName}`.trim(),
-                                  }),
-                                }}
-                              />
+                              <AlertDialogDescription>
+                                {t('futureMembers.deleteDialogDescription', {
+                                  name: `${item.firstName} ${item.lastName}`.trim(),
+                                })}
+                              </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>

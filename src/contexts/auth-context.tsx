@@ -2,13 +2,14 @@
 
 import { useTheme } from "next-themes";
 import { createContext, useContext, useState, ReactNode, useEffect, useCallback, useRef } from "react";
-import { onAuthStateChanged, type User as FirebaseUser } from "firebase/auth";
+import { onAuthStateChanged, onIdTokenChanged, type User as FirebaseUser } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth } from "@/lib/firebase";
 import { usersCollection } from "@/lib/collections";
 import { getAppStoragePrefix } from "@/lib/app-config";
 import { isBrowserOnline } from "@/lib/network";
 import { normalizeRole, normalizePermission, type UserRole, type UserPermission } from "@/lib/roles";
+import { syncServerSession } from "@/lib/auth-session-client";
 
 interface User {
   uid: string;
@@ -258,6 +259,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   }, [applyProfile]);
+
+  // Keep Edge middleware session cookie in sync with Firebase ID token.
+  useEffect(() => {
+    if (!auth) return;
+    const unsub = onIdTokenChanged(auth, async (currentUser) => {
+      if (!currentUser) {
+        if (intentionalSignOutRef.current || isBrowserOnline()) {
+          await syncServerSession(null);
+        }
+        return;
+      }
+      try {
+        const token = await currentUser.getIdToken();
+        await syncServerSession(token);
+      } catch {
+        // non-fatal
+      }
+    });
+    return () => unsub();
+  }, []);
 
   useEffect(() => {
     if (!auth) {

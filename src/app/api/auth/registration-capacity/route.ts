@@ -8,7 +8,12 @@ import { enforceRateLimit } from '@/lib/rate-limit';
  * Does not expose user PII — only counts and limits for a barrioOrg.
  */
 export async function GET(request: NextRequest) {
-  const limited = await enforceRateLimit(request, 'auth');
+  // Stricter than generic auth: limits tenant probing / user-count scraping
+  const limited = await enforceRateLimit(request, {
+    limit: 10,
+    windowMs: 60_000,
+    prefix: 'registration-capacity',
+  });
   if (limited) return limited;
 
   try {

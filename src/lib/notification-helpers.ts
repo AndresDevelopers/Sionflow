@@ -62,6 +62,12 @@ export async function createNotification(params: CreateNotificationParams): Prom
       return '';
     }
 
+    // Never store open redirects / javascript: URLs in notification payloads
+    const { sanitizeNotificationActionUrl } = await import('@/lib/url-safety');
+    const safeActionUrl = actionUrl
+      ? sanitizeNotificationActionUrl(actionUrl, actionType)
+      : null;
+
     const notification: Omit<AppNotification, 'id'> = {
       userId,
       title,
@@ -71,8 +77,10 @@ export async function createNotification(params: CreateNotificationParams): Prom
       barrioOrg: scopedBarrioOrg,
       ...(contextType && { contextType }),
       ...(contextId && { contextId }),
-      ...(actionUrl && { actionUrl }),
-      ...(actionUrl && { actionType }),
+      ...(safeActionUrl && { actionUrl: safeActionUrl }),
+      ...(safeActionUrl && {
+        actionType: safeActionUrl.startsWith('https://') ? 'external' : 'navigate',
+      }),
     };
 
     const docRef = await addDoc(notificationsCollection, notification);

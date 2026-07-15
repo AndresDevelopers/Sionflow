@@ -6,6 +6,7 @@ import logger from '@/lib/logger';
 import { enforceRateLimit } from '@/lib/rate-limit';
 import {
   getErrorStatus,
+  requireCanWrite,
   requireUidAndBarrioOrg,
 } from '@/lib/api-auth';
 
@@ -50,7 +51,9 @@ export async function PUT(
   let data: any = null;
   const { id } = await params;
   try {
-    const { barrioOrg: callerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    const { uid, barrioOrg: callerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    // Admin SDK bypasses Firestore rules — enforce write permission here.
+    await requireCanWrite(uid);
 
     try {
       data = await request.json();
@@ -111,10 +114,15 @@ export async function PUT(
     return response;
   } catch (error) {
     const status = getErrorStatus(error, 500);
-    const message = error instanceof Error ? error.message : 'Failed to update member';
+    if (status === 401 || status === 403) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Unauthorized' },
+        { status }
+      );
+    }
     return NextResponse.json(
-      { error: message, memberId: id },
-      { status }
+      { error: 'Failed to update member' },
+      { status: 500 }
     );
   }
 }
@@ -128,7 +136,9 @@ export async function DELETE(
 
   const { id } = await params;
   try {
-    const { barrioOrg: callerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    const { uid, barrioOrg: callerBarrioOrg } = await requireUidAndBarrioOrg(request);
+    // Admin SDK bypasses Firestore rules — enforce write permission here.
+    await requireCanWrite(uid);
 
     if (!id || id.trim() === '') {
       return NextResponse.json(
@@ -181,7 +191,12 @@ export async function DELETE(
   } catch (error) {
     const status = getErrorStatus(error, 500);
     logger.error({ error, message: 'Error deleting member', memberId: id });
-    const message = error instanceof Error ? error.message : 'Failed to delete member';
-    return NextResponse.json({ error: message }, { status });
+    if (status === 401 || status === 403) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : 'Unauthorized' },
+        { status }
+      );
+    }
+    return NextResponse.json({ error: 'Failed to delete member' }, { status: 500 });
   }
 }

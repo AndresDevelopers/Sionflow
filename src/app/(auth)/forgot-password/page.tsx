@@ -47,8 +47,7 @@ export default function ForgotPasswordPage() {
 
   const onSubmit = async (values: z.infer<typeof forgotPasswordSchema>) => {
     try {
-      // Firebase client ya no lanza user-not-found (enumeración de emails).
-      // Verificamos en el servidor con Admin SDK antes de enviar el correo.
+      // Rate-limit preflight — response is uniform (no email enumeration).
       const checkResponse = await fetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -60,10 +59,10 @@ export default function ForgotPasswordPage() {
         const errorCode = data?.error as string | undefined;
 
         let description = t("forgotPassword.toastErrorUnexpected");
-        if (errorCode === "user-not-found") {
-          description = t("forgotPassword.toastErrorUserNotFound");
-        } else if (errorCode === "invalid-email") {
+        if (errorCode === "invalid-email") {
           description = t("forgotPassword.toastErrorInvalidEmail");
+        } else if (checkResponse.status === 429) {
+          description = t("forgotPassword.toastErrorTooManyRequests");
         }
 
         toast({
@@ -74,7 +73,34 @@ export default function ForgotPasswordPage() {
         return;
       }
 
-      await sendPasswordResetEmail(auth, values.email.trim());
+      // Firebase client does not reveal user-not-found for enumeration protection.
+      // Always show the same success path after attempting the send.
+      try {
+        await sendPasswordResetEmail(auth, values.email.trim());
+      } catch (sendError: unknown) {
+        const code =
+          sendError && typeof sendError === "object" && "code" in sendError
+            ? String((sendError as { code: unknown }).code)
+            : "";
+        if (code === "auth/too-many-requests") {
+          toast({
+            title: t("forgotPassword.toastErrorTitle"),
+            description: t("forgotPassword.toastErrorTooManyRequests"),
+            variant: "destructive",
+          });
+          return;
+        }
+        if (code === "auth/invalid-email") {
+          toast({
+            title: t("forgotPassword.toastErrorTitle"),
+            description: t("forgotPassword.toastErrorInvalidEmail"),
+            variant: "destructive",
+          });
+          return;
+        }
+        // user-not-found and other codes → same success UX (anti-enumeration)
+      }
+
       toast({
         title: t("forgotPassword.toastSuccessTitle"),
         description: t("forgotPassword.toastSuccessDescription"),
@@ -88,9 +114,7 @@ export default function ForgotPasswordPage() {
           : "";
 
       let description = t("forgotPassword.toastErrorUnexpected");
-      if (code === "auth/user-not-found") {
-        description = t("forgotPassword.toastErrorUserNotFound");
-      } else if (code === "auth/invalid-email") {
+      if (code === "auth/invalid-email") {
         description = t("forgotPassword.toastErrorInvalidEmail");
       } else if (code === "auth/too-many-requests") {
         description = t("forgotPassword.toastErrorTooManyRequests");

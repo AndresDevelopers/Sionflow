@@ -7,6 +7,14 @@
  */
 import { authAdmin, firestoreAdmin } from '@/lib/firebase-admin';
 import logger from '@/lib/logger';
+import {
+  canWrite,
+  hasLeadershipPrivileges,
+  normalizePermission,
+  normalizeRole,
+  type UserPermission,
+  type UserRole,
+} from '@/lib/roles';
 
 export class AuthHttpError extends Error {
   status: number;
@@ -101,6 +109,66 @@ export async function requireUidAndBarrioOrg(
   const barrioOrg = await getUserBarrioOrg(uid);
   return { uid, barrioOrg, email };
 }
+
+export type UserAccessProfile = {
+  uid: string;
+  role: UserRole;
+  permission: UserPermission;
+  barrioOrg: string | null;
+  email: string | null;
+  name: string | null;
+};
+
+/**
+ * Load role/permission from c_users for RBAC on Admin SDK routes.
+ * Throws AuthHttpError 403 if the profile is missing.
+ */
+export async function getUserAccessProfile(uid: string): Promise<UserAccessProfile> {
+  const userDoc = await firestoreAdmin.collection('c_users').doc(uid).get();
+  if (!userDoc.exists) {
+    throw new AuthHttpError('Usuario no encontrado.', 403);
+  }
+  const data = userDoc.data() ?? {};
+  return {
+    uid,
+    role: normalizeRole(data.role),
+    permission: normalizePermission(data.permission),
+    barrioOrg: buildBarrioOrgFromUserData(data),
+    email: typeof data.email === 'string' ? data.email : null,
+    name: typeof data.name === 'string' ? data.name : null,
+  };
+}
+
+/** Require Firestore `permission` that allows writes (`all` / legacy aliases). */
+export async function requireCanWrite(uid: string): Promise<UserAccessProfile> {
+  const profile = await getUserAccessProfile(uid);
+  if (!canWrite(profile.permission)) {
+    throw new AuthHttpError(
+      'No tienes permiso de escritura para esta operación.',
+      403
+    );
+  }
+  return profile;
+}
+
+/** Require leadership role (secretary / president / counselor). */
+export async function requireLeadership(uid: string): Promise<UserAccessProfile> {
+  const profile = await getUserAccessProfile(uid);
+  if (!hasLeadershipPrivileges(profile.role)) {
+    throw new AuthHttpError(
+      'Solo el liderazgo puede realizar esta operación.',
+      403
+    );
+  }
+  return profile;
+}
+
+// URL sanitizers: re-export from client-safe module (used by FCM route + helpers)
+export {
+  sanitizeAppRelativeUrl,
+  sanitizeExternalHttpsUrl,
+  sanitizeNotificationActionUrl,
+} from '@/lib/url-safety';
 
 export function getErrorStatus(error: unknown, fallback = 500): number {
   if (

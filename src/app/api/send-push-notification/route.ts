@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { firestoreAdmin } from '@/lib/firebase-admin';
 import { enforceRateLimit } from '@/lib/rate-limit';
-import { getErrorStatus, requireUidAndBarrioOrg } from '@/lib/api-auth';
+import {
+  getErrorStatus,
+  requireLeadership,
+  requireUidAndBarrioOrg,
+} from '@/lib/api-auth';
 
 /**
  * Count how many users in the caller's barrio would receive a notification.
- * Does NOT scan all barrios. Requires Bearer auth.
+ * Does NOT scan all barrios. Requires Bearer auth + leadership.
  */
 export async function POST(request: NextRequest) {
   const limited = await enforceRateLimit(request, 'api');
   if (limited) return limited;
 
   try {
-    const { barrioOrg } = await requireUidAndBarrioOrg(request);
+    const { uid, barrioOrg } = await requireUidAndBarrioOrg(request);
+    await requireLeadership(uid);
     const { title, body } = await request.json();
 
     if (!title || !body) {
