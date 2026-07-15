@@ -18,6 +18,19 @@ export async function syncServerSession(idToken: string | null): Promise<boolean
         credentials: 'same-origin',
         cache: 'no-store',
       });
+      if (!res.ok) {
+        // Surface server-side failures (e.g. 500 from misconfigured Admin) in console
+        // so production debugging is possible without breaking the login UX.
+        try {
+          const body = await res.text();
+          console.warn(
+            `[auth-session] POST /api/auth/session failed: ${res.status}`,
+            body.slice(0, 300)
+          );
+        } catch {
+          console.warn(`[auth-session] POST /api/auth/session failed: ${res.status}`);
+        }
+      }
       return res.ok;
     }
 
@@ -27,8 +40,9 @@ export async function syncServerSession(idToken: string | null): Promise<boolean
       cache: 'no-store',
     });
     return res.ok;
-  } catch {
+  } catch (error) {
     // Network / SW failure — cookie may be stale or missing.
+    console.warn('[auth-session] syncServerSession network error', error);
     return false;
   }
 }

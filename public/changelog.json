@@ -6,20 +6,20 @@
       "date": "2026-07-15",
       "changes": {
         "es": [
-          "Corregimos problemas de inicio de sesión y redirecciones para que la sesión se mantenga estable.",
-          "Ahora las notificaciones se pueden descartar suavemente sin eliminarlas por completo.",
-          "Mejoramos la seguridad actualizando dependencias y corrigiendo vulnerabilidades.",
-          "Actualizamos Firebase Admin y TypeScript para mejor compatibilidad y rendimiento.",
-          "Actualizamos Next.js a la versión más reciente para correcciones de errores y mejoras.",
-          "Optimizamos el manejo de autenticación y sincronización de datos para mayor fiabilidad."
+          "Agregamos páginas de aterrizaje en español e inglés con metadatos SEO completos, incluyendo Open Graph y Twitter Cards, para mejorar tu visibilidad en buscadores.",
+          "Ahora las notificaciones se pueden descartar suavemente en lugar de eliminarse permanentemente, dándote más control sobre tu bandeja de entrada.",
+          "Corregimos problemas de inicio de sesión que causaban bucles de redirección y fallos en cookies de sesión, haciendo que el acceso sea más confiable.",
+          "Actualizamos varias dependencias de seguridad para proteger tu información y garantizar un funcionamiento más estable de la aplicación.",
+          "Mejoramos el manejo de errores en la carga de datos, mostrando información almacenada en caché cuando hay problemas de permisos en la base de datos.",
+          "Optimizamos la instalación de la aplicación en dispositivos móviles (PWA) para que funcione correctamente sin fallos de iconos."
         ],
         "en": [
-          "Fixed login and redirect issues so your session stays stable and secure.",
-          "You can now dismiss notifications softly instead of deleting them permanently.",
-          "Improved security by updating dependencies and fixing vulnerabilities.",
-          "Updated Firebase Admin and TypeScript for better compatibility and performance.",
-          "Updated Next.js to the latest version for bug fixes and improvements.",
-          "Optimized authentication and data sync for more reliable operation."
+          "We added Spanish and English landing pages with full SEO metadata, including Open Graph and Twitter Cards, to boost your search engine visibility.",
+          "Notifications can now be softly dismissed instead of permanently deleted, giving you more control over your inbox.",
+          "Fixed login issues that caused redirect loops and session cookie failures, making sign-in more reliable.",
+          "Updated several security dependencies to protect your data and ensure smoother app performance.",
+          "Improved error handling when loading data, showing cached information when database permission errors occur.",
+          "Optimized the mobile app installation (PWA) so it works correctly without icon-related failures."
         ]
       }
     },

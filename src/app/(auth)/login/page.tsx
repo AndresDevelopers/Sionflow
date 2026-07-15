@@ -43,8 +43,34 @@ const loginSchema = z.object({
     .min(1, { message: "Password is required." }),
 });
 
+/**
+ * Safe post-login destination.
+ * /es and /en are public SEO landings — after auth go to the app shell (/)
+ * and persist the language preference for the UI.
+ */
 function safeNextPath(next: string | null): string {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : "/";
+  if (!next || !next.startsWith("/") || next.startsWith("//")) return "/";
+  const pathOnly = next.split("?")[0]?.split("#")[0] || "/";
+
+  if (pathOnly === "/es" || pathOnly === "/en") {
+    try {
+      localStorage.setItem("language", pathOnly.slice(1));
+    } catch {
+      // ignore
+    }
+    return "/";
+  }
+
+  if (
+    pathOnly === "/login" ||
+    pathOnly === "/register" ||
+    pathOnly === "/forgot-password" ||
+    pathOnly.startsWith("/api") ||
+    pathOnly.startsWith("/_next")
+  ) {
+    return "/";
+  }
+  return next;
 }
 
 function LoginForm() {

@@ -11,7 +11,6 @@
  */
 
 import { NextResponse } from 'next/server';
-import { authAdmin } from '@/lib/firebase-admin';
 
 export type RateLimitPreset = 'api' | 'churchChat' | 'auth' | 'upload';
 
@@ -143,17 +142,21 @@ function getBearerToken(request: Request): string | null {
 /**
  * Resolve a stable identity for rate limiting: prefers Firebase uid when a
  * valid Bearer ID token is present; otherwise falls back to client IP.
+ *
+ * Uses JWKS (jose) instead of firebase-admin so importing this module never
+ * crashes API routes when Admin credentials are missing/misconfigured.
  */
 export async function resolveRateLimitIdentity(request: Request): Promise<string> {
   const token = getBearerToken(request);
   if (token) {
     try {
-      const decoded = await authAdmin.verifyIdToken(token);
-      if (decoded?.uid) {
-        return `uid:${decoded.uid}`;
+      const { verifyFirebaseIdTokenEdge } = await import('@/lib/firebase-token-edge');
+      const decoded = await verifyFirebaseIdTokenEdge(token);
+      if (decoded?.sub) {
+        return `uid:${decoded.sub}`;
       }
     } catch {
-      // Invalid/expired token — fall through to IP. Do not fail the request here.
+      // Invalid/expired token or missing project id — fall through to IP.
     }
   }
   return `ip:${getClientIp(request)}`;

@@ -64,9 +64,14 @@ export const metadata: Metadata = {
   // ── Metadata Base ───────────────────────────────────────────────────
   metadataBase: new URL(siteUrl),
 
-  // ── Canonical & Alternates ─────────────────────────────────────────
+  // ── Canonical & Alternates (hreflang for SEO locales) ──────────────
   alternates: {
     canonical: siteUrl,
+    languages: {
+      es: `${siteUrl}/es`,
+      en: `${siteUrl}/en`,
+      "x-default": siteUrl,
+    },
   },
 
   // ── Robots ──────────────────────────────────────────────────────────

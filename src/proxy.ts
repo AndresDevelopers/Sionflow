@@ -21,6 +21,9 @@ const PUBLIC_EXACT = new Set([
   '/sitemap.xml',
   '/manifest',
   '/favicon.ico',
+  // SEO locale landings (indexable without session)
+  '/es',
+  '/en',
 ]);
 
 const PUBLIC_PREFIXES = [
@@ -39,10 +42,25 @@ function isPublicPath(pathname: string): boolean {
   return false;
 }
 
+function isUsefulNextPath(pathname: string): boolean {
+  if (!pathname || pathname === '/' || pathname === '/login') return false;
+  // SEO locale landings are public; after login send users to the app shell (/)
+  if (pathname === '/es' || pathname === '/en') return false;
+  if (
+    pathname === '/register' ||
+    pathname === '/forgot-password' ||
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next')
+  ) {
+    return false;
+  }
+  return true;
+}
+
 function loginRedirect(request: NextRequest, reason: string): NextResponse {
   const loginUrl = new URL('/login', request.url);
   const { pathname, search } = request.nextUrl;
-  if (pathname && pathname !== '/login') {
+  if (isUsefulNextPath(pathname)) {
     loginUrl.searchParams.set('next', `${pathname}${search}`);
   }
   loginUrl.searchParams.set('reason', reason);
