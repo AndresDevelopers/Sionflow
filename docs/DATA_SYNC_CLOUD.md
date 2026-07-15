@@ -28,6 +28,15 @@ App (cliente)
 - `c_obra_misional_*`, `c_observaciones_salud`, `c_cumpleanos`, `c_bautismos`
 - `c_fs_*`, `c_conversos`, `c_futuros_miembros`, `c_users`
 
+## Qué NO publica señal (pipeline de notificaciones)
+
+- `c_notifications` y `c_push_subscriptions` son propiedad del **notification-dispatcher** CF.
+  Esos writes **nunca** activan `syncOn*Write`: la CF de notificaciones ya lleva el payload
+  (FCM `type: user-notification`) y escribe el documento in-app.
+- Updates de solo bookkeeping de notificaciones en colecciones de dominio
+  (p. ej. `urgentNotifiedAt`, flags derivados de push) se omiten del data-sync.
+  Cambios de contenido real (título, fechas, familias, …) sí publican señal.
+
 ## Deploy
 
 ```bash

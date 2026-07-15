@@ -1,6 +1,28 @@
 {
-  "current": "1.1.31",
+  "current": "1.1.32",
   "entries": [
+    {
+      "version": "1.1.32",
+      "date": "2026-07-15",
+      "changes": {
+        "es": [
+          "Reemplazamos el middleware de borde con un nuevo proxy para mejorar la autenticación de solicitudes.",
+          "Actualizamos todas las referencias a 'edge middleware' por 'proxy' en el código, la documentación y los comentarios.",
+          "Corregimos la ruta de importación de tipos en next-env.d.ts para compilaciones de desarrollo.",
+          "Agregamos protecciones en el pipeline de sincronización de datos para evitar actualizaciones de notificaciones y colecciones propiedad de notificaciones.",
+          "Corregimos la sintaxis del plugin tailwindcss-animate.",
+          "Ajustamos las cabeceras de caché de desarrollo en next.config.js para evitar problemas con HMR."
+        ],
+        "en": [
+          "Replaced the edge middleware with a new proxy to improve request authentication.",
+          "Updated all references from 'edge middleware' to 'proxy' across code, docs, and comments.",
+          "Fixed the type import path in next-env.d.ts for development builds.",
+          "Added data sync pipeline safeguards to skip notification bookkeeping updates and notification-owned collections.",
+          "Fixed the tailwindcss-animate plugin import syntax.",
+          "Adjusted development cache headers in next.config.js to prevent HMR breakages."
+        ]
+      }
+    },
     {
       "version": "1.1.31",
       "date": "2026-07-14",

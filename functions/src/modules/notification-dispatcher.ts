@@ -327,7 +327,10 @@ class FcmRepository {
             },
           },
           // ── Data payload (available on all platforms) ─────────────────────
+          // Explicit type so clients never confuse this with silent data-sync
+          // messages from the data-sync-publisher CF (type: "data-sync").
           data: {
+            type: "user-notification",
             url: payload.url ?? "/",
             tag: payload.tag ?? "",
             title: payload.title,

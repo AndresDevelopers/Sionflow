@@ -220,6 +220,71 @@ export const onActivityCreated = functions
         }
     });
 
+/** User-visible fields for activity update notifications (ignore bookkeeping). */
+const ACTIVITY_NOTIF_CONTENT_FIELDS = [
+    "title",
+    "date",
+    "time",
+    "description",
+    "location",
+    "context",
+    "learning",
+    "additionalText",
+    "imageUrls",
+] as const;
+
+/** User-visible fields for service update notifications (ignore bookkeeping). */
+const SERVICE_NOTIF_CONTENT_FIELDS = [
+    "title",
+    "date",
+    "time",
+    "description",
+    "location",
+    "context",
+    "learning",
+    "additionalText",
+    "imageUrls",
+] as const;
+
+function stableFieldValue(value: unknown): string {
+    if (value == null) return String(value);
+    if (typeof value === "object") {
+        if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+            return `ts:${(value as { toMillis: () => number }).toMillis()}`;
+        }
+        if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+            return `ts:${(value as { toDate: () => Date }).toDate().getTime()}`;
+        }
+        if (value instanceof Date) return `ts:${value.getTime()}`;
+        try {
+            return JSON.stringify(value);
+        } catch {
+            return String(value);
+        }
+    }
+    return JSON.stringify(value);
+}
+
+/**
+ * True when at least one user-visible content field changed.
+ * Bookkeeping-only updates (councilNotified, timestamps, etc.) must NOT
+ * re-fire notification CFs — the notification dispatcher already wrote
+ * c_notifications for the real domain event when applicable.
+ */
+function hasMeaningfulContentChange(
+    before: FirebaseFirestore.DocumentData | undefined,
+    after: FirebaseFirestore.DocumentData | undefined,
+    fields: readonly string[]
+): boolean {
+    if (!before || !after) return true;
+    for (const field of fields) {
+        if (stableFieldValue(before[field]) !== stableFieldValue(after[field])) {
+            return true;
+        }
+    }
+    return false;
+}
+
 export const onActivityUpdated = functions
     .runWith({ maxInstances: MAX_INSTANCES_DEFAULT })
     .firestore
@@ -229,6 +294,14 @@ export const onActivityUpdated = functions
             const before = change.before.data() as (Activity & { barrioOrg?: string }) | undefined;
             const after = change.after.data() as (Activity & { barrioOrg?: string }) | undefined;
             if (!after) return;
+
+            // Skip bookkeeping-only updates (e.g. flags written after another notif CF)
+            if (!hasMeaningfulContentChange(before, after, ACTIVITY_NOTIF_CONTENT_FIELDS)) {
+                functions.logger.log("onActivityUpdated: skip bookkeeping-only change", {
+                    activityId: context.params.activityId,
+                });
+                return;
+            }
 
             const activityId = context.params.activityId as string;
             const activityTitle = after.title?.trim() || "Actividad";
@@ -348,6 +421,15 @@ export const onServiceUpdated = functions
             const before = change.before.data() as (Service & { barrioOrg?: string }) | undefined;
             const after = change.after.data() as (Service & { barrioOrg?: string }) | undefined;
             if (!after) return;
+
+            // e.g. councilNotified=true is written after the notification pipeline
+            // already carried the user-facing message — do not re-notify "Servicio Actualizado".
+            if (!hasMeaningfulContentChange(before, after, SERVICE_NOTIF_CONTENT_FIELDS)) {
+                functions.logger.log("onServiceUpdated: skip bookkeeping-only change", {
+                    serviceId: context.params.serviceId,
+                });
+                return;
+            }
 
             const serviceId = context.params.serviceId as string;
             const title = after.title?.trim() || before?.title?.trim() || "Servicio";
@@ -745,11 +827,11 @@ interface UserNotificationData {
 }
 
 // ── Cache en memoria para preferencias de notificación de usuarios ──────────
-// TTL corto (5 min). Claves: "__all__" o un barrioOrg concreto.
+// TTL corto (10 min). Claves: "__all__" o un barrioOrg concreto.
 // Triggers por documento deben usar getUsersForDocBarrioOrg(scope) — O(users del barrio).
 // Crons diarios/semanales usan getAllUsersNotificationData() una vez.
 const _usersCacheByKey = new Map<string, { data: UserNotificationData[]; ts: number }>();
-const USERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const USERS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos
 const USERS_CACHE_ALL_KEY = "__all__";
 
 /** Fields needed for notification eligibility (reduces bytes/read cost). */

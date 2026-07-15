@@ -18,7 +18,9 @@ export function PushForegroundListener() {
       const data =
         typeof payload.data === 'object' && payload.data ? payload.data : null;
 
-      // Silent data-sync from Cloud Function — refresh without notification toast
+      // Silent data-sync from data-sync-publisher CF — refresh without toast.
+      // User-facing pushes from notification-dispatcher use type "user-notification"
+      // and must NOT trigger auto data refresh (that CF already wrote c_notifications).
       if (data && 'type' in data && data.type === 'data-sync') {
         const d = data as Record<string, unknown>;
         window.dispatchEvent(

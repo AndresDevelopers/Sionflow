@@ -208,10 +208,10 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // En producción: cache larga de assets con hash.
-      // En desarrollo: NUNCA cachear /_next/static — si no, el navegador se queda
-      // con bundles viejos (p. ej. Server Actions obsoletas) y muestra
-      // UnrecognizedActionError aunque el código en disco ya esté actualizado.
+      // Production: long cache for hashed static assets.
+      // Dev: do NOT set Cache-Control on /_next/static (or blanket /:path*) —
+      // Next.js manages those headers; overriding them breaks HMR and triggers
+      // "Setting a custom Cache-Control header can break Next.js development behavior."
       ...(process.env.NODE_ENV === 'production'
         ? [
             {
@@ -230,26 +230,7 @@ const nextConfig: NextConfig = {
               ],
             },
           ]
-        : [
-            {
-              source: '/_next/static/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'no-store, no-cache, must-revalidate, max-age=0',
-                },
-              ],
-            },
-            {
-              source: '/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'no-store, no-cache, must-revalidate, max-age=0',
-                },
-              ],
-            },
-          ]),
+        : []),
     ];
   },
   // Webpack configuration for source maps

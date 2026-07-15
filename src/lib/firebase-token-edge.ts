@@ -1,6 +1,6 @@
 /**
  * Edge-safe verification of Firebase ID tokens (JWKS).
- * Used by middleware — no firebase-admin on the Edge runtime.
+ * Used by proxy (request gate) — no firebase-admin on the Edge/Node runtime.
  */
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 

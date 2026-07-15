@@ -173,6 +173,67 @@ exports.onActivityCreated = functions
         });
     }
 });
+/** User-visible fields for activity update notifications (ignore bookkeeping). */
+const ACTIVITY_NOTIF_CONTENT_FIELDS = [
+    "title",
+    "date",
+    "time",
+    "description",
+    "location",
+    "context",
+    "learning",
+    "additionalText",
+    "imageUrls",
+];
+/** User-visible fields for service update notifications (ignore bookkeeping). */
+const SERVICE_NOTIF_CONTENT_FIELDS = [
+    "title",
+    "date",
+    "time",
+    "description",
+    "location",
+    "context",
+    "learning",
+    "additionalText",
+    "imageUrls",
+];
+function stableFieldValue(value) {
+    if (value == null)
+        return String(value);
+    if (typeof value === "object") {
+        if (typeof value.toMillis === "function") {
+            return `ts:${value.toMillis()}`;
+        }
+        if (typeof value.toDate === "function") {
+            return `ts:${value.toDate().getTime()}`;
+        }
+        if (value instanceof Date)
+            return `ts:${value.getTime()}`;
+        try {
+            return JSON.stringify(value);
+        }
+        catch {
+            return String(value);
+        }
+    }
+    return JSON.stringify(value);
+}
+/**
+ * True when at least one user-visible content field changed.
+ * Bookkeeping-only updates (councilNotified, timestamps, etc.) must NOT
+ * re-fire notification CFs — the notification dispatcher already wrote
+ * c_notifications for the real domain event when applicable.
+ */
+function hasMeaningfulContentChange(before, after, fields) {
+    if (!before || !after)
+        return true;
+    for (const field of fields) {
+        if (stableFieldValue(before[field]) !== stableFieldValue(after[field])) {
+            return true;
+        }
+    }
+    return false;
+}
 exports.onActivityUpdated = functions
     .runWith({ maxInstances: MAX_INSTANCES_DEFAULT })
     .firestore
@@ -183,6 +244,13 @@ exports.onActivityUpdated = functions
         const after = change.after.data();
         if (!after)
             return;
+        // Skip bookkeeping-only updates (e.g. flags written after another notif CF)
+        if (!hasMeaningfulContentChange(before, after, ACTIVITY_NOTIF_CONTENT_FIELDS)) {
+            functions.logger.log("onActivityUpdated: skip bookkeeping-only change", {
+                activityId: context.params.activityId,
+            });
+            return;
+        }
         const activityId = context.params.activityId;
         const activityTitle = after.title?.trim() || "Actividad";
         const prevTitle = before?.title?.trim() || activityTitle;
@@ -284,6 +352,14 @@ exports.onServiceUpdated = functions
         const after = change.after.data();
         if (!after)
             return;
+        // e.g. councilNotified=true is written after the notification pipeline
+        // already carried the user-facing message — do not re-notify "Servicio Actualizado".
+        if (!hasMeaningfulContentChange(before, after, SERVICE_NOTIF_CONTENT_FIELDS)) {
+            functions.logger.log("onServiceUpdated: skip bookkeeping-only change", {
+                serviceId: context.params.serviceId,
+            });
+            return;
+        }
         const serviceId = context.params.serviceId;
         const title = after.title?.trim() || before?.title?.trim() || "Servicio";
         const docBarrioOrg = after.barrioOrg || before?.barrioOrg || null;
@@ -589,11 +665,11 @@ function getBirthdayDateInEcuador(birthDate, year) {
     return new Date(year, parts.month - 1, parts.day);
 }
 // ── Cache en memoria para preferencias de notificación de usuarios ──────────
-// TTL corto (5 min). Claves: "__all__" o un barrioOrg concreto.
+// TTL corto (10 min). Claves: "__all__" o un barrioOrg concreto.
 // Triggers por documento deben usar getUsersForDocBarrioOrg(scope) — O(users del barrio).
 // Crons diarios/semanales usan getAllUsersNotificationData() una vez.
 const _usersCacheByKey = new Map();
-const USERS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutos
+const USERS_CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos
 const USERS_CACHE_ALL_KEY = "__all__";
 /** Fields needed for notification eligibility (reduces bytes/read cost). */
 const USER_NOTIF_SELECT_FIELDS = [

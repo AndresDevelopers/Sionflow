@@ -19,7 +19,7 @@ function extractBearer(request: Request): string | null {
 
 /**
  * POST /api/auth/session
- * Sets httpOnly cookie with a verified Firebase ID token for Edge middleware.
+ * Sets httpOnly cookie with a verified Firebase ID token for the Next.js proxy.
  */
 export async function POST(request: Request) {
   const limited = await enforceRateLimit(request, 'auth');
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
 
 /**
  * DELETE /api/auth/session
- * Clears the middleware session cookie (logout).
+ * Clears the proxy session cookie (logout).
  */
 export async function DELETE(request: Request) {
   const limited = await enforceRateLimit(request, 'auth');

@@ -81,7 +81,7 @@ function LoginForm() {
         values.password
       );
 
-      // Edge middleware session cookie (defense-in-depth)
+      // Proxy session cookie (defense-in-depth)
       try {
         const token = await cred.user.getIdToken();
         const { syncServerSession } = await import("@/lib/auth-session-client");

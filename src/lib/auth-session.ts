@@ -1,6 +1,6 @@
 /**
  * Server session cookie bridged from Firebase client ID tokens.
- * Cookie is verified in Edge middleware via JWKS (see firebase-token-edge.ts).
+ * Cookie is verified in the Next.js proxy via JWKS (see firebase-token-edge.ts).
  */
 
 export const SESSION_COOKIE_NAME = 'sf_session';

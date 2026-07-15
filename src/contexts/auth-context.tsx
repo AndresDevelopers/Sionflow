@@ -260,7 +260,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, [applyProfile]);
 
-  // Keep Edge middleware session cookie in sync with Firebase ID token.
+  // Keep proxy session cookie in sync with Firebase ID token.
   useEffect(() => {
     if (!auth) return;
     const unsub = onIdTokenChanged(auth, async (currentUser) => {

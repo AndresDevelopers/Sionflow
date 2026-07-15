@@ -229,16 +229,106 @@ async function sendDataSyncFcm(
 }
 
 /**
+ * Fields written only for notification delivery bookkeeping / derived flags.
+ * Changes that touch ONLY these keys must NOT publish a data-sync signal:
+ * the notification Cloud Function already carries that payload and writes
+ * c_notifications / c_push_subscriptions itself.
+ *
+ * Domain content changes (title, families, status, …) still sync as usual.
+ */
+const SYNC_NOISE_FIELDS = new Set([
+  // Written after the notification CF / helpers already created c_notifications + FCM.
+  // Not displayed as shared domain content; only throttles re-sending.
+  "urgentNotifiedAt",
+  // Derived account flag from per-device push opt-in (not shared domain data)
+  "pushNotificationsEnabled",
+  // Push delivery diagnostics (never require a barrio-wide data pull)
+  "lastPushAttemptAt",
+  "lastPushAttemptMode",
+  "lastPushResult",
+  "lastPushErrorCode",
+  "lastNotificationTag",
+  // Server-side stamps that often accompany bookkeeping-only writes
+  "updatedAt",
+  "updatedAtMs",
+  // Note: councilNotified IS shared UI state on /council — still publishes sync.
+]);
+
+function serializeForCompare(value: unknown): string {
+  if (value == null) return String(value);
+  if (typeof value === "object") {
+    // Firestore Timestamp / Date → stable ms
+    if (typeof (value as { toMillis?: () => number }).toMillis === "function") {
+      return `ts:${(value as { toMillis: () => number }).toMillis()}`;
+    }
+    if (typeof (value as { toDate?: () => Date }).toDate === "function") {
+      return `ts:${(value as { toDate: () => Date }).toDate().getTime()}`;
+    }
+    if (value instanceof Date) {
+      return `ts:${value.getTime()}`;
+    }
+    if (Array.isArray(value)) {
+      return `[${value.map(serializeForCompare).join(",")}]`;
+    }
+    const obj = value as Record<string, unknown>;
+    const keys = Object.keys(obj).sort();
+    return `{${keys.map((k) => `${k}:${serializeForCompare(obj[k])}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/**
+ * True when the only differing keys (or values) are notification bookkeeping
+ * noise — i.e. the notification pipeline already handled the user-facing side
+ * and there is no domain data other clients need to pull.
+ */
+export function isNotificationBookkeepingOnlyChange(
+  beforeData: FirebaseFirestore.DocumentData | undefined | null,
+  afterData: FirebaseFirestore.DocumentData | undefined | null
+): boolean {
+  if (!beforeData || !afterData) return false;
+
+  const keys = new Set([...Object.keys(beforeData), ...Object.keys(afterData)]);
+  let anyNoiseChange = false;
+
+  for (const key of keys) {
+    const beforeVal = serializeForCompare(beforeData[key]);
+    const afterVal = serializeForCompare(afterData[key]);
+    if (beforeVal === afterVal) continue;
+
+    if (!SYNC_NOISE_FIELDS.has(key)) {
+      return false;
+    }
+    anyNoiseChange = true;
+  }
+
+  return anyNoiseChange;
+}
+
+/**
  * Handler factory for functions.firestore.document(...).onWrite(...)
+ *
+ * Does NOT listen to c_notifications / c_push_subscriptions — those are owned
+ * by the notification dispatcher CF and must never fan out a data-sync refresh.
  */
 export function createCollectionSyncHandler(
   db: admin.firestore.Firestore,
   messaging: admin.messaging.Messaging,
   logger: SimpleLogger,
   collectionName: string
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
 ): (change: any, context: any) => Promise<void> {
   return async (change, context): Promise<void> => {
+    // Notification pipeline collections must never publish data-sync signals
+    if (
+      collectionName === "c_notifications" ||
+      collectionName === "c_push_subscriptions"
+    ) {
+      logger.log("sync handler: skip notification-owned collection", {
+        collection: collectionName,
+      });
+      return;
+    }
+
     const afterExists = Boolean(change?.after?.exists);
     const beforeExists = Boolean(change?.before?.exists);
     const afterData = afterExists ? change.after.data() : undefined;
@@ -254,13 +344,33 @@ export function createCollectionSyncHandler(
       return;
     }
 
-    let changeType: SyncChangeType = "write";
-    if (!beforeExists && afterExists) changeType = "create";
-    else if (beforeExists && !afterExists) changeType = "delete";
-    else changeType = "update";
+    let changeType: SyncChangeType;
+    if (!beforeExists && afterExists) {
+      changeType = "create";
+    } else if (beforeExists && !afterExists) {
+      changeType = "delete";
+    } else {
+      changeType = "update";
+    }
 
     const docId =
       context?.params?.docId || change?.after?.id || change?.before?.id || "unknown";
+
+    // Notification CF / client notif helpers write throttle flags (e.g. urgentNotifiedAt)
+    // AFTER they already wrote c_notifications and sent FCM.
+    // Those writes must not re-activate the data-sync CF — the other CF already
+    // carried and persisted the user-facing notification payload.
+    if (
+      changeType === "update" &&
+      isNotificationBookkeepingOnlyChange(beforeData, afterData)
+    ) {
+      logger.log("sync handler: skip notification bookkeeping-only update", {
+        collection: collectionName,
+        docId,
+        barrioOrg: resolvedBarrio,
+      });
+      return;
+    }
 
     await publishSyncSignal(db, messaging, logger, {
       barrioOrg: resolvedBarrio,

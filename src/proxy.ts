@@ -3,11 +3,11 @@ import { SESSION_COOKIE_NAME } from '@/lib/auth-session';
 import { verifyFirebaseIdTokenEdge } from '@/lib/firebase-token-edge';
 
 /**
- * Edge gate for authenticated app shells.
+ * Edge/network gate for authenticated app shells (Next.js "proxy" convention).
  * APIs keep their own Bearer/CRON checks — this only protects document navigations.
  *
  * Offline/PWA: cached navigations may be served by the SW without re-hitting this
- * middleware; client PrivateRoute remains the offline UX authority.
+ * proxy; client PrivateRoute remains the offline UX authority.
  */
 
 const PUBLIC_EXACT = new Set([
@@ -60,7 +60,7 @@ function loginRedirect(request: NextRequest, reason: string): NextResponse {
   return res;
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   if (isPublicPath(pathname)) {

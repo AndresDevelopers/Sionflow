@@ -82,6 +82,8 @@ function extractNotificationPayload(payload) {
 function isDataSyncPayload(payload) {
   const data = payload?.data ?? {};
   const t = data.type;
+  // user-notification = notification-dispatcher CF (already wrote c_notifications)
+  if (t === 'user-notification') return false;
   return t === 'data-sync' || t === 'DATA_SYNC';
 }
 

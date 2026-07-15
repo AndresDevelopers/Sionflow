@@ -116,7 +116,7 @@ SionFlow es multi-tenant por `barrioOrg` (`barrio|organización`) sobre Next.js 
 ## 🟠 ALTOS
 
 ### A1. Sin protección server-side de rutas de página (solo guardas client-side) — ✅ REMEDIADO (defense-in-depth)
-- **Ubicación:** `src/middleware.ts`, `src/app/api/auth/session`, `src/lib/firebase-token-edge.ts`, sync en `auth-context` / login / logout
+- **Ubicación:** `src/proxy.ts`, `src/app/api/auth/session`, `src/lib/firebase-token-edge.ts`, sync en `auth-context` / login / logout
 - **Problema (histórico):** solo `PrivateRoute` client-side.
 - [x] Cookie httpOnly `sf_session` con ID token Firebase (POST `/api/auth/session`).
 - [x] Middleware Edge verifica JWT con JWKS de Google (`jose`).

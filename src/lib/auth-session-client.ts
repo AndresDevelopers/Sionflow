@@ -1,5 +1,5 @@
 /**
- * Client helper: keep Edge middleware session cookie in sync with Firebase Auth.
+ * Client helper: keep proxy session cookie in sync with Firebase Auth.
  */
 
 export async function syncServerSession(idToken: string | null): Promise<void> {
@@ -19,6 +19,6 @@ export async function syncServerSession(idToken: string | null): Promise<void> {
       });
     }
   } catch {
-    // Non-fatal: APIs still use Bearer; middleware is defense-in-depth.
+    // Non-fatal: APIs still use Bearer; proxy is defense-in-depth.
   }
 }

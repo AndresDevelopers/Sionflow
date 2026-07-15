@@ -30,7 +30,16 @@ export interface PublishSyncSignalParams {
  */
 export declare function publishSyncSignal(db: admin.firestore.Firestore, messaging: admin.messaging.Messaging, logger: SimpleLogger, params: PublishSyncSignalParams): Promise<void>;
 /**
+ * True when the only differing keys (or values) are notification bookkeeping
+ * noise — i.e. the notification pipeline already handled the user-facing side
+ * and there is no domain data other clients need to pull.
+ */
+export declare function isNotificationBookkeepingOnlyChange(beforeData: FirebaseFirestore.DocumentData | undefined | null, afterData: FirebaseFirestore.DocumentData | undefined | null): boolean;
+/**
  * Handler factory for functions.firestore.document(...).onWrite(...)
+ *
+ * Does NOT listen to c_notifications / c_push_subscriptions — those are owned
+ * by the notification dispatcher CF and must never fan out a data-sync refresh.
  */
 export declare function createCollectionSyncHandler(db: admin.firestore.Firestore, messaging: admin.messaging.Messaging, logger: SimpleLogger, collectionName: string): (change: any, context: any) => Promise<void>;
 export {};
