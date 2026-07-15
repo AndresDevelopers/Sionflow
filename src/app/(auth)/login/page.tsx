@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -38,7 +38,7 @@ const loginSchema = z.object({
     .min(1, { message: "Password is required." }),
 });
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
@@ -219,5 +219,29 @@ export default function LoginPage() {
     </Card>
     <InstallPrompt />
     </>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-2xl">…</CardTitle>
+            <CardDescription>Loading…</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="h-10 rounded-md bg-muted animate-pulse" />
+              <div className="h-10 rounded-md bg-muted animate-pulse" />
+              <div className="h-10 rounded-md bg-muted animate-pulse" />
+            </div>
+          </CardContent>
+        </Card>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }
