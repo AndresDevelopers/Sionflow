@@ -1,6 +1,10 @@
 # 🕊️ SionFlow — Sistema de Gestión para la Presidencia del Quórum y la Sociedad de Socorro
 
+[![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+
 Aplicación web moderna (PWA) diseñada para las **presidencias del Quórum de Élderes y la Sociedad de Socorro** — presidente, consejeros y secretario — en la Iglesia de Jesucristo de los Santos de los Últimos Días. Digitaliza y centraliza las responsabilidades administrativas y pastorales de ambas organizaciones.
+
+> **Licencia AGPL-3.0**: Este proyecto está licenciado bajo la [GNU Affero General Public License v3.0 o posterior](LICENSE) (AGPL-3.0-or-later). Cualquier uso del software como servicio (SaaS/web), modificado o no, **obliga a publicar el código fuente correspondiente** conforme a la [sección 13 de AGPL-3.0](https://www.gnu.org/licenses/agpl-3.0.html#section13). Ver también [NOTICE](NOTICE).
 
 > **White-label + multi-organización**: El nombre, logo e ícono de la app son configurables mediante variables de entorno (`NEXT_PUBLIC_APP_NAME`, `NEXT_PUBLIC_APP_LOGO`, `NEXT_PUBLIC_APP_ICON`). La app soporta múltiples organizaciones por barrio (Quórum de Élderes, Sociedad de Socorro, etc.) con datos aislados por `barrioOrg`. "SionFlow" es el nombre por defecto en este repositorio.
 
@@ -560,7 +564,11 @@ Ver [CONTRIBUTING.md](CONTRIBUTING.md) para estándares de código.
 
 ## Licencia
 
-MIT — ver [LICENSE](LICENSE).
+**AGPL-3.0-or-later** — ver [LICENSE](LICENSE) y [NOTICE](NOTICE).
+
+Copyright (C) 2025 AndresDevelopers
+
+Este software se distribuye bajo la GNU Affero General Public License v3.0 o, a tu opción, cualquier versión posterior. Si lo ejecutas como servicio de red (SaaS, aplicación web u otro acceso remoto), la sección 13 de AGPL-3.0 exige ofrecer a los usuarios el código fuente correspondiente de la versión que estén usando.
 
 ---
 

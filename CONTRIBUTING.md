@@ -6,8 +6,8 @@ First off, thank you for considering contributing to SionFlow. It's people like 
 
 ### Reporting Bugs
 
--   Ensure the bug was not already reported by searching on GitHub under [Issues](https://github.com/AndresDevelopers/SionFlow/issues).
--   If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/AndresDevelopers/SionFlow/issues/new). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
+-   Ensure the bug was not already reported by searching on GitHub under [Issues](https://github.com/AndresDevelopers/Sionflow/issues).
+-   If you're unable to find an open issue addressing the problem, [open a new one](https://github.com/AndresDevelopers/Sionflow/issues/new). Be sure to include a **title and clear description**, as much relevant information as possible, and a **code sample** or an **executable test case** demonstrating the expected behavior that is not occurring.
 
 ### Suggesting Enhancements
 
@@ -33,9 +33,9 @@ First off, thank you for considering contributing to SionFlow. It's people like 
 
 ### TypeScript Styleguide
 
-All TypeScript code must adhere to the rules defined in the `.eslintrc.js` file. We use Prettier for code formatting, so please ensure it is run before committing.
+All TypeScript code must adhere to the rules defined in the `eslint.config.mjs` file. We use Prettier for code formatting, so please ensure it is run before committing.
 
 ## Code of Conduct
 
 This project and everyone participating in it is governed by the [SionFlow Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
-de.
+

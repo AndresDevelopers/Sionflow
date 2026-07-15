@@ -287,9 +287,8 @@ service cloud.firestore {
 If you discover a security vulnerability, follow this process:
 
 #### Step 1: Initial Contact
-- **Email**: `security@sionflow.com`
-- **PGP Key**: Available at `https://sionflow.com/.well-known/pgp-key.asc`
-- **Response Time**: Within 4 hours for critical, 24 hours for others
+- **Email**: `security@sionflow.com` (only contact channel)
+- **Response Time**: Best effort — typically within 24–48 hours for critical issues; longer for lower severity (single maintainer; no SLA guarantees)
 
 #### Step 2: Vulnerability Report Template
 
@@ -326,36 +325,16 @@ If you discover a security vulnerability, follow this process:
 
 #### Step 3: Response Timeline
 
-| Severity | Initial Response | Investigation | Fix Deployment | Public Disclosure |
-|----------|------------------|---------------|----------------|-------------------|
-| Critical | 4 hours          | 24 hours      | 72 hours       | 30 days           |
-| High     | 24 hours         | 72 hours      | 1 week         | 60 days           |
-| Medium   | 48 hours         | 1 week        | 2 weeks        | 90 days           |
-| Low      | 1 week           | 2 weeks       | Next release   | Next release      |
+All times below are **best effort** for a solo maintainer. They are not contractual SLAs.
 
-### Bug Bounty Program
+| Severity | Initial Response (best effort) | Investigation / Fix | Public Disclosure |
+|----------|--------------------------------|---------------------|-------------------|
+| Critical | 24–48 hours                    | As soon as practical | Coordinated after fix when appropriate |
+| High     | A few days                     | Within a reasonable release cycle | Coordinated after fix when appropriate |
+| Medium   | Within ~1–2 weeks              | Next suitable release | As needed |
+| Low      | When capacity allows           | Backlog / next release | As needed |
 
-**Scope**: All SionFlow production systems
-**Rewards**: $50 - $5,000 based on severity and impact
-**Hall of Fame**: Public recognition for responsible disclosure
-
-**In Scope**:
-- Authentication/Authorization bypasses
-- SQL/NoSQL injection vulnerabilities
-- Cross-Site Scripting (XSS)
-- Cross-Site Request Forgery (CSRF)
-- Server-Side Request Forgery (SSRF)
-- Remote Code Execution (RCE)
-- Privilege escalation
-- Data exposure vulnerabilities
-
-**Out of Scope**:
-- Social engineering attacks
-- Physical security issues
-- Denial of Service (DoS) attacks
-- Issues in third-party services
-- Already known vulnerabilities
-- Issues requiring physical access
+**Responsible disclosure**: Please report privately to `security@sionflow.com` and allow time to investigate and fix before public disclosure. There is **no bug bounty or monetary reward program**.
 
 ## 🧪 Security Testing
 
@@ -406,55 +385,50 @@ describe('Security Tests', () => {
 
 ### Penetration Testing
 
-**Schedule**: Quarterly for production systems
-**Scope**: Full application security assessment
-**Tools**: OWASP ZAP, Burp Suite, custom scripts
-**Reporting**: Detailed findings with remediation timeline
+**Status**: Not currently scheduled or executed as a formal program.
+
+External tools (e.g. OWASP ZAP, Burp Suite) or third-party penetration tests may be used in the future when capacity allows. Until then, security review relies on ongoing development practices, dependency checks, and manual review by the maintainer. Any future formal pen-test cadence would be documented here when actually in place.
 
 ## 🚨 Incident Response
 
+Development, maintenance, and security incident response for SionFlow are handled directly by **AndresDevelopers (Kevin)**. There is no corporate security team, on-call rotation, or multi-role escalation path. The only contact channel is **`security@sionflow.com`**.
+
 ### Security Incident Classification
 
-| Level | Description | Response Time | Escalation |
-|-------|-------------|---------------|------------|
-| P0    | Active breach, data exposure | Immediate | CEO, CTO, Legal |
-| P1    | Critical vulnerability exploited | 1 hour | CTO, Security Team |
-| P2    | Security control failure | 4 hours | Security Team |
-| P3    | Policy violation | 24 hours | Team Lead |
+| Level | Description | Response (best effort) |
+|-------|-------------|------------------------|
+| P0    | Active breach, data exposure | Prioritized immediately; aim to start triage within 24–48 hours |
+| P1    | Critical vulnerability or likely exploitation | High priority; days rather than weeks when capacity allows |
+| P2    | Security control failure / significant bug | Addressed in the normal maintenance cycle with elevated priority |
+| P3    | Lower-risk policy or hardening issue | Backlog / next suitable release |
 
 ### Incident Response Process
 
-1. **Detection & Analysis** (0-2 hours)
+1. **Detection & Analysis**
    - Identify and classify the incident
    - Assess scope and impact
-   - Activate incident response team
+   - Acknowledge reports via `security@sionflow.com` when possible
 
-2. **Containment** (2-6 hours)
-   - Isolate affected systems
-   - Preserve evidence
-   - Implement temporary fixes
+2. **Containment**
+   - Limit blast radius (disable endpoints, rotate secrets, revoke access as needed)
+   - Preserve useful evidence for investigation
+   - Apply temporary mitigations when a full fix is not yet ready
 
-3. **Eradication & Recovery** (6-24 hours)
-   - Remove threat from environment
-   - Restore systems from clean backups
-   - Implement permanent fixes
+3. **Eradication & Recovery**
+   - Remove the root cause
+   - Restore services safely
+   - Deploy a permanent fix
 
-4. **Post-Incident Activities** (24-72 hours)
-   - Document lessons learned
-   - Update security controls
-   - Notify stakeholders if required
+4. **Post-Incident Activities**
+   - Document what happened and what changed
+   - Improve controls where practical
+   - Notify affected users if required by law or if impact warrants it
 
-### Communication Plan
+### Communication
 
-**Internal Communication**:
-- Slack: `#security-incidents`
-- Email: `security-team@sionflow.com`
-- Phone: Emergency contact list
-
-**External Communication**:
-- Users: In-app notifications, email
-- Regulators: As required by law
-- Media: Prepared statements only
+- **Reports & incidents**: `security@sionflow.com` only (no phone hotline, Slack, or secondary security aliases)
+- **Users**: In-app notice and/or email when disclosure is appropriate
+- **Regulators**: As required by applicable law
 
 ## 📊 Compliance & Auditing
 
@@ -492,50 +466,35 @@ const auditEvents = [
 
 ### Compliance Requirements
 
-**GDPR Compliance**:
-- Data Processing Records (Article 30)
-- Privacy Impact Assessments (Article 35)
-- Data Breach Notifications (Article 33-34)
-- Data Subject Rights (Articles 15-22)
+**Privacy / GDPR-oriented practices** (goals and design intent; not a formal certification claim):
+- Data minimization and access control by tenant/role
+- Careful handling of personal data in application features
+- Breach notification and subject-rights handling as applicable when incidents arise
 
-**Security Standards**:
-- ISO 27001 Information Security Management
-- NIST Cybersecurity Framework
-- OWASP Top 10 compliance
-- SOC 2 Type II (planned)
+**Security standards**:
+- OWASP Top 10 awareness and hardening as a practical goal
+- NIST Cybersecurity Framework principles used as informal guidance where helpful
+
+**Not currently certified or operated as formal programs** (future aspirations only — not present certifications or ongoing audits):
+- SOC 2 Type II — *future goal, not a current certification*
+- ISO 27001 — *future goal, not a current certification*
+- Scheduled external penetration testing (OWASP ZAP / Burp Suite / third parties) — *not running on a quarterly (or any fixed) schedule today*
 
 ### Regular Security Reviews
 
-**Monthly**:
-- Access review and cleanup
-- Vulnerability scan results
-- Security metrics review
-- Incident trend analysis
+As a solo-maintained project, reviews are best-effort rather than a corporate calendar:
 
-**Quarterly**:
-- Penetration testing
-- Security policy updates
-- Training effectiveness review
-- Third-party risk assessment
-
-**Annually**:
-- Full security audit
-- Business continuity testing
-- Compliance certification renewal
-- Security strategy review
+- **Ongoing**: Dependency/vulnerability awareness during development; fix high-risk issues as discovered
+- **When capacity allows**: Access cleanup, policy tweaks, and targeted security review of changed areas
+- **Future (not current)**: Formal pen tests, certification renewal cycles, or third-party assessments if/when adopted
 
 ## 📞 Contact Information
 
-**Security Team**:
-- **Primary**: `security@sionflow.com`
-- **Emergency**: `+1-XXX-XXX-XXXX` (24/7 hotline)
-- **PGP Key**: `https://sionflow.com/.well-known/pgp-key.asc`
+SionFlow is developed and maintained by a single person: **AndresDevelopers (Kevin)**. There is no separate security team, executive escalation chain, or 24/7 hotline.
 
-**Incident Response Team**:
-- **Lead**: Security Officer
-- **Technical**: Senior Developer
-- **Legal**: Legal Counsel
-- **Communications**: Marketing Lead
+- **Security reports & incidents**: `security@sionflow.com` (only channel)
+
+Encrypted email (PGP) is not offered at this time. If a public key is published later, it will be documented here.
 
 ---
 
@@ -546,7 +505,7 @@ const auditEvents = [
 - [Next.js Security Headers](https://nextjs.org/docs/advanced-features/security-headers)
 - [GDPR Compliance Guide](https://gdpr.eu/compliance/)
 
-**Last Updated**: 2024-01-15
-**Next Review**: 2024-04-15
-**Version**: 2.0.0
-0
+**Last Updated**: 2026-07-14
+**Next Review**: 2027-01-14
+**Version**: 2.1.0
+

@@ -6,20 +6,20 @@
       "date": "2026-07-14",
       "changes": {
         "es": [
-          "Ahora puedes iniciar sesión de forma más segura y rápida, con una mejor sincronización entre dispositivos.",
-          "Agregamos un nuevo campo para ingresar códigos de ubicación (Plus Codes) y convertirlos automáticamente a direcciones reales, sin guardar coordenadas en tu perfil.",
-          "Mejoramos la administración de la plataforma: los administradores ahora tienen su propio panel separado y más seguro.",
-          "Las notificaciones push ahora se activan por dispositivo, dándote más control sobre qué notificaciones recibir.",
-          "Optimizamos el sistema para que solo veas información de tu propio barrio u organización, protegiendo tu privacidad.",
-          "Corregimos varios errores y mejoramos el rendimiento general de la aplicación."
+          "Cambiamos la licencia del proyecto a AGPL-3.0 para proteger mejor el software como servicio.",
+          "Ahora puedes ingresar un código de ubicación (Plus Code) que se convierte automáticamente a dirección postal.",
+          "Mejoramos la seguridad con verificación de sesión en el borde y aislamiento estricto entre barrios.",
+          "Agregamos un sistema de administración general de la plataforma para gestionar usuarios y configuración.",
+          "Las notificaciones push ahora se activan por dispositivo, dándote más control sobre qué recibes.",
+          "Corregimos errores de sincronización y optimizamos el rendimiento para evitar duplicados y fugas de datos."
         ],
         "en": [
-          "Login is now more secure and faster, with better session sync across devices.",
-          "You can now enter location codes (Plus Codes) and they will be automatically converted to real street addresses, without saving raw coordinates.",
-          "Platform administration has been improved: admins now have their own separate, more secure panel.",
-          "Push notifications are now enabled per device, giving you more control over which notifications you receive.",
-          "We optimized the system so you only see information from your own ward or organization, protecting your privacy.",
-          "Fixed various bugs and improved overall app performance."
+          "We changed the project license to AGPL-3.0 to better protect software as a service.",
+          "You can now enter a location code (Plus Code) that automatically converts to a street address.",
+          "Improved security with edge session verification and strict isolation between wards.",
+          "Added a general platform admin system to manage users and configuration.",
+          "Push notifications are now enabled per device, giving you more control over what you receive.",
+          "Fixed sync errors and optimized performance to prevent duplicates and data leaks."
         ]
       }
     },
