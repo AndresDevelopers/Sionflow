@@ -208,29 +208,12 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // Production: long cache for hashed static assets.
-      // Dev: do NOT set Cache-Control on /_next/static (or blanket /:path*) —
-      // Next.js manages those headers; overriding them breaks HMR and triggers
-      // "Setting a custom Cache-Control header can break Next.js development behavior."
-      ...(process.env.NODE_ENV === 'production'
-        ? [
-            {
-              source: '/_next/static/:path*',
-              headers: [
-                {
-                  key: 'Cache-Control',
-                  value: 'public, max-age=31536000, immutable',
-                },
-              ],
-            },
-            {
-              source: '/favicon.ico',
-              headers: [
-                { key: 'Cache-Control', value: 'public, max-age=86400' },
-              ],
-            },
-          ]
-        : []),
+      {
+        source: '/favicon.ico',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=86400' },
+        ],
+      },
     ];
   },
   // Webpack configuration for source maps

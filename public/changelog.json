@@ -6,20 +6,20 @@
       "date": "2026-07-15",
       "changes": {
         "es": [
-          "Actualizamos las dependencias internas para mejorar la seguridad y el rendimiento.",
-          "Mejoramos el sistema de autenticación y sincronización de datos para que sea más rápido y confiable.",
-          "Corregimos problemas de compatibilidad con las últimas versiones de Next.js y otras herramientas.",
-          "Optimizamos el manejo de notificaciones para que solo recibas las que te interesan.",
-          "Ajustamos la configuración de desarrollo para evitar reinicios inesperados.",
-          "Reforzamos la protección de tus datos al actualizar los componentes de autenticación."
+          "Se corrigieron vulnerabilidades de seguridad y se actualizaron dependencias clave.",
+          "Se actualizó firebase-admin a la versión 14 y @types/node a la versión 26.",
+          "Se actualizó Next.js y eslint-config-next a la versión 16.2.10.",
+          "Se reemplazó el middleware de borde con un proxy de Next.js para mejorar la autenticación y sincronización de datos.",
+          "Se agregaron salvaguardas en la sincronización de datos para evitar actualizaciones innecesarias en notificaciones.",
+          "Se corrigieron problemas de importación y cabeceras de caché para mejorar el desarrollo y la compilación."
         ],
         "en": [
-          "Updated internal dependencies to improve security and performance.",
-          "Enhanced authentication and data sync for faster and more reliable operation.",
-          "Fixed compatibility issues with the latest Next.js and other tools.",
-          "Optimized notification handling so you only get the ones that matter.",
-          "Tweaked development settings to prevent unexpected restarts.",
-          "Strengthened data protection by updating authentication components."
+          "Fixed security vulnerabilities and updated key dependencies.",
+          "Upgraded firebase-admin to version 14 and @types/node to version 26.",
+          "Updated Next.js and eslint-config-next to version 16.2.10.",
+          "Replaced edge middleware with a Next.js proxy for better authentication and data sync.",
+          "Added safeguards in data sync to skip unnecessary notification updates.",
+          "Fixed import issues and cache headers to improve development and build."
         ]
       }
     },
