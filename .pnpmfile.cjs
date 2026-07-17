@@ -5,14 +5,18 @@
  * or change exact-version pins. This hook modifies package manifests before
  * resolution so that vulnerable sub-dependencies are upgraded in-place.
  *
- * uuid: MUST stay on the dual CJS/ESM line (9.x). uuid@10+ is pure ESM and
- * breaks gaxios@6 / teeny-request via `require('uuid')` → ERR_REQUIRE_ESM.
+ * uuid: MUST stay on a dual CJS/ESM release. uuid@12+ is pure ESM and breaks
+ * gaxios@6 / teeny-request via `require('uuid')` → ERR_REQUIRE_ESM.
  * That failure used to surface as "Invalid ID token" on API auth because
  * firebase-admin Storage loads gaxios when the Cloud Storage client is imported.
+ *
+ * Use 11.1.1+ (not 9.x): GHSA-w5hq-g745-h8pq / CVE-2026-41907 fixed buffer
+ * bounds checks in v3/v5/v6 when `buf` is provided. uuid@11 remains dual-package
+ * (require → dist/cjs); prefer it over 9.x which is EOL and unpatched.
  */
 
-/** Last dual-package (CJS+ESM) uuid that gaxios@6 can require(). */
-const UUID_CJS_SAFE = '9.0.1';
+/** Dual-package (CJS+ESM) uuid that gaxios@6 can require(), with GHSA fix. */
+const UUID_CJS_SAFE = '11.1.1';
 
 function pinUuid(pkg, context) {
   if (pkg.dependencies && pkg.dependencies['uuid']) {
@@ -37,9 +41,9 @@ function readPackage(pkg, context) {
     }
   }
 
-  // ── uuid (CJS-safe pin) ─────────────────────────────────────────
+  // ── uuid (CJS-safe + GHSA-w5hq-g745-h8pq) ───────────────────────
   // cloudevents / gaxios@6 / teeny-request / google-gax still `require('uuid')`.
-  // Do NOT pin uuid@14 (ESM-only) — production broke with ERR_REQUIRE_ESM.
+  // Do NOT pin uuid@12+ (ESM-only) — production broke with ERR_REQUIRE_ESM.
   if (
     pkg.name === 'cloudevents' ||
     pkg.name === 'gaxios' ||

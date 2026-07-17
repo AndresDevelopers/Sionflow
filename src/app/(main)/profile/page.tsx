@@ -33,6 +33,7 @@ import { OrdinanceLabels } from '@/lib/types';
 
 interface UserProfileData {
     name?: string;
+    lastName?: string;
     email?: string;
     photoURL?: string | null;
     birthDate?: Timestamp;
@@ -53,6 +54,7 @@ export default function ProfilePage() {
     const [isSaving, setIsSaving] = useState(false);
     const [editValues, setEditValues] = useState({
         name: '',
+        lastName: '',
         birthDate: '',
         memberId: '',
     });
@@ -81,6 +83,7 @@ export default function ProfilePage() {
                     setProfileData(data);
                     setEditValues({
                         name: data.name ?? '',
+                        lastName: data.lastName ?? '',
                         birthDate: data.birthDate
                             ? format(data.birthDate.toDate(), 'yyyy-MM-dd')
                             : '',
@@ -148,9 +151,13 @@ export default function ProfilePage() {
         ? `${syncedMember.firstName} ${syncedMember.lastName}`.trim()
         : null;
 
+    const profileFullName = profileData
+        ? `${profileData.name ?? ''} ${profileData.lastName ?? ''}`.trim()
+        : '';
+
     const displayName = isViewingOtherUser
-        ? profileData?.name ?? syncedFullName ?? t('profile.fallbackUser')
-        : profileData?.name ?? user?.displayName ?? syncedFullName ?? t('profile.fallbackUser');
+        ? profileFullName || syncedFullName || t('profile.fallbackUser')
+        : profileFullName || user?.displayName || syncedFullName || t('profile.fallbackUser');
 
     const displayEmail = isViewingOtherUser
         ? profileData?.email ?? syncedMember?.email ?? undefined
@@ -171,6 +178,7 @@ export default function ProfilePage() {
     const handleCancelEdit = () => {
         setEditValues({
             name: profileData?.name ?? '',
+            lastName: profileData?.lastName ?? '',
             birthDate: profileData?.birthDate
                 ? format(profileData.birthDate.toDate(), 'yyyy-MM-dd')
                 : '',
@@ -207,6 +215,7 @@ export default function ProfilePage() {
     const handleSaveEdit = async () => {
         if (!targetUid) return;
         const trimmedName = editValues.name.trim();
+        const trimmedLastName = editValues.lastName.trim();
         if (!trimmedName) return;
 
         setIsSaving(true);
@@ -242,6 +251,7 @@ export default function ProfilePage() {
 
             const updates: Partial<UserProfileData> & { updatedAt: Timestamp } = {
                 name: trimmedName,
+                lastName: trimmedLastName || undefined,
                 memberId: editValues.memberId.trim() || null,
                 updatedAt: Timestamp.now(),
             };
@@ -487,10 +497,25 @@ export default function ProfilePage() {
                                 <Input
                                     id="profile-name"
                                     value={editValues.name}
+                                    autoComplete="given-name"
                                     onChange={(event) =>
                                         setEditValues((prev) => ({
                                             ...prev,
                                             name: event.target.value,
+                                        }))
+                                    }
+                                />
+                            </div>
+                            <div className="space-y-2 text-left">
+                                <Label htmlFor="profile-last-name">{t('profile.lastName')}</Label>
+                                <Input
+                                    id="profile-last-name"
+                                    value={editValues.lastName}
+                                    autoComplete="family-name"
+                                    onChange={(event) =>
+                                        setEditValues((prev) => ({
+                                            ...prev,
+                                            lastName: event.target.value,
                                         }))
                                     }
                                 />

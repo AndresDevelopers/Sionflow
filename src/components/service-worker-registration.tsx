@@ -102,15 +102,24 @@ export function ServiceWorkerRegistration() {
           console.warn('[sw] ready timed out — push may fail until next load');
         }
 
-        // First install: page may not be controlled until reload — do it once.
-        // Never force reload while offline (would show the native "sin internet" page).
+        // Prefer clientsClaim + controllerchange over a hard reload.
+        // Force-reloading on first visit used to cancel Chrome's install sheet
+        // mid-prompt ("tap Install → nothing → tap again → works").
         if (!navigator.serviceWorker.controller && isBrowserOnline()) {
-          const claimKey = 'qf-sw-claim-reload-v3';
-          if (sessionStorage.getItem(claimKey) !== '1') {
-            sessionStorage.setItem(claimKey, '1');
-            window.location.reload();
-            return;
-          }
+          await new Promise<void>((resolve) => {
+            let settled = false;
+            const done = () => {
+              if (settled) return;
+              settled = true;
+              navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange);
+              window.clearTimeout(timer);
+              resolve();
+            };
+            const onControllerChange = () => done();
+            navigator.serviceWorker.addEventListener('controllerchange', onControllerChange);
+            activateWaiting();
+            const timer = window.setTimeout(done, 4_000);
+          });
         }
 
         // Light warm of start URL only — full shell precache is OfflineShellPrecache

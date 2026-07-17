@@ -2,6 +2,14 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getAppStoragePrefix } from '@/lib/app-config';
+import {
+    canPromptPwaInstall,
+    initPwaInstallListeners,
+    isPwaInstalled,
+    promptPwaInstall,
+    subscribePwaInstall,
+    type PwaInstallOutcome,
+} from '@/lib/pwa-install';
 
 interface OfflineState {
     isOnline: boolean;
@@ -12,14 +20,13 @@ interface OfflineState {
 
 interface OfflineHook extends OfflineState {
     forceSync: () => Promise<void>;
-    installApp: () => Promise<void>;
+    installApp: () => Promise<PwaInstallOutcome>;
     canInstall: boolean;
 }
 
 export function useOffline(): OfflineHook {
     // Initialize all states at the top to maintain consistent hook order
     const [isClient, setIsClient] = useState(false);
-    const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
     const [canInstall, setCanInstall] = useState(false);
     const [state, setState] = useState<OfflineState>({
         isOnline: typeof window !== 'undefined' ? navigator.onLine : true,
@@ -31,41 +38,29 @@ export function useOffline(): OfflineHook {
     // Client-side initialization
     useEffect(() => {
         setIsClient(true);
-        
-        // Check installation status
-        const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-        const isInWebAppiOS = (window.navigator as any).standalone === true;
-        const isInstalled = isStandalone || isInWebAppiOS;
-        
+
+        const isInstalled = isPwaInstalled();
         setState(prev => ({
             ...prev,
             isInstalled,
             isOnline: navigator.onLine
         }));
 
-        // Setup beforeinstallprompt event
-        const handleBeforeInstallPrompt = (e: Event) => {
-            e.preventDefault();
-            setDeferredPrompt(e);
-            setCanInstall(true);
-        };
+        initPwaInstallListeners();
+        setCanInstall(canPromptPwaInstall());
 
-        window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        
-        // Cleanup
-        return () => {
-            window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-        };
+        return subscribePwaInstall(() => {
+            setCanInstall(canPromptPwaInstall());
+            if (isPwaInstalled()) {
+                setState(prev => ({ ...prev, isInstalled: true }));
+            }
+        });
     }, []);
 
     // Check if app is installed
     const checkInstallStatus = useCallback(() => {
         if (typeof window !== 'undefined') {
-            const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-            const isInWebAppiOS = (window.navigator as any).standalone === true;
-            const isInstalled = isStandalone || isInWebAppiOS;
-
-            setState(prev => ({ ...prev, isInstalled }));
+            setState(prev => ({ ...prev, isInstalled: isPwaInstalled() }));
         }
     }, []);
 
@@ -94,24 +89,17 @@ export function useOffline(): OfflineHook {
         }
     }, [isClient]);
 
-    // Install app
-    const installApp = useCallback(async () => {
-        if (deferredPrompt) {
-            try {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-
-                if (outcome === 'accepted') {
-                    console.log('App installed successfully');
-                    setDeferredPrompt(null);
-                    setCanInstall(false);
-                    setState(prev => ({ ...prev, isInstalled: true }));
-                }
-            } catch (error) {
-                console.error('Installation failed:', error);
-            }
+    // Install app via shared deferred-prompt store (single prompt() call site)
+    const installApp = useCallback(async (): Promise<PwaInstallOutcome> => {
+        const outcome = await promptPwaInstall();
+        if (outcome === 'accepted') {
+            setCanInstall(false);
+            setState(prev => ({ ...prev, isInstalled: true }));
+        } else {
+            setCanInstall(canPromptPwaInstall());
         }
-    }, [deferredPrompt]);
+        return outcome;
+    }, []);
 
     // Count Storage offline queue (+ legacy SW queue if present)
     const updateQueuedOperations = useCallback(async () => {
@@ -172,23 +160,6 @@ export function useOffline(): OfflineHook {
             setState(prev => ({ ...prev, isOnline: false }));
         };
 
-        // Listen for install prompt
-        const handleBeforeInstallPrompt = (e: Event) => {
-            if (!mounted) return;
-            e.preventDefault();
-            setDeferredPrompt(e);
-            setCanInstall(true);
-        };
-
-        // Listen for app installed
-        const handleAppInstalled = () => {
-            if (!mounted) return;
-            console.log('App was installed');
-            setState(prev => ({ ...prev, isInstalled: true }));
-            setCanInstall(false);
-            setDeferredPrompt(null);
-        };
-
         // Listen for service worker messages
         const handleServiceWorkerMessage = (event: MessageEvent) => {
             if (!mounted) return;
@@ -205,8 +176,6 @@ export function useOffline(): OfflineHook {
         try {
             window.addEventListener('online', handleOnline, { passive: true });
             window.addEventListener('offline', handleOffline, { passive: true });
-            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-            window.addEventListener('appinstalled', handleAppInstalled, { passive: true });
             window.addEventListener('sionflow:storage-queue-changed', onQueueChanged);
             window.addEventListener('sionflow:offline-sync-complete', onQueueChanged);
 
@@ -232,8 +201,6 @@ export function useOffline(): OfflineHook {
             try {
                 window.removeEventListener('online', handleOnline);
                 window.removeEventListener('offline', handleOffline);
-                window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-                window.removeEventListener('appinstalled', handleAppInstalled);
                 window.removeEventListener('sionflow:storage-queue-changed', onQueueChanged);
                 window.removeEventListener('sionflow:offline-sync-complete', onQueueChanged);
 

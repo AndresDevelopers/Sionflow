@@ -6,20 +6,20 @@
       "date": "2026-07-17",
       "changes": {
         "es": [
-          "Corregimos los tiempos de espera en sugerencias de DeepSeek y agregamos contenido de respaldo para que siempre veas algo útil.",
-          "Mejoramos la seguridad del inicio de sesión para que los usuarios normales no sean redirigidos al panel de administración.",
-          "Aceleramos las respuestas de los chats y sugerencias de la iglesia al aumentar el tiempo máximo de ejecución en Vercel.",
-          "Ahora la sincronización de datos en segundo plano es más fluida y no interrumpe lo que estás viendo.",
-          "Mejoramos la página de donaciones para que funcione aunque falten datos de configuración.",
-          "La aplicación ahora carga más rápido y funciona mejor sin conexión, con una página offline renovada."
+          "Añadimos el campo de apellido a los perfiles de usuario, con traducciones en español e inglés.",
+          "Implementamos anotaciones de servicio en la página de servicio, permitiendo filtrar por año.",
+          "Mejoramos la instalación de la PWA con iconos optimizados y actualizamos el manifiesto web.",
+          "Corregimos redirecciones inseguras al iniciar sesión y actualizamos dependencias para evitar errores.",
+          "Reducimos los tiempos de espera en las funciones de IA, mejorando la sincronización de datos y la gestión de errores.",
+          "Optimizamos el diseño móvil, el soporte sin conexión y la configuración de donaciones."
         ],
         "en": [
-          "Fixed timeout issues in DeepSeek suggestions and added fallback content so you always see something useful.",
-          "Improved login security so regular users are no longer redirected to the admin panel.",
-          "Sped up church chat and suggestion responses by increasing the maximum execution time on Vercel.",
-          "Background data sync is now smoother and won't interrupt what you're viewing.",
-          "Enhanced the donate page to work even when configuration data is missing.",
-          "The app now loads faster and works better offline, with a refreshed offline page."
+          "Added a last name field to user profiles, with translations in English and Spanish.",
+          "Introduced service annotations on the service page, with a year filter for easier browsing.",
+          "Improved PWA setup with optimized icons, updated web manifest, and better offline caching.",
+          "Fixed unsafe login redirects and updated dependencies to prevent compatibility issues.",
+          "Reduced AI function timeouts, improved data sync with separate manual and silent states, and added error handling.",
+          "Enhanced mobile layout, offline support, and donation configuration with better error logging."
         ]
       }
     },

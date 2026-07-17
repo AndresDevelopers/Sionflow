@@ -91,18 +91,22 @@ export const metadata: Metadata = {
   },
 
   // ── Icons ───────────────────────────────────────────────────────────
+  // Prefer sized assets under /icons (small, real 192/512). The legacy
+  // /icono-app.png is multi‑MB and breaks/hangs PWA install on mobile Chrome.
   icons: {
     icon: [
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },
       { url: localIcon, sizes: "any" },
       { url: "/favicon.ico", sizes: "48x48" },
     ],
     apple: [
-      { url: localIcon, sizes: "180x180" },
+      { url: "/icons/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
     ],
     other: [
       {
         rel: "mask-icon",
-        url: localIcon,
+        url: "/icons/icon-192.png",
       },
     ],
   },
@@ -113,7 +117,7 @@ export const metadata: Metadata = {
     capable: true,
     statusBarStyle: "default",
     title: appName,
-    startupImage: [localIcon],
+    startupImage: ["/icons/apple-touch-icon.png"],
   },
 
   // ── Verificaciones de Webmaster ─────────────────────────────────────

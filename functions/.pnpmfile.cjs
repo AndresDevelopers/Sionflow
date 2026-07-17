@@ -1,11 +1,12 @@
 /**
  * .pnpmfile.cjs - pnpm hook for Cloud Functions dependencies.
  *
- * uuid must stay on 9.x (dual CJS/ESM). uuid@10+ is pure ESM and breaks
- * gaxios@6 / google-gax via require('uuid') → ERR_REQUIRE_ESM.
+ * uuid must stay on a dual CJS/ESM release (11.x). uuid@12+ is pure ESM and
+ * breaks gaxios@6 / google-gax via require('uuid') → ERR_REQUIRE_ESM.
+ * 11.1.1+ also patches GHSA-w5hq-g745-h8pq (buffer bounds in v3/v5/v6).
  */
 
-const UUID_CJS_SAFE = '9.0.1';
+const UUID_CJS_SAFE = '11.1.1';
 
 function pinUuid(pkg, context) {
   if (pkg.dependencies && pkg.dependencies['uuid']) {

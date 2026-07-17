@@ -53,7 +53,7 @@ import { useI18n } from '@/contexts/i18n-context';
 interface VoiceAnnotationsProps {
   title: string;
   description: string;
-  source: 'dashboard' | 'council' | 'family-search' | 'missionary-work';
+  source: 'dashboard' | 'council' | 'family-search' | 'missionary-work' | 'service' | 'activities';
   annotations: Annotation[];
   isLoading: boolean;
   onAnnotationAdded: () => void;

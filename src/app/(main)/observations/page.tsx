@@ -7,7 +7,7 @@ import { OfflineImage } from '@/components/offline-image';
 
 import type { ChangeEvent } from 'react';
 
-import { Users, AlertTriangle, UserX, UserCheck, Eye, ChevronUp, HeartPulse, Plus, Trash2, Loader2, Check, ChevronsUpDown, X, Pencil } from 'lucide-react';
+import { Users, AlertTriangle, UserX, UserCheck, Eye, ChevronUp, HeartPulse, Plus, Trash2, Loader2, Check, ChevronsUpDown, X, Pencil, MapPin } from 'lucide-react';
 
 import {
 
@@ -49,17 +49,29 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 
 import { Input } from '@/components/ui/input';
 
 import { Textarea } from '@/components/ui/textarea';
 
+import { Label } from '@/components/ui/label';
+
+import { Checkbox } from '@/components/ui/checkbox';
+
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 import { cn } from '@/lib/utils';
+
+import {
+  resolveLocationCodeToAddress,
+  reverseGeocodeToAddress,
+  looksLikeCoordinates,
+} from '@/lib/geocode-address';
+
+import { saveCurrentDeviceGpsPermission, getCurrentDevicePermissions } from '@/lib/device-permissions';
 
 import { useForm } from 'react-hook-form';
 
@@ -145,9 +157,12 @@ const createHealthConcernSchema = (t: TranslateFn) =>
   z.object({
     firstName: z.string().min(2, { message: t('observations.health.validation.firstName') }),
     lastName: z.string().min(2, { message: t('observations.health.validation.lastName') }),
-    address: z.string().min(5, { message: t('observations.health.validation.address') }),
+    // Address may be empty while using location-code mode; final length is checked after resolve.
+    address: z.string(),
     observation: z.string().min(5, { message: t('observations.health.validation.observation') }),
-    helperIds: z.array(z.string()).min(1, { message: t('observations.health.validation.helpers') }),
+    helperIds: z.array(z.string()),
+    /** Free-text helpers (Sociedad de Socorro). Comma-separated names. */
+    helperNamesText: z.string(),
   });
 
 type HealthConcernFormValues = z.infer<ReturnType<typeof createHealthConcernSchema>>;
@@ -157,6 +172,37 @@ const DEFAULT_HEALTH_FORM_VALUES: HealthConcernFormValues = {
   address: '',
   observation: '',
   helperIds: [],
+  helperNamesText: '',
+};
+
+/** Split free-text helper names (comma / semicolon / newline). */
+const parseHelperNamesText = (text: string): string[] =>
+  text
+    .split(/[,;\n]+/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+/** Display labels for helpers: prefer member lookup, then saved names (manual RS entry). */
+const getHealthHelperLabels = (
+  concern: HealthConcern,
+  membersById: Map<string, Member>,
+  unregisteredLabel: string
+): string[] => {
+  const helperIds = Array.isArray(concern.helperIds) ? concern.helperIds.filter(Boolean) : [];
+  const helperNames = Array.isArray(concern.helperNames)
+    ? concern.helperNames.map((n) => (typeof n === 'string' ? n.trim() : '')).filter(Boolean)
+    : [];
+
+  if (helperIds.length > 0) {
+    return helperIds.map((helperId, index) => {
+      const helper = membersById.get(helperId);
+      if (helper) return `${helper.firstName} ${helper.lastName}`.trim();
+      return helperNames[index] || unregisteredLabel;
+    });
+  }
+
+  // Manual entry (e.g. Sociedad de Socorro): only names, no member ids
+  return helperNames;
 };
 
 const getInitials = (first: string, last: string) => `${(first?.[0] ?? '').toUpperCase()}${(last?.[0] ?? '').toUpperCase()}`.trim() || 'PS';
@@ -178,7 +224,13 @@ export default function ObservationsPage() {
   const { canWrite } = usePermission();
   const { t } = useI18n();
 
-  const isElderesQuorum = organizacion.toLowerCase().includes('élder') || organizacion.toLowerCase().includes('elder');
+  const orgKey = `${organizacion} ${barrioOrg}`.toLowerCase();
+  const isElderesQuorum = orgKey.includes('élder') || orgKey.includes('elder');
+  /** Sociedad de Socorro: free-text helpers instead of member picker */
+  const isSociedadSocorro =
+    orgKey.includes('socorro') ||
+    orgKey.includes('relief society') ||
+    orgKey.includes('relief-society');
 
   const { toast } = useToast();
 
@@ -213,6 +265,15 @@ export default function ObservationsPage() {
   const [editingHealthConcern, setEditingHealthConcern] = useState<HealthConcern | null>(null);
 
   const [removeExistingPhoto, setRemoveExistingPhoto] = useState(false);
+
+  /** Optional mode: enter lat/lng or Plus Code instead of typing the address */
+  const [useLocationCode, setUseLocationCode] = useState(false);
+
+  const [locationCode, setLocationCode] = useState('');
+
+  const [resolvingCode, setResolvingCode] = useState(false);
+
+  const [gettingLocation, setGettingLocation] = useState(false);
 
 
 
@@ -465,12 +526,152 @@ export default function ObservationsPage() {
 
     setRemoveExistingPhoto(false);
 
+    setUseLocationCode(false);
+
+    setLocationCode('');
+
+    setResolvingCode(false);
+
+    setGettingLocation(false);
+
     if (photoInputRef.current) {
 
       photoInputRef.current.value = '';
 
     }
 
+  };
+
+  const applyResolvedAddress = (formattedAddress: string) => {
+    healthForm.setValue('address', formattedAddress, { shouldValidate: true });
+    setUseLocationCode(false);
+    setLocationCode('');
+  };
+
+  const handleResolveLocationCode = async (codeOverride?: string): Promise<string | null> => {
+    const code = (codeOverride ?? locationCode).trim();
+    if (!code) {
+      toast({
+        title: t('common.error'),
+        description: t('memberForm.toast.locationCodeEmpty'),
+        variant: 'destructive',
+      });
+      return null;
+    }
+
+    setResolvingCode(true);
+    try {
+      const address = await resolveLocationCodeToAddress(code);
+      if (!address) {
+        toast({
+          title: t('memberForm.toast.addressLookupError'),
+          description: t('memberForm.toast.locationCodeNotFound'),
+          variant: 'destructive',
+        });
+        return null;
+      }
+      applyResolvedAddress(address);
+      toast({
+        title: t('memberForm.toast.locationCodeResolvedTitle'),
+        description: t('memberForm.toast.locationCodeResolvedDesc'),
+      });
+      return address;
+    } catch (error) {
+      console.error('Error resolving location code:', error);
+      toast({
+        title: t('common.error'),
+        description: t('memberForm.toast.addressLookupError'),
+        variant: 'destructive',
+      });
+      return null;
+    } finally {
+      setResolvingCode(false);
+    }
+  };
+
+  const handleGetCurrentLocation = async () => {
+    if (typeof window === 'undefined' || !navigator.geolocation) {
+      toast({
+        title: t('memberForm.toast.gpsUnavailableTitle'),
+        description: t('memberForm.toast.gpsUnavailableDesc'),
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (user) {
+      try {
+        const perms = await getCurrentDevicePermissions(user.uid);
+        if (!perms.gpsEnabled) {
+          toast({
+            title: t('settings.permissions.gps'),
+            description: t('memberForm.toast.gpsDisabledInSettings'),
+            variant: 'destructive',
+          });
+          return;
+        }
+      } catch {
+        // If we can't check, let the native prompt be the gate
+      }
+    }
+
+    setGettingLocation(true);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        if (user) {
+          saveCurrentDeviceGpsPermission(user.uid, true).catch(() => {});
+        }
+
+        const { latitude, longitude } = position.coords;
+        try {
+          const formattedAddress = await reverseGeocodeToAddress(latitude, longitude);
+          if (!formattedAddress) {
+            setUseLocationCode(true);
+            setLocationCode(`${latitude}, ${longitude}`);
+            healthForm.setValue('address', '', { shouldValidate: false });
+            toast({
+              title: t('memberForm.toast.partialAddressTitle'),
+              description: t('memberForm.toast.partialAddressDesc'),
+            });
+            return;
+          }
+          applyResolvedAddress(formattedAddress);
+          toast({
+            title: t('memberForm.toast.locationObtainedTitle'),
+            description: t('memberForm.toast.locationObtainedDesc'),
+          });
+        } catch (error) {
+          console.error('Error reverse geocoding:', error);
+          setUseLocationCode(true);
+          setLocationCode(`${latitude}, ${longitude}`);
+          healthForm.setValue('address', '', { shouldValidate: false });
+          toast({
+            title: t('memberForm.toast.partialAddressTitle'),
+            description: t('memberForm.toast.partialAddressDesc'),
+          });
+        } finally {
+          setGettingLocation(false);
+        }
+      },
+      (error) => {
+        setGettingLocation(false);
+        let message = t('memberForm.toast.gpsGenericError');
+        if (error.code === error.PERMISSION_DENIED) {
+          message = t('memberForm.toast.gpsPermissionDenied');
+        } else if (error.code === error.POSITION_UNAVAILABLE) {
+          message = t('memberForm.toast.gpsUnavailableNow');
+        } else if (error.code === error.TIMEOUT) {
+          message = t('memberForm.toast.gpsTimeout');
+        }
+        toast({
+          title: t('memberForm.toast.gpsErrorTitle'),
+          description: message,
+          variant: 'destructive',
+        });
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
   };
 
 
@@ -499,6 +700,10 @@ export default function ObservationsPage() {
 
         helperIds: Array.isArray(concern.helperIds) ? concern.helperIds : [],
 
+        helperNamesText: Array.isArray(concern.helperNames)
+          ? concern.helperNames.filter(Boolean).join(', ')
+          : '',
+
       });
 
       setPhotoPreview(concern.photoURL ?? null);
@@ -508,6 +713,14 @@ export default function ObservationsPage() {
       setRemoveExistingPhoto(false);
 
       setHelperPickerOpen(false);
+
+      setUseLocationCode(false);
+
+      setLocationCode('');
+
+      setResolvingCode(false);
+
+      setGettingLocation(false);
 
       if (photoInputRef.current) {
 
@@ -667,29 +880,84 @@ export default function ObservationsPage() {
 
     }
 
+    // If user entered a location code, resolve it to a real address before saving
+    let resolvedAddressFromCode: string | null = null;
+    if (useLocationCode && locationCode.trim()) {
+      resolvedAddressFromCode = await handleResolveLocationCode(locationCode);
+      if (!resolvedAddressFromCode) {
+        return;
+      }
+    }
 
+    let addressToSave = (
+      resolvedAddressFromCode ??
+      values.address?.trim() ??
+      healthForm.getValues('address')?.trim() ??
+      ''
+    ).trim();
+
+    // Never persist raw lat/lng as the address
+    if (addressToSave && looksLikeCoordinates(addressToSave)) {
+      const converted = await resolveLocationCodeToAddress(addressToSave);
+      if (!converted) {
+        setUseLocationCode(true);
+        setLocationCode(addressToSave);
+        healthForm.setValue('address', '', { shouldValidate: false });
+        toast({
+          title: t('memberForm.toast.partialAddressTitle'),
+          description: t('memberForm.toast.partialAddressDesc'),
+          variant: 'destructive',
+        });
+        return;
+      }
+      addressToSave = converted;
+      healthForm.setValue('address', converted, { shouldValidate: true });
+    }
+
+    if (addressToSave.length < 5) {
+      healthForm.setError('address', {
+        type: 'manual',
+        message: t('observations.health.validation.address'),
+      });
+      return;
+    }
+
+    let helperIdsToSave: string[] = [];
+    let helperNames: string[] = [];
+
+    if (isSociedadSocorro) {
+      helperNames = parseHelperNamesText(values.helperNamesText ?? '');
+      if (helperNames.length < 1) {
+        healthForm.setError('helperNamesText', {
+          type: 'manual',
+          message: t('observations.health.validation.helpersManual'),
+        });
+        return;
+      }
+      helperIdsToSave = [];
+    } else {
+      helperIdsToSave = values.helperIds;
+      if (helperIdsToSave.length < 1) {
+        healthForm.setError('helperIds', {
+          type: 'manual',
+          message: t('observations.health.validation.helpers'),
+        });
+        return;
+      }
+      helperNames = helperIdsToSave.map((id) => {
+        const helper = membersById.get(id);
+        if (helper) {
+          return `${helper.firstName} ${helper.lastName}`;
+        }
+        return t('observations.health.memberUnregistered');
+      });
+    }
 
     setSavingHealthConcern(true);
 
 
 
     try {
-
-      const helperNames = values.helperIds.map((id) => {
-
-        const helper = membersById.get(id);
-
-        if (helper) {
-
-          return `${helper.firstName} ${helper.lastName}`;
-
-        }
-
-        return t('observations.health.memberUnregistered');
-
-      });
-
-
 
       if (editingHealthConcern) {
 
@@ -701,11 +969,11 @@ export default function ObservationsPage() {
 
           lastName: values.lastName.trim(),
 
-          address: values.address.trim(),
+          address: addressToSave,
 
           observation: values.observation.trim(),
 
-          helperIds: values.helperIds,
+          helperIds: helperIdsToSave,
 
           helperNames,
 
@@ -739,11 +1007,11 @@ export default function ObservationsPage() {
 
           lastName: values.lastName.trim(),
 
-          address: values.address.trim(),
+          address: addressToSave,
 
           observation: values.observation.trim(),
 
-          helperIds: values.helperIds,
+          helperIds: helperIdsToSave,
 
           helperNames,
 
@@ -1311,20 +1579,11 @@ export default function ObservationsPage() {
                   </TableRow>
                 ) : (
                   healthConcerns.map((concern) => {
-                    const helperIds = Array.isArray(concern.helperIds) ? concern.helperIds : [];
-                    const helpers = helperIds.length > 0
-                      ? helperIds.map((helperId, index) => {
-                        const helper = membersById.get(helperId);
-                        const helperName = helper
-                          ? `${helper.firstName} ${helper.lastName}`
-                          : (concern.helperNames?.[index] ?? t('observations.health.memberUnregistered'));
-                        return (
-                          <Badge key={`${concern.id}-${helperId}-${index}`} variant="outline" className="text-xs font-normal">
-                            {helperName}
-                          </Badge>
-                        );
-                      })
-                      : [];
+                    const helperLabels = getHealthHelperLabels(
+                      concern,
+                      membersById,
+                      t('observations.health.memberUnregistered')
+                    );
 
                     const createdAtLabel = concern.createdAt
                       ? format(concern.createdAt.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
@@ -1355,7 +1614,19 @@ export default function ObservationsPage() {
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-wrap gap-2">
-                            {helpers.length > 0 ? helpers : <span className="text-sm text-muted-foreground">{t('common.unassigned')}</span>}
+                            {helperLabels.length > 0
+                              ? helperLabels.map((helperName, index) => (
+                                  <Badge
+                                    key={`${concern.id}-helper-${index}-${helperName}`}
+                                    variant="outline"
+                                    className="text-xs font-normal"
+                                  >
+                                    {helperName}
+                                  </Badge>
+                                ))
+                              : (
+                                <span className="text-sm text-muted-foreground">{t('common.unassigned')}</span>
+                              )}
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
@@ -1407,20 +1678,11 @@ export default function ObservationsPage() {
               </div>
             ) : (
               healthConcerns.map((concern) => {
-                const helperIds = Array.isArray(concern.helperIds) ? concern.helperIds : [];
-                const helpers = helperIds.length > 0
-                  ? helperIds.map((helperId, index) => {
-                    const helper = membersById.get(helperId);
-                    const helperName = helper
-                      ? `${helper.firstName} ${helper.lastName}`
-                      : (concern.helperNames?.[index] ?? t('observations.health.memberUnregistered'));
-                    return (
-                      <Badge key={`${concern.id}-${helperId}-${index}`} variant="outline" className="text-xs font-normal">
-                        {helperName}
-                      </Badge>
-                    );
-                  })
-                  : [];
+                const helperLabels = getHealthHelperLabels(
+                  concern,
+                  membersById,
+                  t('observations.health.memberUnregistered')
+                );
 
                 const createdAtLabel = concern.createdAt
                   ? format(concern.createdAt.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
@@ -1450,7 +1712,19 @@ export default function ObservationsPage() {
                       <div>
                         <p className="text-xs uppercase text-muted-foreground">{t('observations.health.col.helpers')}</p>
                         <div className="mt-1 flex flex-wrap gap-2">
-                          {helpers.length > 0 ? helpers : <span className="text-sm text-muted-foreground">{t('common.unassigned')}</span>}
+                          {helperLabels.length > 0
+                            ? helperLabels.map((helperName, index) => (
+                                <Badge
+                                  key={`${concern.id}-helper-${index}-${helperName}`}
+                                  variant="outline"
+                                  className="text-xs font-normal"
+                                >
+                                  {helperName}
+                                </Badge>
+                              ))
+                            : (
+                              <span className="text-sm text-muted-foreground">{t('common.unassigned')}</span>
+                            )}
                         </div>
                       </div>
                       <div className="flex justify-end gap-2">
@@ -3972,8 +4246,8 @@ export default function ObservationsPage() {
           }
         }}
       >
-        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="max-w-2xl max-h-[90dvh] p-0 gap-0 flex flex-col overflow-hidden">
+          <DialogHeader className="px-6 pt-6 pb-2 shrink-0 pr-12">
             <DialogTitle>
               {isEditingHealthConcern ? t('observations.health.dialog.editTitle') : t('observations.health.dialog.addTitle')}
             </DialogTitle>
@@ -3984,207 +4258,339 @@ export default function ObservationsPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...healthForm}>
-            <form onSubmit={healthForm.handleSubmit(handleHealthSubmit)} className="space-y-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={photoPreview || undefined} alt={t('observations.health.photoAlt')} />
-                  <AvatarFallback>{getInitials(watchFirstName, watchLastName)}</AvatarFallback>
-                </Avatar>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => photoInputRef.current?.click()}
-                    disabled={savingHealthConcern}
-                  >
-                    <Plus className="mr-2 h-4 w-4" />
-                    {photoPreview ? t('observations.health.changePhoto') : t('observations.health.uploadPhoto')}
-                  </Button>
-                  {photoPreview && (
+            <form onSubmit={healthForm.handleSubmit(handleHealthSubmit)} className="flex flex-col flex-1 min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-6">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                  <Avatar className="h-16 w-16">
+                    <AvatarImage src={photoPreview || undefined} alt={t('observations.health.photoAlt')} />
+                    <AvatarFallback>{getInitials(watchFirstName, watchLastName)}</AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
-                      variant="ghost"
-                      onClick={handleRemovePhoto}
+                      variant="outline"
+                      onClick={() => photoInputRef.current?.click()}
                       disabled={savingHealthConcern}
                     >
-                      <X className="mr-2 h-4 w-4" />
-                      {t('observations.health.removePhoto')}
+                      <Plus className="mr-2 h-4 w-4" />
+                      {photoPreview ? t('observations.health.changePhoto') : t('observations.health.uploadPhoto')}
                     </Button>
-                  )}
+                    {photoPreview && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        onClick={handleRemovePhoto}
+                        disabled={savingHealthConcern}
+                      >
+                        <X className="mr-2 h-4 w-4" />
+                        {t('observations.health.removePhoto')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
-              </div>
-              <input
-                ref={photoInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handlePhotoChange}
-                aria-label={t('observations.health.selectPhotoAria')}
-              />
-              <div className="grid gap-4 md:grid-cols-2">
-                <FormField
-                  control={healthForm.control}
-                  name="firstName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('observations.health.firstName')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder={t('observations.health.firstName')} disabled={savingHealthConcern} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                <input
+                  ref={photoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handlePhotoChange}
+                  aria-label={t('observations.health.selectPhotoAria')}
                 />
-                <FormField
-                  control={healthForm.control}
-                  name="lastName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>{t('observations.health.lastName')}</FormLabel>
-                      <FormControl>
-                        <Input {...field} placeholder={t('observations.health.lastName')} disabled={savingHealthConcern} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={healthForm.control}
-                  name="address"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>{t('observations.health.address')}</FormLabel>
-                      <FormControl>
-                        <Input
-                          {...field}
-                          placeholder={t('observations.health.addressPlaceholder')}
-                          disabled={savingHealthConcern}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={healthForm.control}
-                  name="observation"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>{t('observations.health.observation')}</FormLabel>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder={t('observations.health.observationPlaceholder')}
-                          rows={4}
-                          disabled={savingHealthConcern}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={healthForm.control}
-                  name="helperIds"
-                  render={({ field }) => (
-                    <FormItem className="md:col-span-2">
-                      <FormLabel>{t('observations.health.helpersLabel')}</FormLabel>
-                      <FormControl>
-                        <div className="space-y-3">
-                          <Popover open={helperPickerOpen} onOpenChange={setHelperPickerOpen}>
-                            <PopoverTrigger asChild>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <FormField
+                    control={healthForm.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('observations.health.firstName')}</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={t('observations.health.firstName')} disabled={savingHealthConcern} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={healthForm.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>{t('observations.health.lastName')}</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder={t('observations.health.lastName')} disabled={savingHealthConcern} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={healthForm.control}
+                    name="address"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>{t('observations.health.address')}</FormLabel>
+
+                        <div className="flex items-start gap-2 rounded-md border border-border/60 bg-muted/30 px-3 py-2">
+                          <Checkbox
+                            id="health-use-location-code"
+                            checked={useLocationCode}
+                            disabled={savingHealthConcern || resolvingCode || gettingLocation}
+                            onCheckedChange={(checked) => {
+                              const enabled = checked === true;
+                              setUseLocationCode(enabled);
+                              if (enabled) {
+                                const current = field.value || '';
+                                if (looksLikeCoordinates(current)) {
+                                  setLocationCode(current);
+                                  field.onChange('');
+                                }
+                              } else {
+                                setLocationCode('');
+                              }
+                            }}
+                            className="mt-0.5"
+                          />
+                          <div className="space-y-0.5">
+                            <Label
+                              htmlFor="health-use-location-code"
+                              className="cursor-pointer text-sm font-medium leading-none"
+                            >
+                              {t('memberForm.useLocationCode')}
+                            </Label>
+                            <p className="text-xs text-muted-foreground">
+                              {t('memberForm.useLocationCodeHint')}
+                            </p>
+                          </div>
+                        </div>
+
+                        {useLocationCode ? (
+                          <div className="space-y-2">
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder={t('memberForm.locationCodePlaceholder')}
+                                value={locationCode}
+                                onChange={(e) => setLocationCode(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    void handleResolveLocationCode();
+                                  }
+                                }}
+                                disabled={savingHealthConcern || resolvingCode}
+                                aria-label={t('memberForm.locationCodeLabel')}
+                              />
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => void handleResolveLocationCode()}
+                                disabled={savingHealthConcern || resolvingCode || !locationCode.trim()}
+                                title={t('memberForm.resolveLocationCodeTitle')}
+                              >
+                                {resolvingCode ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  t('memberForm.resolveLocationCode')
+                                )}
+                              </Button>
+                            </div>
+                            {field.value ? (
+                              <div className="rounded-md border bg-background px-3 py-2 text-sm">
+                                <p className="text-xs font-medium text-muted-foreground mb-0.5">
+                                  {t('memberForm.resolvedAddressLabel')}
+                                </p>
+                                <p className="text-foreground">{field.value}</p>
+                              </div>
+                            ) : null}
+                            <FormDescription>
+                              {t('memberForm.locationCodeDescription')}
+                            </FormDescription>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="flex gap-2">
+                              <FormControl>
+                                <Input
+                                  placeholder={t('observations.health.addressPlaceholder')}
+                                  {...field}
+                                  value={field.value || ''}
+                                  disabled={savingHealthConcern || gettingLocation}
+                                />
+                              </FormControl>
                               <Button
                                 type="button"
                                 variant="outline"
-                                className={cn('w-full justify-between', field.value.length === 0 && 'text-muted-foreground')}
-                                disabled={loading || savingHealthConcern}
+                                size="icon"
+                                onClick={() => void handleGetCurrentLocation()}
+                                disabled={savingHealthConcern || gettingLocation}
+                                title={t('memberForm.gpsTitle')}
+                                aria-label={t('memberForm.gpsAria')}
                               >
-                                {field.value.length > 0
-                                  ? t('observations.health.helpersSelected', { count: field.value.length })
-                                  : t('observations.health.selectMembers')}
-                                <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                                {gettingLocation ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <MapPin className="h-4 w-4" />
+                                )}
                               </Button>
-                            </PopoverTrigger>
-                            <PopoverContent
-                              align="start"
-                              sideOffset={8}
-                              className="w-[min(320px,90vw)] max-h-[min(60vh,420px)] overflow-y-auto p-0"
-                            >
-                              {loading ? (
-                                <div className="px-3 py-6 text-sm text-muted-foreground">{t('observations.health.loadingMembers')}</div>
-                              ) : members.length === 0 ? (
-                                <div className="px-3 py-6 text-sm text-muted-foreground">{t('observations.health.noMembersAvailable')}</div>
-                              ) : (
-                                <Command>
-                                  <CommandInput placeholder={t('observations.health.searchMember')} />
-                                  <CommandEmpty>{t('observations.health.noMembersFound')}</CommandEmpty>
-                                  <CommandGroup>
-                                    {members.map((member) => {
-                                      const isSelected = field.value.includes(member.id);
-                                      const statusInfo = statusConfig[member.status];
-                                      return (
-                                        <CommandItem
-                                          key={member.id}
-                                          value={`${member.firstName} ${member.lastName}`}
-                                          onSelect={() => {
-                                            toggleHelper(member.id);
-                                            setHelperPickerOpen(true);
-                                          }}
-                                        >
-                                          <div className="flex items-center gap-2">
-                                            <Check className={cn('h-4 w-4', isSelected ? 'opacity-100' : 'opacity-0')} />
-                                            <span className="flex-1">{member.firstName} {member.lastName}</span>
-                                            <Badge variant={statusInfo.variant} className="text-[10px]">
-                                              {t(`member.status.${member.status}`)}
-                                            </Badge>
-                                          </div>
-                                        </CommandItem>
-                                      );
-                                    })}
-                                  </CommandGroup>
-                                </Command>
-                              )}
-                            </PopoverContent>
-                          </Popover>
-                          <div className="flex flex-wrap gap-2">
-                            {field.value.length === 0 ? (
-                              <span className="text-sm text-muted-foreground">
-                                {t('observations.health.selectAtLeastOne')}
-                              </span>
-                            ) : (
-                              field.value.map((helperId, index) => {
-                                const helper = membersById.get(helperId);
-                                const helperName = helper
-                                  ? `${helper.firstName} ${helper.lastName}`
-                                  : t('observations.health.memberUnregistered');
-                                return (
-                                  <Badge
-                                    key={`${helperId}-${index}`}
-                                    variant="secondary"
-                                    className="flex items-center gap-1"
+                            </div>
+                            <FormDescription>
+                              {t('memberForm.addressDescription')}
+                            </FormDescription>
+                          </>
+                        )}
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={healthForm.control}
+                    name="observation"
+                    render={({ field }) => (
+                      <FormItem className="md:col-span-2">
+                        <FormLabel>{t('observations.health.observation')}</FormLabel>
+                        <FormControl>
+                          <Textarea
+                            {...field}
+                            placeholder={t('observations.health.observationPlaceholder')}
+                            rows={4}
+                            disabled={savingHealthConcern}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {isSociedadSocorro ? (
+                    <FormField
+                      control={healthForm.control}
+                      name="helperNamesText"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>{t('observations.health.helpersManualLabel')}</FormLabel>
+                          <FormControl>
+                            <Input
+                              {...field}
+                              value={field.value || ''}
+                              placeholder={t('observations.health.helpersManualPlaceholder')}
+                              disabled={savingHealthConcern}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            {t('observations.health.helpersManualHint')}
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  ) : (
+                    <FormField
+                      control={healthForm.control}
+                      name="helperIds"
+                      render={({ field }) => (
+                        <FormItem className="md:col-span-2">
+                          <FormLabel>{t('observations.health.helpersLabel')}</FormLabel>
+                          <FormControl>
+                            <div className="space-y-3">
+                              <Popover open={helperPickerOpen} onOpenChange={setHelperPickerOpen}>
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className={cn('w-full justify-between', field.value.length === 0 && 'text-muted-foreground')}
+                                    disabled={loading || savingHealthConcern}
                                   >
-                                    {helperName}
-                                    <button
-                                      type="button"
-                                      onClick={() => toggleHelper(helperId)}
-                                      className="rounded-full p-0.5 hover:bg-muted"
-                                      aria-label={t('observations.health.removeHelperAria', { name: helperName })}
-                                    >
-                                      <X className="h-3 w-3" />
-                                    </button>
-                                  </Badge>
-                                );
-                              })
-                            )}
-                          </div>
-                        </div>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
+                                    {field.value.length > 0
+                                      ? t('observations.health.helpersSelected', { count: field.value.length })
+                                      : t('observations.health.selectMembers')}
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 opacity-50" />
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent
+                                  align="start"
+                                  sideOffset={8}
+                                  collisionPadding={16}
+                                  className="w-[min(320px,90vw)] p-0 flex flex-col overflow-hidden"
+                                  onWheel={(e) => e.stopPropagation()}
+                                  onTouchMove={(e) => e.stopPropagation()}
+                                >
+                                  {loading ? (
+                                    <div className="px-3 py-6 text-sm text-muted-foreground">{t('observations.health.loadingMembers')}</div>
+                                  ) : members.length === 0 ? (
+                                    <div className="px-3 py-6 text-sm text-muted-foreground">{t('observations.health.noMembersAvailable')}</div>
+                                  ) : (
+                                    <Command className="max-h-[min(50vh,360px)]">
+                                      <CommandInput placeholder={t('observations.health.searchMember')} />
+                                      <CommandList className="max-h-[min(42vh,300px)] overflow-y-auto overscroll-contain">
+                                        <CommandEmpty>{t('observations.health.noMembersFound')}</CommandEmpty>
+                                        <CommandGroup>
+                                          {members.map((member) => {
+                                            const isSelected = field.value.includes(member.id);
+                                            const statusInfo = statusConfig[member.status];
+                                            return (
+                                              <CommandItem
+                                                key={member.id}
+                                                value={`${member.firstName} ${member.lastName}`}
+                                                onSelect={() => {
+                                                  toggleHelper(member.id);
+                                                  setHelperPickerOpen(true);
+                                                }}
+                                              >
+                                                <div className="flex items-center gap-2 w-full min-w-0">
+                                                  <Check className={cn('h-4 w-4 shrink-0', isSelected ? 'opacity-100' : 'opacity-0')} />
+                                                  <span className="flex-1 truncate">{member.firstName} {member.lastName}</span>
+                                                  <Badge variant={statusInfo.variant} className="text-[10px] shrink-0">
+                                                    {t(`member.status.${member.status}`)}
+                                                  </Badge>
+                                                </div>
+                                              </CommandItem>
+                                            );
+                                          })}
+                                        </CommandGroup>
+                                      </CommandList>
+                                    </Command>
+                                  )}
+                                </PopoverContent>
+                              </Popover>
+                              <div className="flex flex-wrap gap-2">
+                                {field.value.length === 0 ? (
+                                  <span className="text-sm text-muted-foreground">
+                                    {t('observations.health.selectAtLeastOne')}
+                                  </span>
+                                ) : (
+                                  field.value.map((helperId, index) => {
+                                    const helper = membersById.get(helperId);
+                                    const helperName = helper
+                                      ? `${helper.firstName} ${helper.lastName}`
+                                      : t('observations.health.memberUnregistered');
+                                    return (
+                                      <Badge
+                                        key={`${helperId}-${index}`}
+                                        variant="secondary"
+                                        className="flex items-center gap-1"
+                                      >
+                                        {helperName}
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleHelper(helperId)}
+                                          className="rounded-full p-0.5 hover:bg-muted"
+                                          aria-label={t('observations.health.removeHelperAria', { name: helperName })}
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </Badge>
+                                    );
+                                  })
+                                )}
+                              </div>
+                            </div>
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
                   )}
-                />
+                </div>
               </div>
-              <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <DialogFooter className="shrink-0 border-t px-6 py-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
                 <Button
                   type="button"
                   variant="outline"
@@ -4196,7 +4602,7 @@ export default function ObservationsPage() {
                 >
                   {t('common.cancel')}
                 </Button>
-                <Button type="submit" disabled={savingHealthConcern}>
+                <Button type="submit" disabled={savingHealthConcern || resolvingCode || gettingLocation}>
                   {savingHealthConcern ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

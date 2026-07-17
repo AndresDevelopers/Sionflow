@@ -125,10 +125,21 @@ function ClientOfflineIndicator() {
 
     const handleInstall = async () => {
         try {
-            await installApp();
+            const outcome = await installApp();
+            if (outcome === 'accepted') {
+                toast({
+                    title: t("offline.toast.installedTitle"),
+                    description: t("offline.toast.installedDescription", { appName }),
+                });
+                return;
+            }
+            if (outcome === 'dismissed') {
+                return;
+            }
             toast({
-                title: t("offline.toast.installedTitle"),
-                description: t("offline.toast.installedDescription", { appName }),
+                title: t("offline.toast.installErrorTitle"),
+                description: t("offline.toast.installErrorDescription"),
+                variant: "destructive"
             });
         } catch (error) {
             console.error('Installation error:', error);

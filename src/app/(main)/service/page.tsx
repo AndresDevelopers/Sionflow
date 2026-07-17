@@ -3,11 +3,12 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { query, orderBy, Timestamp, where, deleteDoc, doc, addDoc } from 'firebase/firestore';
 import { getDocs } from '@/lib/firestore-query';
-import { servicesCollection, activitiesCollection } from '@/lib/collections';
-import type { Service } from '@/lib/types';
+import { servicesCollection, activitiesCollection, annotationsCollection } from '@/lib/collections';
+import type { Annotation, Service } from '@/lib/types';
+import { VoiceAnnotations } from '@/components/shared/voice-annotations';
 import { addDays, endOfYear, format, getYear, isAfter, isBefore, startOfYear } from 'date-fns';
 import { getDateFnsLocale } from "@/lib/i18n-date";
 import { useI18n } from "@/contexts/i18n-context";
@@ -52,6 +53,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { PlusCircle, Trash2, Pencil, Image as ImageIcon, ArrowRightLeft, RefreshCw, Wand2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { OfflineImage } from '@/components/offline-image';
@@ -63,6 +71,27 @@ import {
   normalizeServiceSuggestions,
   type SuggestedServices,
 } from '@/lib/ai-suggestions';
+
+async function getAvailableServiceYears(barrioOrg?: string): Promise<number[]> {
+  const yearSet = new Set<number>();
+
+  try {
+    const constraints: any[] = [orderBy('date', 'desc')];
+    if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
+    const snapshot = await getDocs(query(servicesCollection, ...constraints));
+
+    snapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data() as { date?: Timestamp };
+      if (data.date) yearSet.add(getYear(data.date.toDate()));
+    });
+  } catch (err) {
+    logger.error({ error: err, message: 'Error fetching service years' });
+  }
+
+  yearSet.add(getYear(new Date()));
+
+  return Array.from(yearSet).sort((a, b) => b - a);
+}
 
 async function getServicesForYear(year: number, barrioOrg?: string): Promise<Service[]> {
   try {
@@ -95,10 +124,14 @@ export default function ServicePage() {
   const { user, loading: authLoading, barrioOrg, firebaseUser } = useAuth();
   const { t } = useI18n();
   const { canWrite } = usePermission();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [services, setServices] = useState<Service[]>([]);
   const [serviceSuggestions, setServiceSuggestions] = useState<SuggestedServices | null>(null);
   const [loading, setLoading] = useState(true);
+  const [availableYears, setAvailableYears] = useState<number[] | null>(null);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [loadingAnnotations, setLoadingAnnotations] = useState(true);
   /** Start true so production never flashes the empty/error card before the first fetch. */
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(true);
   const { toast } = useToast();
@@ -106,6 +139,16 @@ export default function ServicePage() {
   const currentYear = getYear(new Date());
   const yearParam = Number(searchParams.get('year'));
   const selectedYear = Number.isInteger(yearParam) && yearParam >= 1900 && yearParam <= 2100 ? yearParam : currentYear;
+  const yearOptions =
+    availableYears && availableYears.length > 0
+      ? availableYears.map(String)
+      : [String(selectedYear)];
+
+  const handleYearChange = (year: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set('year', year);
+    router.replace(`/service?${params.toString()}`);
+  };
 
   const fetchServices = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setLoading(true);
@@ -133,10 +176,92 @@ export default function ServicePage() {
     }
   }, [authLoading, fetchServices, user]);
 
+  useEffect(() => {
+    if (authLoading || !user) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const years = await getAvailableServiceYears(barrioOrg);
+        if (cancelled) return;
+        setAvailableYears(years);
+
+        if (years.length > 0 && !years.includes(selectedYear)) {
+          const params = new URLSearchParams(searchParams.toString());
+          params.set('year', String(years[0]));
+          router.replace(`/service?${params.toString()}`);
+        }
+      } catch (error) {
+        if (cancelled) return;
+        logger.error({ error, message: 'Error loading available service years' });
+        setAvailableYears([]);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, router, searchParams, selectedYear, barrioOrg]);
+
+  const fetchAnnotations = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (authLoading || !user || !barrioOrg) return;
+    if (!opts?.quiet) setLoadingAnnotations(true);
+    try {
+      const q = query(
+        annotationsCollection,
+        where('source', '==', 'service'),
+        where('barrioOrg', '==', barrioOrg),
+        where('isResolved', '==', false)
+      );
+      const snapshot = await getDocs(q);
+      const data = snapshot.docs
+        .map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Annotation))
+        .sort((a, b) => {
+          const dateA = a.createdAt?.toMillis?.() ?? 0;
+          const dateB = b.createdAt?.toMillis?.() ?? 0;
+          return dateB - dateA;
+        });
+      setAnnotations(data);
+    } catch (error) {
+      logger.error({ error, message: 'Error loading service annotations' });
+      setAnnotations([]);
+    } finally {
+      setLoadingAnnotations(false);
+    }
+  }, [authLoading, user, barrioOrg]);
+
+  useEffect(() => {
+    if (authLoading || !user) return;
+    queueMicrotask(() => {
+      void fetchAnnotations();
+    });
+  }, [authLoading, user, fetchAnnotations]);
+
   useOnManualRefresh(async () => {
-    await fetchServices({ quiet: true });
+    await Promise.all([
+      fetchServices({ quiet: true }),
+      fetchAnnotations({ quiet: true }),
+    ]);
     return true;
   });
+
+  const handleDeleteAnnotation = async (id: string) => {
+    try {
+      await deleteDoc(doc(annotationsCollection, id));
+      toast({
+        title: t('service.annotations.deletedTitle'),
+        description: t('service.annotations.deletedDescription'),
+      });
+      fetchAnnotations();
+    } catch (error) {
+      logger.error({ error, message: 'Error deleting service annotation', id });
+      toast({
+        title: t('common.error'),
+        description: t('service.annotations.deleteError'),
+        variant: 'destructive',
+      });
+    }
+  };
 
   const handleDelete = async (serviceId: string, serviceTitle: string) => {
     try {
@@ -372,21 +497,41 @@ export default function ServicePage() {
     
       <Card>
         <CardHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start gap-3 flex-wrap">
             <div>
               <CardTitle>{t('service.yearTitle', { year: selectedYear })}</CardTitle>
               <CardDescription>
                 {t('service.yearDescription')}
               </CardDescription>
             </div>
-            {canWrite && (
-            <Button asChild>
-                <Link href="/service/add">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="w-40">
+                <Select
+                  value={String(selectedYear)}
+                  onValueChange={handleYearChange}
+                  disabled={availableYears === null}
+                >
+                  <SelectTrigger aria-label={t('service.filterByYear')}>
+                    <SelectValue placeholder={t('service.yearPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {yearOptions.map((year) => (
+                      <SelectItem key={year} value={year}>
+                        {year}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {canWrite && (
+                <Button asChild>
+                  <Link href="/service/add">
                     <PlusCircle className="mr-2 h-4 w-4" />
                     {t('service.addService')}
-                </Link>
-            </Button>
-            )}
+                  </Link>
+                </Button>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -582,6 +727,18 @@ export default function ServicePage() {
           </div>
         </CardContent>
       </Card>
+
+      <VoiceAnnotations
+        title={t('service.annotations.title')}
+        description={t('service.annotations.description')}
+        source="service"
+        annotations={annotations}
+        isLoading={loadingAnnotations}
+        onAnnotationAdded={fetchAnnotations}
+        onAnnotationToggled={fetchAnnotations}
+        onDeleteAnnotation={handleDeleteAnnotation}
+        currentUserId={user?.uid}
+      />
     </div>
   );
 }

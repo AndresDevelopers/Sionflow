@@ -52,7 +52,6 @@ import type {
   NewConvertFriendship,
   Convert,
   Member,
-  MissionaryImage,
   Annotation,
 } from '@/lib/types';
 import { membersCollection } from '@/lib/collections';
@@ -66,7 +65,6 @@ import {
   useCallback,
 } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Image from 'next/image';
 import { query, orderBy, where, Timestamp } from 'firebase/firestore';
 import { getDocs } from '@/lib/firestore-query';
 import {
@@ -118,7 +116,6 @@ import {
   missionaryAssignmentsCollection,
   investigatorsCollection,
   newConvertFriendsCollection,
-  missionaryImagesCollection,
   annotationsCollection,
 } from '@/lib/collections';
 import { z } from 'zod';
@@ -128,7 +125,6 @@ import { useOnManualRefresh } from '@/contexts/refresh-context';
 import { usePermission } from '@/hooks/use-permission';
 import { subHours } from 'date-fns';
 import { FriendshipForm } from './FriendshipForm';
-import { MissionaryImagesTab } from './MissionaryImagesTab';
 import { FutureMembersTab } from './FutureMembersTab';
 import { VoiceAnnotations } from '@/components/shared/voice-annotations';
 import { AnnotationManager } from '@/components/shared/annotation-manager';
@@ -217,18 +213,6 @@ async function getNewConvertsWithoutFriends(barrioOrg?: string): Promise<Convert
     } as Member;
   });
   return membersToRecentConverts(members);
-}
-
-async function getMissionaryImages(barrioOrg?: string): Promise<MissionaryImage[]> {
-  if (!missionaryImagesCollection) {
-    console.warn('missionaryImagesCollection is not available');
-    return [];
-  }
-  const constraints: any[] = [orderBy('createdAt', 'desc')];
-  if (barrioOrg) constraints.unshift(where('barrioOrg', '==', barrioOrg));
-  const q = query(missionaryImagesCollection, ...constraints);
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MissionaryImage));
 }
 
 // --- Components ---
@@ -968,7 +952,6 @@ function NewConvertsTab({
 const MISSIONARY_TABS = [
   'assignments',
   'investigators',
-  'images',
   'new_converts',
   'future_members',
 ] as const;
@@ -987,7 +970,6 @@ export default function MissionaryWorkPage() {
     Convert[]
   >([]);
   const [members, setMembers] = useState<Member[]>([]);
-  const [missionaryImages, setMissionaryImages] = useState<MissionaryImage[]>([]);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingAnnotations, setLoadingAnnotations] = useState(true);
@@ -1017,21 +999,18 @@ export default function MissionaryWorkPage() {
         friendshipsData,
         newConvertsData,
         membersData,
-        imagesData,
       ] = await Promise.all([
         getMissionaryAssignments(barrioOrg),
         getInvestigators(barrioOrg),
         getNewConvertFriendships(barrioOrg),
         getNewConvertsWithoutFriends(barrioOrg),
         getMembersForSelector(true, barrioOrg),
-        getMissionaryImages(barrioOrg),
       ]);
       setAssignments(assignmentsData);
       setInvestigators(investigatorsData);
       setFriendships(friendshipsData);
       setNewConvertsWithoutFriends(newConvertsData);
       setMembers(membersData);
-      setMissionaryImages(imagesData);
     } catch (error) {
       console.error('Failed to fetch missionary work data:', error);
     } finally {
@@ -1111,10 +1090,9 @@ export default function MissionaryWorkPage() {
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-5 h-auto sm:h-10">
+        <TabsList className="grid w-full grid-cols-1 sm:grid-cols-4 h-auto sm:h-10">
           <TabsTrigger value="assignments">{t('missionaryWork.tabs.assignments')}</TabsTrigger>
           <TabsTrigger value="investigators">{t('missionaryWork.tabs.investigators')}</TabsTrigger>
-          <TabsTrigger value="images">{t('missionaryWork.tabs.images')}</TabsTrigger>
           <TabsTrigger value="new_converts">{t('missionaryWork.tabs.new_converts')}</TabsTrigger>
           <TabsTrigger value="future_members">{t('missionaryWork.tabs.future_members')}</TabsTrigger>
         </TabsList>
@@ -1131,14 +1109,6 @@ export default function MissionaryWorkPage() {
           <InvestigatorsTab
             investigators={investigators}
             newConverts={availableNewConverts}
-            loading={loading}
-            onRefresh={fetchData}
-            barrioOrg={barrioOrg}
-          />
-        </TabsContent>
-        <TabsContent value="images">
-          <MissionaryImagesTab
-            images={missionaryImages}
             loading={loading}
             onRefresh={fetchData}
             barrioOrg={barrioOrg}

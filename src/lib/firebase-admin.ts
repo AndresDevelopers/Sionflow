@@ -10,9 +10,10 @@ import type { Messaging } from 'firebase-admin/messaging';
 //
 // IMPORTANT: do NOT import firebase-admin/storage at module top-level.
 // getStorage() pulls @google-cloud/storage → gaxios → uuid. If uuid is
-// forced to an ESM-only major (v10+), gaxios's require('uuid') throws
+// forced to an ESM-only major (v12+), gaxios's require('uuid') throws
 // ERR_REQUIRE_ESM and used to brick the ENTIRE Admin SDK (including
 // verifyIdToken for /api/app-admin/*), which surfaced as "Invalid ID token".
+// Keep uuid on the dual CJS line (11.1.1+) via package.json overrides / .pnpmfile.cjs.
 let app: App | undefined;
 let authAdmin: Auth;
 let firestoreAdmin: Firestore;

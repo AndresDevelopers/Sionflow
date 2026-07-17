@@ -94,11 +94,40 @@ type TranslateFn = (key: string, params?: Record<string, string | number>) => st
 const createProfileSchema = (t: TranslateFn) =>
   z.object({
     name: z.string().min(2, { message: t('settings.profile.validation.name') }),
+    lastName: z.string().min(1, { message: t('settings.profile.validation.lastName') }),
     birthDate: z.date({
       required_error: t('settings.profile.validation.birthDate'),
     }),
     memberId: z.string().trim().optional(),
   });
+
+/** Full display name for Firebase Auth / UI. */
+function buildDisplayName(firstName: string, lastName: string): string {
+  return `${firstName.trim()} ${lastName.trim()}`.trim();
+}
+
+/**
+ * Resolve first/last name from user doc (supports legacy full-name in `name` only).
+ */
+function resolveNameParts(userData: {
+  name?: string | null;
+  lastName?: string | null;
+}, fallbackDisplayName?: string | null): { name: string; lastName: string } {
+  const storedLast = (userData.lastName ?? '').trim();
+  const rawName = (userData.name || fallbackDisplayName || '').trim();
+
+  if (storedLast) {
+    return { name: rawName || '', lastName: storedLast };
+  }
+
+  // Legacy: single "name" field held full name — split once for migration UX
+  const parts = rawName.split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) {
+    return { name: parts[0], lastName: parts.slice(1).join(' ') };
+  }
+
+  return { name: rawName, lastName: '' };
+}
 
 type FormValues = z.infer<ReturnType<typeof createProfileSchema>>;
 
@@ -343,6 +372,7 @@ export default function SettingsPage() {
     resolver: zodResolver(createProfileSchema(t)),
     defaultValues: {
       name: '',
+      lastName: '',
       memberId: '',
     },
   });
@@ -364,7 +394,7 @@ export default function SettingsPage() {
     },
   });
 
-  // Keep synced member name and birthDate up-to-date
+  // Keep synced member name, lastName and birthDate up-to-date
   useEffect(() => {
     if (!syncedMemberId) return;
     let cancelled = false;
@@ -375,7 +405,13 @@ export default function SettingsPage() {
         const memberSnap = await getDoc(memberRef);
         if (!cancelled && memberSnap.exists()) {
           const mData = memberSnap.data();
-          setSyncedMemberName(`${mData.firstName} ${mData.lastName}`);
+          const firstName = (mData.firstName as string) || '';
+          const lastName = (mData.lastName as string) || '';
+          setSyncedMemberName(buildDisplayName(firstName, lastName));
+
+          // Pull name parts from member — member is authoritative when linked
+          if (firstName) form.setValue('name', firstName);
+          if (lastName) form.setValue('lastName', lastName);
 
           // Pull birthDate from member — member is authoritative
           if (mData.birthDate) {
@@ -425,8 +461,14 @@ export default function SettingsPage() {
             setTheme(userData.theme);
           }
 
+          const nameParts = resolveNameParts(
+            { name: userData.name, lastName: userData.lastName },
+            firebaseUser.displayName
+          );
+
           form.reset({
-            name: userData.name || firebaseUser.displayName || '',
+            name: nameParts.name,
+            lastName: nameParts.lastName,
             birthDate: userData.birthDate
               ? (userData.birthDate as Timestamp).toDate()
               : undefined,
@@ -446,8 +488,10 @@ export default function SettingsPage() {
           const firestorePhotoURL = userData.photoURL || null;
           setPreviewUrl(firestorePhotoURL || firebaseUser.photoURL || null);
         } else {
+          const nameParts = resolveNameParts({}, firebaseUser.displayName);
           form.reset({
-            name: firebaseUser.displayName || '',
+            name: nameParts.name,
+            lastName: nameParts.lastName,
             memberId: '',
           });
           originalBirthDateRef.current = null;
@@ -529,14 +573,17 @@ export default function SettingsPage() {
         finalPhotoURL = previewUrl;
       }
 
+      const fullDisplayName = buildDisplayName(values.name, values.lastName);
+
       await updateProfile(firebaseUser, {
-        displayName: values.name,
+        displayName: fullDisplayName,
         photoURL: finalPhotoURL,
       });
 
       const userDocRef = doc(usersCollection, firebaseUser.uid);
       const userUpdateData: Record<string, unknown> = {
-        name: values.name,
+        name: values.name.trim(),
+        lastName: values.lastName.trim(),
         birthDate: Timestamp.fromDate(normalizeDateForEcuadorStorage(values.birthDate)),
         photoURL: finalPhotoURL,
         mainPage: mainPage,
@@ -555,18 +602,23 @@ export default function SettingsPage() {
         if (memberSnap.exists()) {
           const mData = memberSnap.data();
 
-          // 1) Push user data to member
+          // 1) Push user data to member (firstName/lastName map 1:1)
           const memberUpdate: Record<string, unknown> = {};
 
-          // Name: parse first/last name from user's full name
-          const nameParts = (values.name || '').trim().split(/\s+/);
-          if (nameParts.length >= 2) {
-            const firstName = nameParts[0];
-            const lastName = nameParts.slice(1).join(' ');
-            memberUpdate.firstName = firstName;
-            memberUpdate.lastName = lastName;
-          } else if (nameParts.length === 1) {
-            memberUpdate.firstName = nameParts[0];
+          const firstName = values.name.trim();
+          const lastName = values.lastName.trim();
+          if (firstName) memberUpdate.firstName = firstName;
+          if (lastName) memberUpdate.lastName = lastName;
+
+          // Keep linked display name in sync for user doc
+          const linkedName = buildDisplayName(firstName, lastName);
+          if (linkedName && linkedName !== syncedMemberName) {
+            setSyncedMemberName(linkedName);
+            await setDoc(
+              userDocRef,
+              { syncedMemberName: linkedName },
+              { merge: true }
+            );
           }
 
           if (values.birthDate) {
@@ -627,6 +679,15 @@ export default function SettingsPage() {
             pullUpdates.memberId = mData.memberId;
             form.setValue('memberId', mData.memberId);
           }
+          // Pull first/last name if user still missing either after push
+          if (mData.firstName && !values.name.trim()) {
+            pullUpdates.name = mData.firstName;
+            form.setValue('name', mData.firstName as string);
+          }
+          if (mData.lastName && !values.lastName.trim()) {
+            pullUpdates.lastName = mData.lastName;
+            form.setValue('lastName', mData.lastName as string);
+          }
           // Pull photo from member if user doesn't have one
           if (mData.photoURL && !finalPhotoURL && !currentUserData.photoURL) {
             pullUpdates.photoURL = mData.photoURL;
@@ -641,7 +702,7 @@ export default function SettingsPage() {
           // If photo was pulled from member, update Firebase Auth too
           if (finalPhotoURL && !firebaseUser.photoURL) {
             await updateProfile(firebaseUser, {
-              displayName: values.name,
+              displayName: fullDisplayName,
               photoURL: finalPhotoURL,
             });
           }
@@ -1454,7 +1515,20 @@ export default function SettingsPage() {
                         <FormItem>
                           <FormLabel>{t('settings.profile.name')}</FormLabel>
                           <FormControl>
-                            <Input {...field} />
+                            <Input {...field} autoComplete="given-name" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="lastName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>{t('settings.profile.lastName')}</FormLabel>
+                          <FormControl>
+                            <Input {...field} autoComplete="family-name" />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
@@ -1580,7 +1654,46 @@ export default function SettingsPage() {
                                         className="w-full text-left px-4 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
                                         onClick={() => {
                                           setSyncedMemberId(member.id);
-                                          setSyncedMemberName(`${member.firstName} ${member.lastName}`);
+                                          setSyncedMemberName(
+                                            buildDisplayName(member.firstName, member.lastName)
+                                          );
+                                          // Prefill profile fields from the linked member
+                                          if (member.firstName) {
+                                            form.setValue('name', member.firstName, {
+                                              shouldDirty: true,
+                                              shouldValidate: true,
+                                            });
+                                          }
+                                          if (member.lastName) {
+                                            form.setValue('lastName', member.lastName, {
+                                              shouldDirty: true,
+                                              shouldValidate: true,
+                                            });
+                                          }
+                                          if (member.birthDate) {
+                                            const rawBirth = member.birthDate as Timestamp | Date;
+                                            const memberBirth =
+                                              rawBirth instanceof Timestamp
+                                                ? rawBirth.toDate()
+                                                : rawBirth instanceof Date
+                                                  ? rawBirth
+                                                  : null;
+                                            if (memberBirth && !Number.isNaN(memberBirth.getTime())) {
+                                              form.setValue('birthDate', memberBirth, {
+                                                shouldDirty: true,
+                                                shouldValidate: true,
+                                              });
+                                              originalBirthDateRef.current = memberBirth;
+                                            }
+                                          }
+                                          if (member.memberId) {
+                                            form.setValue('memberId', member.memberId, {
+                                              shouldDirty: true,
+                                            });
+                                          }
+                                          if (member.photoURL && !previewUrl) {
+                                            setPreviewUrl(member.photoURL);
+                                          }
                                           setSyncMemberSearch('');
                                           setSyncDropdownOpen(false);
                                         }}

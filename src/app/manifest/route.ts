@@ -1,39 +1,51 @@
 import { NextResponse } from "next/server";
-import { getAppName, getAppIcon } from "@/lib/app-config";
+import { getAppName } from "@/lib/app-config";
 
 const appName = getAppName();
 const shortName = appName.length > 12 ? appName.slice(0, 12) : appName;
 
-/** Static icon file served from /public — always a 200, never a redirect. */
-const STATIC_ICON = "/icono-app.png";
+/**
+ * Sized icons under /public/icons — real 192/512 PNGs (not a multi‑MB source
+ * mislabeled as 192/512). Chrome Android often hangs or fails the first
+ * install attempt when the manifest icon is multi‑MB.
+ */
+const ICON_192 = "/icons/icon-192.png";
+const ICON_512 = "/icons/icon-512.png";
+const ICON_MASKABLE_192 = "/icons/icon-maskable-192.png";
+const ICON_MASKABLE_512 = "/icons/icon-maskable-512.png";
 
 export const revalidate = 86400;
 
 export async function GET() {
-  // Use the static icon file directly so browsers (Chrome Android, etc.)
-  // never receive a redirect response for the manifest icon — redirects
-  // cause PWA install prompts to fail silently on mobile.
-  const useStaticIcon =
-    !getAppIcon() || getAppIcon() === "/icono-app.png" || getAppIcon() === "/api/icon";
-
-  const iconSrc = useStaticIcon ? STATIC_ICON : "/api/icon";
-
   const icons = [
     {
-      src: iconSrc,
+      src: ICON_192,
       sizes: "192x192",
       type: "image/png",
       purpose: "any",
     },
     {
-      src: iconSrc,
+      src: ICON_512,
       sizes: "512x512",
       type: "image/png",
       purpose: "any",
     },
+    {
+      src: ICON_MASKABLE_192,
+      sizes: "192x192",
+      type: "image/png",
+      purpose: "maskable",
+    },
+    {
+      src: ICON_MASKABLE_512,
+      sizes: "512x512",
+      type: "image/png",
+      purpose: "maskable",
+    },
   ];
 
   const manifest = {
+    id: "/",
     name: appName,
     short_name: shortName,
     description: "Sistema de gestión integral para presidencias del Quorum de Elderes y Sociedad de Socorro.",
@@ -48,25 +60,25 @@ export async function GET() {
     icons,
     shortcuts: [
       {
-        name: "Dashboard",
-        short_name: "Dashboard",
+        name: "Inicio",
+        short_name: "Inicio",
         description: "Panel principal",
-        url: "/dashboard",
-        icons: [{ src: iconSrc, sizes: "96x96" }],
+        url: "/",
+        icons: [{ src: ICON_192, sizes: "192x192", type: "image/png" }],
       },
       {
         name: "Miembros",
         short_name: "Miembros",
         description: "Gestionar miembros del quórum y sociedad de socorro",
         url: "/members",
-        icons: [{ src: iconSrc, sizes: "96x96" }],
+        icons: [{ src: ICON_192, sizes: "192x192", type: "image/png" }],
       },
       {
         name: "Consejo",
         short_name: "Consejo",
         description: "Ver elementos del consejo",
         url: "/council",
-        icons: [{ src: iconSrc, sizes: "96x96" }],
+        icons: [{ src: ICON_192, sizes: "192x192", type: "image/png" }],
       },
     ],
     prefer_related_applications: false,
@@ -75,7 +87,8 @@ export async function GET() {
   return NextResponse.json(manifest, {
     headers: {
       "Content-Type": "application/manifest+json",
-      "Cache-Control": "public, max-age=3600, s-maxage=86400",
+      // Short browser cache so icon path fixes deploy quickly on mobile.
+      "Cache-Control": "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400",
     },
   });
 }

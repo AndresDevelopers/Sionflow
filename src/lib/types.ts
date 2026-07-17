@@ -66,7 +66,7 @@ export type Annotation = {
     text: string;
     isCouncilAction: boolean;
     isResolved: boolean;
-    source: 'dashboard' | 'council' | 'family-search' | 'missionary-work';
+    source: 'dashboard' | 'council' | 'family-search' | 'missionary-work' | 'service' | 'activities';
     createdAt: Timestamp;
     userId: string;
 }

@@ -3,7 +3,7 @@
  *
  * Token verification uses JWKS via jose (same as /api/auth/session and the
  * Edge proxy). This avoids depending on firebase-admin Auth for the hot path,
- * so a broken @google-cloud/storage / uuid ESM chain cannot brick login or
+ * so a broken @google-cloud/storage / uuid ESM-only chain cannot brick login or
  * /api/app-admin/me.
  *
  * IMPORTANT: never default barrio/organizacion to a production ward.

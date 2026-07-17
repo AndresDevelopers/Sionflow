@@ -57,7 +57,11 @@ export const ALL_SHELL_ROUTES: string[] = Array.from(
     '/manifest',
     '/api/icon',
     '/logo.png',
-    '/icono-app.png',
+    '/icons/icon-192.png',
+    '/icons/icon-512.png',
+    '/icons/icon-maskable-192.png',
+    '/icons/icon-maskable-512.png',
+    '/icons/apple-touch-icon.png',
     '/favicon.ico',
   ])
 );
