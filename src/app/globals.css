@@ -101,6 +101,8 @@
 
   .page-shell {
     width: min(100%, 80rem);
+    max-width: 100%;
+    min-width: 0;
     margin-inline: auto;
     display: flex;
     flex: 1 1 auto;

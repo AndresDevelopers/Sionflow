@@ -29,8 +29,11 @@ export default function DonatePage() {
         if (snapshot.exists()) {
           const data = snapshot.data() as DonateConfig;
           setConfig(data);
+        } else {
+          console.warn("[donate] No donation config document found at c_donate_config/global");
         }
-      } catch {
+      } catch (error) {
+        console.error("[donate] Failed to load donation config:", error);
         setError(true);
       } finally {
         setLoading(false);

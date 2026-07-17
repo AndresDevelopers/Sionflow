@@ -102,19 +102,21 @@ async function offlineNavigationFallback() {
       const abs = new URL(path, self.location.origin).href;
       const hit =
         (await caches.match(abs, { ignoreSearch: true })) ||
-        (await caches.match(path, { ignoreSearch: true }));
+        (await caches.match(path, { ignoreSearch: true })) ||
+        (await caches.match(abs)) ||
+        (await caches.match(path));
       if (hit) return hit;
     } catch {
       // continue
     }
   }
-  return new Response(
-    `<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Sin conexión</title><style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#fafafa;color:#111;padding:24px;text-align:center}h1{font-size:1.25rem;margin:0 0 8px}p{color:#555;font-size:.9rem;line-height:1.45}</style></head><body><div><h1>Sin conexión</h1><p>Abre la app una vez con internet para cachear las pantallas. Luego podrás usarlas sin red.</p></div></body></html>`,
-    {
-      status: 200,
-      headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
-    }
-  );
+  // Hard inline fallback so we NEVER return an error response to a navigation.
+  const html = `<!doctype html><html lang="es"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><title>Sin conexión</title><style>body{font-family:system-ui,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center;margin:0;background:#0f0f1a;color:#fff;padding:24px;text-align:center}h1{font-size:1.25rem;margin:0 0 8px}p{color:#bbb;font-size:.9rem;line-height:1.45}</style></head><body><div><h1>Sin conexión</h1><p>Abre la app una vez con internet para cachear las pantallas. Luego podrás usarlas sin red.</p><button onclick="location.reload()">Reintentar</button></div></body></html>`;
+  return new Response(html, {
+    status: 200,
+    statusText: 'OK',
+    headers: { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' },
+  });
 }
 
 // Offline-first navigations MUST be handled here (before/alongside Workbox)
@@ -137,19 +139,31 @@ self.addEventListener('fetch', (event) => {
   if (isNavigate && url.origin === self.location.origin) {
     event.respondWith(
       (async () => {
-        // Try network quickly when online-ish; fail fast offline
+        // Try network with a generous timeout (cold-start hosting can take >5s).
+        // First attempt: up to 10s. If that fails, try a second, slower attempt.
+        let networkResponse = null;
         try {
           const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 2500);
-          const networkResponse = await fetch(request, { signal: controller.signal });
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          networkResponse = await fetch(request, { signal: controller.signal });
           clearTimeout(timer);
-          if (networkResponse && networkResponse.ok) {
+        } catch {
+          // first attempt failed, try once more without abort
+          try {
+            networkResponse = await fetch(request);
+          } catch {
+            networkResponse = null;
+          }
+        }
+
+        if (networkResponse && networkResponse.ok) {
+          try {
             const cache = await caches.open(PAGES_CACHE);
             event.waitUntil(cache.put(request, networkResponse.clone()));
-            return networkResponse;
+          } catch {
+            // ignore cache write failures
           }
-        } catch {
-          // offline or timeout — use cache
+          return networkResponse;
         }
 
         const cached = await matchInCaches(request);
@@ -171,18 +185,27 @@ self.addEventListener('fetch', (event) => {
   if (isRsc) {
     event.respondWith(
       (async () => {
+        let networkResponse = null;
         try {
           const controller = new AbortController();
-          const timer = setTimeout(() => controller.abort(), 2500);
-          const networkResponse = await fetch(request, { signal: controller.signal });
+          const timer = setTimeout(() => controller.abort(), 10_000);
+          networkResponse = await fetch(request, { signal: controller.signal });
           clearTimeout(timer);
-          if (networkResponse && networkResponse.ok) {
+        } catch {
+          try {
+            networkResponse = await fetch(request);
+          } catch {
+            networkResponse = null;
+          }
+        }
+        if (networkResponse && networkResponse.ok) {
+          try {
             const cache = await caches.open('pages-rsc');
             event.waitUntil(cache.put(request, networkResponse.clone()));
-            return networkResponse;
+          } catch {
+            // ignore cache write failures
           }
-        } catch {
-          // fall through to cache
+          return networkResponse;
         }
         const cached = await matchInCaches(request);
         if (cached) return cached;

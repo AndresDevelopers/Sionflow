@@ -392,7 +392,7 @@ export function MainLayout({ children }: { children: ReactNode }) {
         {/* refreshGeneration remounts the page so client data loaders re-run after manual refresh.
             Offline refreshes do NOT bump generation (see refresh-context) so the UI stays put.
             Scroll lives here so the header above stays fixed while the page content moves. */}
-        <main className="page-shell min-h-0 flex-1 overflow-y-auto overscroll-y-contain" key={refreshGeneration}>
+        <main className="page-shell min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-y-contain" key={refreshGeneration}>
           <OfflineContentBanner />
           <ErrorBoundary>
             {children}

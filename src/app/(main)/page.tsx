@@ -308,7 +308,7 @@ function DashboardPage() {
   return (
     <div className="flex flex-1 flex-col gap-4 md:gap-8">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {loading ? <StatCardSkeleton/> : <Link href="/converts">
+        {loading ? <StatCardSkeleton/> : <Link href="/converts" className="block min-w-0">
           <StatCard
             title={t("Total Converts")}
             value={String(convertsCount)}
@@ -316,7 +316,7 @@ function DashboardPage() {
             description={t("in the last 18 months")}
           />
         </Link>}
-         {loading ? <StatCardSkeleton/> : <Link href="/missionary-work?tab=future_members">
+         {loading ? <StatCardSkeleton/> : <Link href="/missionary-work?tab=future_members" className="block min-w-0">
           <StatCard
             title={t("Future Members")}
             value={String(futureMembersCount)}
@@ -324,7 +324,7 @@ function DashboardPage() {
             description={t("with baptism date set")}
           />
         </Link>}
-         {loading ? <StatCardSkeleton/> : <Link href="/council">
+         {loading ? <StatCardSkeleton/> : <Link href="/council" className="block min-w-0">
           <StatCard
             title={t("Council Actions")}
             value={String(councilActionsCount)}
@@ -335,7 +335,7 @@ function DashboardPage() {
         <BirthdaysDashboardCard />
       </div>
       <div className="grid gap-4 md:gap-8 lg:grid-cols-2">
-        <Link href="/reports/activities">
+        <Link href="/reports/activities" className="block min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>{t("Activity Overview")}</CardTitle>
@@ -398,7 +398,7 @@ function DashboardPage() {
           </Card>
         </Link>
 
-        <Link href="/members">
+        <Link href="/members" className="block min-w-0">
           <Card>
             <CardHeader>
               <CardTitle>{t("Members by Status")}</CardTitle>
@@ -500,11 +500,11 @@ function DashboardPage() {
                     </div>
                     
                     {/* Ordinance checkboxes */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 mt-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-3 min-w-0">
                       {ALL_TEMPLE_ORDINANCES.map((ordinance) => {
                         const isChecked = memberOrdinances.includes(ordinance as TempleOrdinance);
                         return (
-                          <div key={ordinance} className="flex items-center space-x-2 min-w-0">
+                          <div key={ordinance} className="flex items-center space-x-2 min-w-0 overflow-hidden">
                             <Checkbox
                               id={`${member.id}-${ordinance}`}
                               checked={isChecked}
@@ -512,7 +512,7 @@ function DashboardPage() {
                             />
                             <label
                               htmlFor={`${member.id}-${ordinance}`}
-                              className={`text-sm cursor-pointer truncate ${isChecked ? 'text-green-600 line-through' : 'text-gray-700'}`}
+                              className={`text-sm cursor-pointer truncate block min-w-0 ${isChecked ? 'text-green-600 line-through' : 'text-gray-700'}`}
                             >
                               {TempleOrdinanceLabels[ordinance]}
                             </label>

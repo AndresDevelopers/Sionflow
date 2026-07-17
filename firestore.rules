@@ -371,6 +371,13 @@ service cloud.firestore {
 
     // ── Reference data — public read (names only for registration) ──
 
+    match /c_donate_config/{document} {
+      // Global app configuration; readable by any signed-in user.
+      allow read: if signedIn();
+      // Only leadership can change the donation link/QR.
+      allow create, update, delete: if isSecretary();
+    }
+
     match /c_barrios/{document} {
       allow read: if true;
       // Only leadership can mutate reference lists

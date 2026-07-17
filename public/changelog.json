@@ -6,16 +6,16 @@
       "date": "2026-07-17",
       "changes": {
         "es": [
-          "La aplicación ahora se carga más rápido al guardar la página actual antes de instalar el service worker.",
-          "Mejoramos el almacenamiento en caché de la URL de inicio para que funcione correctamente incluso si la URL se redirige.",
-          "Aceleramos la instalación del service worker al omitir partes de la página que no son esenciales.",
-          "Aumentamos el tiempo de espera de la red para las páginas en caché de 2 a 5 segundos, mejorando la fiabilidad."
+          "Mejoramos el diseño para que se vea bien en dispositivos móviles, sin desbordamientos.",
+          "Ahora la aplicación funciona sin conexión a internet, con una página de espera que incluye un botón para reintentar la conexión.",
+          "La configuración de donaciones es más robusta: si falta algún dato, la página lo maneja correctamente y registra errores.",
+          "Optimizamos el rendimiento de la aplicación progresiva (PWA): se carga más rápido y guarda la página actual de inmediato para usarla sin conexión."
         ],
         "en": [
-          "The app now loads faster by caching the current page before installing the service worker.",
-          "Improved start-url caching to work correctly even when the URL gets redirected.",
-          "Sped up service worker installation by skipping non-essential page parts.",
-          "Increased network timeout for cached pages from 2 to 5 seconds for better reliability."
+          "We improved the layout so it looks great on mobile devices without any overflow issues.",
+          "The app now works offline, with a fallback page that includes a retry button to reconnect.",
+          "Donation configuration is more robust: if data is missing, the page handles it gracefully and logs errors.",
+          "We optimized the progressive web app (PWA) performance: it loads faster and caches the current page immediately for offline use."
         ]
       }
     },

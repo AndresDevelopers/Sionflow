@@ -172,15 +172,18 @@ export function useMembersLocal(): UseMembersLocalReturn {
   }, [user, firebaseUser, barrioOrg]);
 
   // Carga inicial: localStorage primero. Solo va al servidor si NO hay cache.
-  // No hay auto-refresh por TTL: el usuario debe usar el icono de actualizar.
+  // No usa TTL para no gastar lecturas de Firestore innecesarias.
+  // Se re-ejecuta si barrioOrg cambia (p. ej. cache de auth tarda en hidratarse en PWA).
   useEffect(() => {
-    if (authLoading || initialLoadDone.current) return;
-    if (!user || !barrioOrg) {
-      setMembers([]);
-      setLoading(false);
-      initialLoadDone.current = true;
+    // Si aún no tenemos barrioOrg, no marcar como "done" — esperar a que llegue
+    if (authLoading || !user || !barrioOrg) {
+      // Reset the flag so we retry when prerequisites arrive
+      if (!barrioOrg) {
+        initialLoadDone.current = false;
+      }
       return;
     }
+    if (initialLoadDone.current) return;
 
     initialLoadDone.current = true;
 
@@ -195,10 +198,6 @@ export function useMembersLocal(): UseMembersLocalReturn {
     setLoading(true);
     syncFromServer().finally(() => setLoading(false));
   }, [authLoading, user, barrioOrg, loadFromLocal, syncFromServer]);
-
-  // Tras un refresh manual del header, MembersProvider actualiza el cache local
-  // y main remonta esta página (refreshGeneration), por lo que se relee localStorage.
-  // No hay auto-sync por TTL: el usuario debe pulsar el icono de actualizar.
 
   const addToLocal = useCallback(
     (member: Member) => {
