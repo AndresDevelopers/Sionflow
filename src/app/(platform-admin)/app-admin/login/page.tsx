@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -35,6 +36,19 @@ const loginSchema = z.object({
   password: z.string().min(1, { message: "La contraseña es obligatoria." }),
 });
 
+/** Only allow post-login destinations inside the platform-admin shell. */
+function safeAppAdminNext(next: string | null): string {
+  if (!next || !next.startsWith("/") || next.startsWith("//")) {
+    return "/app-admin/panel";
+  }
+  const pathOnly = next.split("?")[0]?.split("#")[0] || "";
+  if (pathOnly === "/app-admin" || pathOnly.startsWith("/app-admin/")) {
+    if (pathOnly === "/app-admin/login") return "/app-admin/panel";
+    return pathOnly;
+  }
+  return "/app-admin/panel";
+}
+
 async function verifyAppAdmin(idToken: string): Promise<boolean> {
   const res = await fetch("/api/app-admin/me", {
     headers: { Authorization: `Bearer ${idToken}` },
@@ -44,9 +58,11 @@ async function verifyAppAdmin(idToken: string): Promise<boolean> {
   return data.ok === true;
 }
 
-export default function AppAdminLoginPage() {
+function AppAdminLoginForm() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const [checking, setChecking] = useState(true);
+  const reason = searchParams.get("reason");
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -73,9 +89,15 @@ export default function AppAdminLoginPage() {
             user.getIdToken(force)
           );
           if (sessionOk) {
-            hardNavigate("/app-admin/panel");
+            hardNavigate(safeAppAdminNext(searchParams.get("next")));
             return;
           }
+          toast({
+            title: "Sesión de servidor incompleta",
+            description:
+              "Firebase te reconoce, pero no se pudo crear la cookie. Vuelve a iniciar sesión.",
+            variant: "destructive",
+          });
         }
         setChecking(false);
       } catch {
@@ -83,7 +105,7 @@ export default function AppAdminLoginPage() {
       }
     });
     return () => unsub();
-  }, []);
+  }, [searchParams, toast]);
 
   const onSubmit = async (values: z.infer<typeof loginSchema>) => {
     try {
@@ -118,7 +140,7 @@ export default function AppAdminLoginPage() {
         toast({
           title: "Acceso denegado",
           description:
-            "Esta cuenta no es el admin general de la app. Usa las credenciales de APP_ADMIN_EMAIL.",
+            "Esta cuenta no es el admin general de la app. Usa las credenciales de APP_ADMIN_EMAIL (y el flag isAppAdmin en c_users).",
           variant: "destructive",
         });
         return;
@@ -128,7 +150,7 @@ export default function AppAdminLoginPage() {
         title: "Sesión de admin general",
         description: "Puedes ver todos los usuarios e ingresar como cualquiera.",
       });
-      hardNavigate("/app-admin/panel");
+      hardNavigate(safeAppAdminNext(searchParams.get("next")));
     } catch (error: unknown) {
       const code =
         typeof error === "object" &&
@@ -177,6 +199,9 @@ export default function AppAdminLoginPage() {
           </CardTitle>
           <CardDescription>
             Inicia sesión para gestionar la plataforma.
+            {reason === "missing" || reason === "invalid"
+              ? " Necesitas una sesión de servidor válida para abrir el panel."
+              : null}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -232,5 +257,19 @@ export default function AppAdminLoginPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AppAdminLoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
+          Cargando…
+        </div>
+      }
+    >
+      <AppAdminLoginForm />
+    </Suspense>
   );
 }

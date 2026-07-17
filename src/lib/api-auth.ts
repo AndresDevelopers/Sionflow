@@ -1,11 +1,16 @@
 /**
  * Shared API auth helpers for Next.js route handlers.
- * Pattern mirrors requireUid in /api/storage/upload (Bearer + verifyIdToken).
+ *
+ * Token verification uses JWKS via jose (same as /api/auth/session and the
+ * Edge proxy). This avoids depending on firebase-admin Auth for the hot path,
+ * so a broken @google-cloud/storage / uuid ESM chain cannot brick login or
+ * /api/app-admin/me.
  *
  * IMPORTANT: never default barrio/organizacion to a production ward.
  * Incomplete profiles must be rejected (403), not silently scoped to Libertad.
  */
-import { authAdmin, firestoreAdmin } from '@/lib/firebase-admin';
+import { firestoreAdmin } from '@/lib/firebase-admin';
+import { verifyFirebaseIdTokenEdge } from '@/lib/firebase-token-edge';
 import logger from '@/lib/logger';
 import {
   canWrite,
@@ -32,7 +37,7 @@ export type VerifiedAuth = {
 };
 
 /**
- * Extract Bearer token, verify with Firebase Admin, return uid + email.
+ * Extract Bearer token, verify with Firebase JWKS (jose), return uid + email.
  * Throws AuthHttpError with status 401 on missing/invalid token.
  */
 export async function requireAuth(request: Request): Promise<VerifiedAuth> {
@@ -42,12 +47,26 @@ export async function requireAuth(request: Request): Promise<VerifiedAuth> {
     throw new AuthHttpError('No autenticado. Inicia sesión de nuevo.', 401);
   }
   try {
-    const decoded = await authAdmin.verifyIdToken(match[1]);
+    const decoded = await verifyFirebaseIdTokenEdge(match[1]);
     return {
-      uid: decoded.uid,
+      uid: decoded.sub,
       email: typeof decoded.email === 'string' ? decoded.email : null,
     };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    // Config / JWKS infrastructure — not a bad user token.
+    const isInfra =
+      message.includes('not configured') ||
+      message.includes('project id') ||
+      message.includes('JWKS') ||
+      message.includes('fetch');
+    if (isInfra) {
+      logger.error({ error, message: 'Token verification infrastructure failure' });
+      throw new AuthHttpError(
+        'Servicio de autenticación no disponible en el servidor. Intenta de nuevo en unos minutos.',
+        503
+      );
+    }
     logger.warn({ error, message: 'Invalid ID token on API request' });
     throw new AuthHttpError('Token inválido o expirado. Cierra sesión y vuelve a entrar.', 401);
   }

@@ -8,7 +8,7 @@ overrides:
   postcss: '>=8.5.10'
   jwks-rsa>jose: 4.15.9
 
-pnpmfileChecksum: sha256-WlviJbFh77hZPKMnlzpwue5Kp48wWDcdDCmfrfemfhU=
+pnpmfileChecksum: sha256-kyP9GhRAq7jywrNIbDJ+h3DxI6/w8QTFBrWurLMbIbk=
 
 importers:
 
@@ -164,9 +164,6 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@3.4.18(tsx@4.23.1)(yaml@2.9.0))
-      uuid:
-        specifier: ^14.0.0
-        version: 14.0.1
       web-push:
         specifier: ^3.6.7
         version: 3.6.7
@@ -5597,8 +5594,9 @@ packages:
   util@0.12.5:
     resolution: {integrity: sha512-kZf/K6hEIrWHI6XqOFUiiMa+79wE/D8Q+NCNAWclkyg3b4d2k7s0QGepNjiABc+aR3N1PAyHL7p6UcLY6LmrnA==}
 
-  uuid@14.0.1:
-    resolution: {integrity: sha512-6ZxzVpzDXDa3bJWaHilVayA+BH/1zmxCJoVgvmqJnid/gPoKHxUrS/aC/T6LGQtNHT+XHG9fXPJB4d+IrU30Ew==}
+  uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
     hasBin: true
 
   validate-npm-package-license@3.0.4:
@@ -8842,7 +8840,7 @@ snapshots:
       json-bigint: 1.0.0
       process: 0.11.10
       util: 0.12.5
-      uuid: 14.0.1
+      uuid: 9.0.1
 
   clsx@2.1.1: {}
 
@@ -9723,7 +9721,7 @@ snapshots:
       https-proxy-agent: 7.0.6
       is-stream: 2.0.1
       node-fetch: 2.7.0
-      uuid: 14.0.1
+      uuid: 9.0.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -11565,7 +11563,7 @@ snapshots:
       https-proxy-agent: 5.0.1
       node-fetch: 2.7.0
       stream-events: 1.0.5
-      uuid: 14.0.1
+      uuid: 9.0.1
     transitivePeerDependencies:
       - encoding
       - supports-color
@@ -11802,7 +11800,7 @@ snapshots:
       is-typed-array: 1.1.15
       which-typed-array: 1.1.22
 
-  uuid@14.0.1: {}
+  uuid@9.0.1: {}
 
   validate-npm-package-license@3.0.4:
     dependencies:

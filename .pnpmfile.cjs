@@ -4,7 +4,25 @@
  * pnpm's top-level "overrides" field cannot force semver-incompatible upgrades
  * or change exact-version pins. This hook modifies package manifests before
  * resolution so that vulnerable sub-dependencies are upgraded in-place.
+ *
+ * uuid: MUST stay on the dual CJS/ESM line (9.x). uuid@10+ is pure ESM and
+ * breaks gaxios@6 / teeny-request via `require('uuid')` → ERR_REQUIRE_ESM.
+ * That failure used to surface as "Invalid ID token" on API auth because
+ * firebase-admin Storage loads gaxios when the Cloud Storage client is imported.
  */
+
+/** Last dual-package (CJS+ESM) uuid that gaxios@6 can require(). */
+const UUID_CJS_SAFE = '9.0.1';
+
+function pinUuid(pkg, context) {
+  if (pkg.dependencies && pkg.dependencies['uuid']) {
+    const prev = pkg.dependencies['uuid'];
+    pkg.dependencies['uuid'] = UUID_CJS_SAFE;
+    if (prev !== UUID_CJS_SAFE) {
+      context.log(`[pnpmfile] ${pkg.name}: uuid ${prev} → ${UUID_CJS_SAFE}`);
+    }
+  }
+}
 
 function readPackage(pkg, context) {
   // ── serialize-javascript (RCE + DoS) ────────────────────────────
@@ -19,31 +37,16 @@ function readPackage(pkg, context) {
     }
   }
 
-  // ── uuid (buffer bounds check in v3/v5/v6) ──────────────────────
-  // cloudevents@10.0.0 depends on uuid@^8.3.2. Bump to ^14.0.0 to
-  // deduplicate with the workspace root (which already uses uuid@14).
-  if (pkg.name === 'cloudevents') {
-    if (pkg.dependencies && pkg.dependencies['uuid']) {
-      pkg.dependencies['uuid'] = '^14.0.0';
-      context.log('[pnpmfile] cloudevents: uuid → ^14.0.0');
-    }
-  }
-
-  // gaxios@6.x depends on uuid@^9.0.0.  Bump to ^14.0.0 so the
-  // override in the root package.json can collapse all uuid copies.
-  if (pkg.name === 'gaxios') {
-    if (pkg.dependencies && pkg.dependencies['uuid']) {
-      pkg.dependencies['uuid'] = '^14.0.0';
-      context.log('[pnpmfile] gaxios: uuid → ^14.0.0');
-    }
-  }
-
-  // teeny-request@9.x depends on uuid@^9.0.0.  Bump to ^14.0.0.
-  if (pkg.name === 'teeny-request') {
-    if (pkg.dependencies && pkg.dependencies['uuid']) {
-      pkg.dependencies['uuid'] = '^14.0.0';
-      context.log('[pnpmfile] teeny-request: uuid → ^14.0.0');
-    }
+  // ── uuid (CJS-safe pin) ─────────────────────────────────────────
+  // cloudevents / gaxios@6 / teeny-request / google-gax still `require('uuid')`.
+  // Do NOT pin uuid@14 (ESM-only) — production broke with ERR_REQUIRE_ESM.
+  if (
+    pkg.name === 'cloudevents' ||
+    pkg.name === 'gaxios' ||
+    pkg.name === 'teeny-request' ||
+    pkg.name === 'google-gax'
+  ) {
+    pinUuid(pkg, context);
   }
 
   // ── workbox-build / workbox-webpack-plugin ───────────────────────

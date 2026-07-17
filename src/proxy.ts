@@ -32,36 +32,65 @@ const PUBLIC_PREFIXES = [
   '/icon',
 ];
 
+/** Strip trailing slash except for `/` so /app-admin/login/ stays public. */
+function normalizePathname(pathname: string): string {
+  if (!pathname || pathname === '/') return '/';
+  return pathname.length > 1 && pathname.endsWith('/')
+    ? pathname.slice(0, -1)
+    : pathname;
+}
+
+function isAppAdminPath(pathname: string): boolean {
+  return pathname === '/app-admin' || pathname.startsWith('/app-admin/');
+}
+
 function isPublicPath(pathname: string): boolean {
-  if (PUBLIC_EXACT.has(pathname)) return true;
-  if (PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  const path = normalizePathname(pathname);
+  if (PUBLIC_EXACT.has(path)) return true;
+  if (PUBLIC_PREFIXES.some((p) => path.startsWith(p) || pathname.startsWith(p))) {
+    return true;
+  }
   // Static assets in /public
-  if (/\.[a-zA-Z0-9]+$/.test(pathname) && !pathname.endsWith('.html')) {
+  if (/\.[a-zA-Z0-9]+$/.test(path) && !path.endsWith('.html')) {
     return true;
   }
   return false;
 }
 
 function isUsefulNextPath(pathname: string): boolean {
-  if (!pathname || pathname === '/' || pathname === '/login') return false;
+  const path = normalizePathname(pathname);
+  if (!path || path === '/' || path === '/login' || path === '/app-admin/login') {
+    return false;
+  }
   // SEO locale landings are public; after login send users to the app shell (/)
-  if (pathname === '/es' || pathname === '/en') return false;
+  if (path === '/es' || path === '/en') return false;
   if (
-    pathname === '/register' ||
-    pathname === '/forgot-password' ||
-    pathname.startsWith('/api') ||
-    pathname.startsWith('/_next')
+    path === '/register' ||
+    path === '/forgot-password' ||
+    path.startsWith('/api') ||
+    path.startsWith('/_next')
   ) {
     return false;
   }
   return true;
 }
 
+/**
+ * Unauthenticated document navigations:
+ * - Platform admin shell → /app-admin/login (never the ward-member /login)
+ * - Everything else → /login
+ *
+ * Previously /app-admin/panel bounced to /login?next=/app-admin/panel&reason=missing,
+ * so operators never saw the admin form and thought login was broken.
+ */
 function loginRedirect(request: NextRequest, reason: string): NextResponse {
-  const loginUrl = new URL('/login', request.url);
   const { pathname, search } = request.nextUrl;
-  if (isUsefulNextPath(pathname)) {
-    loginUrl.searchParams.set('next', `${pathname}${search}`);
+  const path = normalizePathname(pathname);
+  const loginPath = isAppAdminPath(path) ? '/app-admin/login' : '/login';
+  const loginUrl = new URL(loginPath, request.url);
+
+  if (isUsefulNextPath(path)) {
+    loginUrl.searchParams.set('next', `${path}${search}`);
   }
   loginUrl.searchParams.set('reason', reason);
   const res = NextResponse.redirect(loginUrl);

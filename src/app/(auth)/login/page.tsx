@@ -66,7 +66,11 @@ function safeNextPath(next: string | null): string {
     pathOnly === "/register" ||
     pathOnly === "/forgot-password" ||
     pathOnly.startsWith("/api") ||
-    pathOnly.startsWith("/_next")
+    pathOnly.startsWith("/_next") ||
+    // Platform admin is only for isAppAdmin; that branch hard-navigates separately.
+    // Never dump a ward user into /app-admin/* via ?next=.
+    pathOnly === "/app-admin" ||
+    pathOnly.startsWith("/app-admin/")
   ) {
     return "/";
   }

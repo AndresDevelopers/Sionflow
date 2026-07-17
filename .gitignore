@@ -76,3 +76,4 @@ quorumflow-*.json
 # Misc
 .windsurfrules
 opencode.json
+.vercel

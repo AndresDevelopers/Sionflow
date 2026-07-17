@@ -6,20 +6,20 @@
       "date": "2026-07-17",
       "changes": {
         "es": [
-          "Mejoramos la estabilidad del chat y las sugerencias de la iglesia, solucionando los tiempos de espera en el inicio en frío de la nube.",
-          "Ahora la sincronización de datos es más fluida: las actualizaciones de fondo ya no reinician la página por completo.",
-          "Agregamos un mensaje de error claro cuando el chat de la iglesia se queda sin tiempo de respuesta.",
-          "Corregimos problemas de diseño en dispositivos móviles y mejoramos la página de donaciones cuando falta la configuración.",
-          "La aplicación ahora funciona mejor sin conexión: la página offline tiene un botón para reintentar y la caché es más rápida.",
-          "Optimizamos la instalación de la aplicación para que cargue más rápido al iniciar."
+          "Corregimos redirecciones inseguras que podían enviar usuarios regulares al panel de administración.",
+          "Mejoramos el inicio de sesión de administradores y actualizamos dependencias para evitar errores de carga.",
+          "Aumentamos el tiempo de espera de las APIs de chat e IA para evitar tiempos de espera en Vercel.",
+          "Optimizamos la sincronización de datos en segundo plano sin recargar toda la página.",
+          "Mejoramos la página de donaciones y la seguridad de la base de datos.",
+          "Aceleramos la carga inicial de la PWA y mejoramos el soporte sin conexión."
         ],
         "en": [
-          "We improved the stability of church chat and suggestions, fixing cloud cold start timeouts.",
-          "Data sync is now smoother: background updates no longer reload the entire page.",
-          "Added a clear error message when the church chat times out.",
-          "Fixed layout issues on mobile devices and improved the donate page when configuration is missing.",
-          "The app now works better offline: the offline page has a retry button and caching is faster.",
-          "Optimized app installation to load faster on startup."
+          "Fixed unsafe redirects that could send regular users to the admin panel.",
+          "Improved admin login flow and updated dependencies to prevent loading errors.",
+          "Increased timeout for AI and chat APIs to prevent cold start timeouts on Vercel.",
+          "Optimized background data sync without full page reloads.",
+          "Improved the donate page and database security rules.",
+          "Sped up initial PWA loading and improved offline support."
         ]
       }
     },
