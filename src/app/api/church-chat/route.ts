@@ -11,6 +11,7 @@ import {
   isFullCallingsListRequest,
   resolveOrganizationCallings,
 } from '@/lib/church-organization-callings';
+import { resolveDeepSeekTimeoutMs } from '@/lib/deepseek';
 
 export const runtime = 'nodejs';
 /**
@@ -35,8 +36,13 @@ const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEEPSEEK_CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? 'deepseek-v4-flash';
 /** Listing all callings needs more tokens than a short Q&A (default was 800 and truncated). */
 const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 1600;
-/** Full pastoral lists often exceed 8s on DeepSeek; default 30s. */
-const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 30_000;
+/**
+ * Per-attempt timeout (default 30s, floor 25s).
+ * Legacy host env with 8000 caused 504s; resolveDeepSeekTimeoutMs ignores that.
+ */
+const DEEPSEEK_TIMEOUT_MS = resolveDeepSeekTimeoutMs();
+/** Leave headroom under maxDuration=60 for news/vision/JSON overhead. */
+const DEEPSEEK_TOTAL_BUDGET_MS = Math.min(55_000, DEEPSEEK_TIMEOUT_MS + 25_000);
 /** Public model ids (deepseek-chat aliases to v4-flash). */
 const FALLBACK_MODELS = ['deepseek-chat', 'deepseek-v4-pro'];
 
@@ -303,10 +309,23 @@ export async function POST(request: Request) {
     let answer = '';
     let lastErrorText = '';
     let lastStatus = 502;
+    const budgetStartedAt = Date.now();
 
     for (const model of modelCandidates) {
+      const remainingBudget = DEEPSEEK_TOTAL_BUDGET_MS - (Date.now() - budgetStartedAt);
+      // Need a few seconds for a meaningful completion; otherwise stop trying.
+      if (remainingBudget < 5_000) {
+        logger.warn({
+          message: 'DeepSeek model fallback skipped: total budget exhausted',
+          model,
+          remainingBudgetMs: remainingBudget,
+        });
+        break;
+      }
+
+      const attemptTimeoutMs = Math.min(DEEPSEEK_TIMEOUT_MS, remainingBudget);
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), DEEPSEEK_TIMEOUT_MS);
+      const timeoutId = setTimeout(() => controller.abort(), attemptTimeoutMs);
       try {
         const response = await fetch(DEEPSEEK_API_URL, {
           method: 'POST',
@@ -352,12 +371,13 @@ export async function POST(request: Request) {
             (error as { name: string }).name === 'AbortError');
         if (isTimeout) {
           lastStatus = 504;
-          lastErrorText = `timeout after ${DEEPSEEK_TIMEOUT_MS}ms`;
+          lastErrorText = `timeout after ${attemptTimeoutMs}ms`;
           logger.warn({
             message: 'DeepSeek request failed for model candidate',
             model,
             status: 'timeout',
-            timeoutMs: DEEPSEEK_TIMEOUT_MS,
+            timeoutMs: attemptTimeoutMs,
+            configuredTimeoutMs: DEEPSEEK_TIMEOUT_MS,
           });
           continue;
         }

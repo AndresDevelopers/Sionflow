@@ -69,13 +69,34 @@ Sin `GEMINI_API_KEY`, el chat de texto sigue funcionando; las imágenes no se an
 
 Si el chat o las sugerencias fallan solo en `sionflow.com` y no en localhost:
 
-1. En Vercel → Settings → Environment Variables, confirma **Production**:
+1. En el host (Vercel u otro) → Settings → Environment Variables, confirma **Production**:
    - `DEEPSEEK_API_KEY`
    - `GEMINI_API_KEY` (solo imágenes)
-   - `DEEPSEEK_TIMEOUT_MS=30000` (recomendado)
+   - `DEEPSEEK_TIMEOUT_MS=30000` (**no** dejes `8000`: corta respuestas reales y devuelve 504)
    - `FIREBASE_SERVICE_ACCOUNT_KEY` (auth de las APIs)
 2. Redeploy tras cambiar env vars.
 3. En el navegador: Application → Service Workers → Unregister + hard refresh (para tomar el SW nuevo).
+
+### Síntoma: logs con `timeoutMs: 8000` y status 504
+
+La API de DeepSeek suele responder en 2–8s en prompts cortos, pero con system prompt + noticias + historial a menudo supera **8s**. Si el host tiene `DEEPSEEK_TIMEOUT_MS=8000` (valor legacy), el chat aborta y prueba los modelos de fallback hasta fallar todos.
+
+- El código ahora impone un **mínimo de 25s** aunque el env diga 8000.
+- Aun así, actualiza el env del host a `30000` y vuelve a desplegar.
+
+### Sugerencias de Actividades / Servicios vacías solo en producción
+
+Rutas: `GET /api/suggestions`, `GET /api/service-suggestions` (mismo DeepSeek).
+
+Causas frecuentes:
+1. `DEEPSEEK_TIMEOUT_MS=8000` en el host (misma causa que church-chat).
+2. Fallo de auth (`401`/`403`) si falta token o `barrioOrg` en `c_users`.
+3. Schema JSON demasiado estricto (antes exigía exactamente 3 ítems) o timeout de la función serverless.
+
+Mitigaciones en código:
+- Timeout mínimo 25s + soft-deadline + fallback estático en API y cliente.
+- El cliente nunca deja la tarjeta vacía: si falla la red/IA muestra sugerencias de respaldo.
+- Validación de respuesta/cache local antes de renderizar.
 
 ## Notas de seguridad
 

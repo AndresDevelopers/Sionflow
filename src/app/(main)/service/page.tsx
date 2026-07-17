@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { query, orderBy, Timestamp, where, deleteDoc, doc, addDoc } from 'firebase/firestore';
@@ -58,11 +58,11 @@ import { OfflineImage } from '@/components/offline-image';
 import { cacheImages } from '@/lib/image-offline-cache';
 import { isBrowserOnline } from '@/lib/network';
 
-type SuggestedServices = {
-  quorumCare: string[];
-  communityImpact: string[];
-};
-
+import {
+  FALLBACK_SERVICE_SUGGESTIONS,
+  normalizeServiceSuggestions,
+  type SuggestedServices,
+} from '@/lib/ai-suggestions';
 
 async function getServicesForYear(year: number, barrioOrg?: string): Promise<Service[]> {
   try {
@@ -99,7 +99,8 @@ export default function ServicePage() {
   const [services, setServices] = useState<Service[]>([]);
   const [serviceSuggestions, setServiceSuggestions] = useState<SuggestedServices | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isGeneratingSuggestions, startGeneratingSuggestions] = useTransition();
+  /** Start true so production never flashes the empty/error card before the first fetch. */
+  const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(true);
   const { toast } = useToast();
   
   const currentYear = getYear(new Date());
@@ -181,54 +182,83 @@ export default function ServicePage() {
     }
   };
 
-  const handleGenerateServiceSuggestions = useCallback((refresh = false) => {
-    startGeneratingSuggestions(async () => {
-      try {
-        const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-        const cacheKey = 'service_suggestions_cache';
-        const cacheTimestampKey = 'service_suggestions_timestamp';
+  const handleGenerateServiceSuggestions = useCallback(async (refresh = false) => {
+    setIsGeneratingSuggestions(true);
+    try {
+      const isProduction =
+        typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+      const cacheKey = 'service_suggestions_cache';
+      const cacheTimestampKey = 'service_suggestions_timestamp';
 
-        if (!refresh && isProduction) {
+      if (!refresh && isProduction) {
+        try {
           const cachedData = localStorage.getItem(cacheKey);
           const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
 
           if (cachedData && cachedTimestamp) {
             const cacheAge = Date.now() - Number.parseInt(cachedTimestamp, 10);
             if (!Number.isNaN(cacheAge) && cacheAge < 24 * 60 * 60 * 1000) {
-              setServiceSuggestions(JSON.parse(cachedData) as SuggestedServices);
-              return;
+              const normalized = normalizeServiceSuggestions(JSON.parse(cachedData));
+              if (normalized) {
+                setServiceSuggestions(normalized);
+                return;
+              }
+              localStorage.removeItem(cacheKey);
+              localStorage.removeItem(cacheTimestampKey);
             }
           }
+        } catch (error) {
+          logger.error({ error, message: 'Error loading service suggestions from cache' });
         }
+      }
 
-        const idToken = await firebaseUser?.getIdToken().catch(() => null);
-        if (!idToken) throw new Error('No autenticado');
-        const response = await fetch(
-          refresh ? '/api/service-suggestions?refresh=true' : '/api/service-suggestions',
-          { headers: { Authorization: `Bearer ${idToken}` } }
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to fetch service suggestions: ${response.status} ${response.statusText}`);
+      const idToken = await firebaseUser?.getIdToken().catch(() => null);
+      if (!idToken) {
+        setServiceSuggestions(FALLBACK_SERVICE_SUGGESTIONS);
+        return;
+      }
+
+      const response = await fetch(
+        refresh ? '/api/service-suggestions?refresh=true' : '/api/service-suggestions',
+        {
+          headers: { Authorization: `Bearer ${idToken}` },
+          signal: AbortSignal.timeout(45_000),
         }
-        const result = (await response.json()) as SuggestedServices;
-        setServiceSuggestions(result);
+      );
+      if (!response.ok) {
+        logger.error({
+          message: 'Failed to fetch service suggestions',
+          status: response.status,
+          statusText: response.statusText,
+        });
+        setServiceSuggestions(FALLBACK_SERVICE_SUGGESTIONS);
+        return;
+      }
 
-        if (isProduction) {
+      const result = normalizeServiceSuggestions(await response.json());
+      const finalSuggestions = result ?? FALLBACK_SERVICE_SUGGESTIONS;
+      setServiceSuggestions(finalSuggestions);
+
+      if (isProduction && result) {
+        try {
           localStorage.setItem(cacheKey, JSON.stringify(result));
           localStorage.setItem(cacheTimestampKey, Date.now().toString());
+        } catch (error) {
+          logger.error({ error, message: 'Error saving service suggestions to cache' });
         }
-      } catch (error) {
-        logger.error({ error, message: 'Error generating service suggestions' });
-        setServiceSuggestions(null);
       }
-    });
+    } catch (error) {
+      logger.error({ error, message: 'Error generating service suggestions' });
+      setServiceSuggestions(FALLBACK_SERVICE_SUGGESTIONS);
+    } finally {
+      setIsGeneratingSuggestions(false);
+    }
   }, [firebaseUser]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      queueMicrotask(() => handleGenerateServiceSuggestions());
-    }
-  }, [authLoading, handleGenerateServiceSuggestions, user]);
+    if (authLoading || !user || !firebaseUser) return;
+    void handleGenerateServiceSuggestions();
+  }, [authLoading, handleGenerateServiceSuggestions, user, firebaseUser]);
 
 
   const upcomingServices = services.filter(service => {

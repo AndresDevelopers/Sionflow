@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState, useTransition } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { OfflineImage } from '@/components/offline-image';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -8,7 +8,11 @@ import { orderBy, query, Timestamp, where, deleteDoc, doc, addDoc } from 'fireba
 import { getDocs } from '@/lib/firestore-query';
 import { activitiesCollection, servicesCollection } from '@/lib/collections';
 import type { Activity } from '@/lib/types';
-import type { SuggestedActivities } from '@/ai/flows/suggest-activities-flow';
+import {
+  FALLBACK_ACTIVITY_SUGGESTIONS,
+  normalizeActivitySuggestions,
+  type SuggestedActivities,
+} from '@/lib/ai-suggestions';
 import {
   Card,
   CardContent,
@@ -113,7 +117,8 @@ export default function ActivitiesPage() {
   const [loading, setLoading] = useState(true);
   const [availableYears, setAvailableYears] = useState<number[] | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestedActivities | null>(null);
-  const [isGenerating, startGenerating] = useTransition();
+  /** Start true so production never flashes the empty/error card before the first fetch. */
+  const [isGenerating, setIsGenerating] = useState(true);
   const currentYear = getYear(new Date());
   const yearParam = Number(searchParams.get('year'));
   const selectedYear = Number.isInteger(yearParam) && yearParam >= 1900 && yearParam <= 2100 ? yearParam : currentYear;
@@ -191,61 +196,78 @@ export default function ActivitiesPage() {
     }
   };
 
-  const handleGenerateSuggestions = async (refresh = false) => {
-    startGenerating(async () => {
-      try {
-        const isProduction = typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
-        const cacheKey = 'activities_suggestions_cache';
-        const cacheTimestampKey = 'activities_suggestions_timestamp';
+  const handleGenerateSuggestions = useCallback(async (refresh = false) => {
+    setIsGenerating(true);
+    try {
+      const isProduction =
+        typeof window !== 'undefined' && !window.location.hostname.includes('localhost');
+      const cacheKey = 'activities_suggestions_cache';
+      const cacheTimestampKey = 'activities_suggestions_timestamp';
 
-        if (!refresh && isProduction) {
-          try {
-            const cachedData = localStorage.getItem(cacheKey);
-            const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
+      if (!refresh && isProduction) {
+        try {
+          const cachedData = localStorage.getItem(cacheKey);
+          const cachedTimestamp = localStorage.getItem(cacheTimestampKey);
 
-            if (cachedData && cachedTimestamp) {
-              const cacheAge = Date.now() - parseInt(cachedTimestamp);
-              if (cacheAge < 24 * 60 * 60 * 1000) {
-                const result = JSON.parse(cachedData);
-                setSuggestions(result);
+          if (cachedData && cachedTimestamp) {
+            const cacheAge = Date.now() - Number.parseInt(cachedTimestamp, 10);
+            if (!Number.isNaN(cacheAge) && cacheAge < 24 * 60 * 60 * 1000) {
+              const normalized = normalizeActivitySuggestions(JSON.parse(cachedData));
+              if (normalized) {
+                setSuggestions(normalized);
                 return;
               }
+              localStorage.removeItem(cacheKey);
+              localStorage.removeItem(cacheTimestampKey);
             }
-          } catch (error) {
-            console.error('Error loading suggestions from cache:', error);
           }
+        } catch (error) {
+          logger.error({ error, message: 'Error loading activity suggestions from cache' });
         }
-
-        const idToken = await firebaseUser?.getIdToken().catch(() => null);
-        if (!idToken) throw new Error('No autenticado');
-        const url = refresh ? '/api/suggestions?refresh=true' : '/api/suggestions';
-        const response = await fetch(url, {
-          headers: { Authorization: `Bearer ${idToken}` },
-        });
-        if (!response.ok) {
-          console.error(`Failed to fetch suggestions: ${response.status} ${response.statusText}`);
-          const errorText = await response.text();
-          console.error('Error response:', errorText);
-          throw new Error(`Failed to fetch suggestions: ${response.status} ${response.statusText}`);
-        }
-        const result = await response.json();
-
-        if (isProduction) {
-          try {
-            localStorage.setItem(cacheKey, JSON.stringify(result));
-            localStorage.setItem(cacheTimestampKey, Date.now().toString());
-          } catch (error) {
-            console.error('Error saving suggestions to cache:', error);
-          }
-        }
-
-        setSuggestions(result);
-      } catch (error) {
-        console.error('Error generating suggestions:', error);
-        setSuggestions(null);
       }
-    });
-  };
+
+      const idToken = await firebaseUser?.getIdToken().catch(() => null);
+      if (!idToken) {
+        // Auth still settling or offline sticky session without token — show fallback, not empty.
+        setSuggestions(FALLBACK_ACTIVITY_SUGGESTIONS);
+        return;
+      }
+
+      const url = refresh ? '/api/suggestions?refresh=true' : '/api/suggestions';
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${idToken}` },
+        signal: AbortSignal.timeout(45_000),
+      });
+
+      if (!response.ok) {
+        logger.error({
+          message: 'Failed to fetch activity suggestions',
+          status: response.status,
+          statusText: response.statusText,
+        });
+        setSuggestions(FALLBACK_ACTIVITY_SUGGESTIONS);
+        return;
+      }
+
+      const result = normalizeActivitySuggestions(await response.json());
+      const finalSuggestions = result ?? FALLBACK_ACTIVITY_SUGGESTIONS;
+      setSuggestions(finalSuggestions);
+
+      if (isProduction && result) {
+        try {
+          localStorage.setItem(cacheKey, JSON.stringify(result));
+          localStorage.setItem(cacheTimestampKey, Date.now().toString());
+        } catch (error) {
+          logger.error({ error, message: 'Error saving activity suggestions to cache' });
+        }
+      }
+    } catch (error) {
+      logger.error({ error, message: 'Error generating activity suggestions' });
+      setSuggestions(FALLBACK_ACTIVITY_SUGGESTIONS);
+    } finally {
+      setIsGenerating(false);
+    }
+  }, [firebaseUser]);
 
   useEffect(() => {
     if (authLoading || !user) return;
@@ -253,9 +275,9 @@ export default function ActivitiesPage() {
   }, [authLoading, user, fetchActivities]);
 
   useEffect(() => {
-    if (authLoading || !user) return;
-    handleGenerateSuggestions();
-  }, [authLoading, user]);
+    if (authLoading || !user || !firebaseUser) return;
+    void handleGenerateSuggestions();
+  }, [authLoading, user, firebaseUser, handleGenerateSuggestions]);
 
   useEffect(() => {
     if (authLoading || !user) return;

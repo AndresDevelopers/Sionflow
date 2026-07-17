@@ -7,18 +7,34 @@
  * NO se usa para analizar fotos (la API de chat no acepta image_url).
  * Para imágenes ver `@/lib/vision` (GEMINI_API_KEY).
  *
- * Env: DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_CHAT_MODEL, DEEPSEEK_MAX_TOKENS
+ * Env: DEEPSEEK_API_KEY, DEEPSEEK_MODEL, DEEPSEEK_CHAT_MODEL, DEEPSEEK_MAX_TOKENS, DEEPSEEK_TIMEOUT_MS
  */
 import { z } from 'zod';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
 const DEFAULT_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
 /**
- * Default 30s (was 8s). Serverless cold start + DeepSeek latency often exceeds 8s
- * in production, which made suggestions/vision polish fail only on sionflow.com.
+ * Default 30s. Floor 25s so stale host env (`DEEPSEEK_TIMEOUT_MS=8000` from older
+ * deploys) cannot abort pastoral/chat completions mid-flight.
  * Keep under route `maxDuration` (60s).
  */
-const DEEPSEEK_TIMEOUT_MS = Number(process.env.DEEPSEEK_TIMEOUT_MS) || 30_000;
+export const DEEPSEEK_MIN_TIMEOUT_MS = 25_000;
+export const DEEPSEEK_DEFAULT_TIMEOUT_MS = 30_000;
+
+/** Resolve timeout from env, ignoring invalid/legacy-low values. */
+export function resolveDeepSeekTimeoutMs(
+  envValue: string | undefined = process.env.DEEPSEEK_TIMEOUT_MS,
+): number {
+  const parsed = Number(envValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEEPSEEK_DEFAULT_TIMEOUT_MS;
+  }
+  // 8s was the old default and still appears in some production env dashboards;
+  // real prompts with system context routinely need 6–20s+.
+  return Math.max(Math.floor(parsed), DEEPSEEK_MIN_TIMEOUT_MS);
+}
+
+const DEEPSEEK_TIMEOUT_MS = resolveDeepSeekTimeoutMs();
 const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 1600;
 
 type DeepSeekMessage = {
@@ -72,17 +88,30 @@ export async function requestDeepSeekText(messages: DeepSeekMessage[], model = D
     }
 
     const data = (await response.json()) as {
-      choices?: Array<{ message?: { content?: string | Array<{ text?: string }> } }>;
+      choices?: Array<{
+        message?: {
+          content?: string | Array<{ text?: string }>;
+          /** Present when thinking mode left content empty. */
+          reasoning_content?: string;
+        };
+      }>;
     };
 
-    const rawContent = data.choices?.[0]?.message?.content;
+    const message = data.choices?.[0]?.message;
+    const rawContent = message?.content;
 
-    if (typeof rawContent === 'string') {
+    if (typeof rawContent === 'string' && rawContent.trim()) {
       return rawContent.trim();
     }
 
     if (Array.isArray(rawContent)) {
-      return rawContent.map((item) => item.text ?? '').join(' ').trim();
+      const joined = rawContent.map((item) => item.text ?? '').join(' ').trim();
+      if (joined) return joined;
+    }
+
+    const reasoning = message?.reasoning_content;
+    if (typeof reasoning === 'string' && reasoning.trim()) {
+      return reasoning.trim();
     }
 
     throw new Error('DeepSeek respondió sin contenido.');

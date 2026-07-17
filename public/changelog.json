@@ -6,20 +6,20 @@
       "date": "2026-07-17",
       "changes": {
         "es": [
-          "Corregimos redirecciones inseguras que podían enviar usuarios regulares al panel de administración.",
-          "Mejoramos el inicio de sesión de administradores y actualizamos dependencias para evitar errores de carga.",
-          "Aumentamos el tiempo de espera de las APIs de chat e IA para evitar tiempos de espera en Vercel.",
-          "Optimizamos la sincronización de datos en segundo plano sin recargar toda la página.",
-          "Mejoramos la página de donaciones y la seguridad de la base de datos.",
-          "Aceleramos la carga inicial de la PWA y mejoramos el soporte sin conexión."
+          "Corregimos los tiempos de espera en sugerencias de DeepSeek y agregamos contenido de respaldo para que siempre veas algo útil.",
+          "Mejoramos la seguridad del inicio de sesión para que los usuarios normales no sean redirigidos al panel de administración.",
+          "Aceleramos las respuestas de los chats y sugerencias de la iglesia al aumentar el tiempo máximo de ejecución en Vercel.",
+          "Ahora la sincronización de datos en segundo plano es más fluida y no interrumpe lo que estás viendo.",
+          "Mejoramos la página de donaciones para que funcione aunque falten datos de configuración.",
+          "La aplicación ahora carga más rápido y funciona mejor sin conexión, con una página offline renovada."
         ],
         "en": [
-          "Fixed unsafe redirects that could send regular users to the admin panel.",
-          "Improved admin login flow and updated dependencies to prevent loading errors.",
-          "Increased timeout for AI and chat APIs to prevent cold start timeouts on Vercel.",
-          "Optimized background data sync without full page reloads.",
-          "Improved the donate page and database security rules.",
-          "Sped up initial PWA loading and improved offline support."
+          "Fixed timeout issues in DeepSeek suggestions and added fallback content so you always see something useful.",
+          "Improved login security so regular users are no longer redirected to the admin panel.",
+          "Sped up church chat and suggestion responses by increasing the maximum execution time on Vercel.",
+          "Background data sync is now smoother and won't interrupt what you're viewing.",
+          "Enhanced the donate page to work even when configuration data is missing.",
+          "The app now loads faster and works better offline, with a refreshed offline page."
         ]
       }
     },
