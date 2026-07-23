@@ -1,6 +1,18 @@
 {
-  "current": "1.1.37",
+  "current": "1.1.38",
   "entries": [
+    {
+      "version": "1.1.38",
+      "date": "2026-07-23",
+      "changes": {
+        "es": [
+          "Actualización: Add full interview scheduling, tracking and reminder system."
+        ],
+        "en": [
+          "Update: Add full interview scheduling, tracking and reminder system."
+        ]
+      }
+    },
     {
       "version": "1.1.37",
       "date": "2026-07-22",

@@ -123,6 +123,23 @@
       ]
     },
     {
+      "collectionGroup": "c_ministracion_entrevistas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "c_ministracion_entrevistas",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "barrioOrg", "order": "ASCENDING" },
+        { "fieldPath": "companionshipId", "order": "ASCENDING" },
+        { "fieldPath": "date", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "c_ministracion",
       "queryScope": "COLLECTION",
       "fields": [

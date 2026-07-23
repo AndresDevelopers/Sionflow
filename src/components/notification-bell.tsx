@@ -306,6 +306,8 @@ export function NotificationBell() {
         return '/missionary-work';
       case 'admin_user':
         return '/admin/users';
+      case 'ministering_interview':
+        return '/ministering';
       default:
         return null;
     }

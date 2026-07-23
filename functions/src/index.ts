@@ -824,6 +824,11 @@ interface UserNotificationData {
     barrioOrg: string | null;
     /** Raw role from c_users (e.g. secretary, admin, president). */
     role: string | null;
+    /**
+     * Member document id linked from Settings/Profile (syncedMemberId).
+     * Used to notify the district leader account for ministering interviews.
+     */
+    syncedMemberId: string | null;
 }
 
 // ── Cache en memoria para preferencias de notificación de usuarios ──────────
@@ -844,6 +849,7 @@ const USER_NOTIF_SELECT_FIELDS = [
     "pushNotificationsEnabled",
     "notificationPrefs",
     "role",
+    "syncedMemberId",
 ] as const;
 
 function resolveUserBarrioOrgFromData(d: FirebaseFirestore.DocumentData): string | null {
@@ -879,6 +885,10 @@ function mapUserDocToNotificationData(
         },
         barrioOrg,
         role: typeof d.role === "string" ? d.role : null,
+        syncedMemberId:
+            typeof d.syncedMemberId === "string" && d.syncedMemberId.trim()
+                ? d.syncedMemberId.trim()
+                : null,
     };
 }
 
@@ -1043,7 +1053,8 @@ type NotifCategory =
     | "missionaryWork"
     | "service"
     | "council"
-    | "activities";
+    | "activities"
+    | "ministering";
 
 /**
  * Page paths used for visiblePages matching.
@@ -1060,7 +1071,21 @@ const CATEGORY_PAGE: Record<NotifCategory, string> = {
     service: "/service",
     council: "/council",
     activities: "/reports/activities",
+    ministering: "/ministering",
 };
+
+interface MinisteringInterviewDoc {
+    companionshipId?: string;
+    companionshipName?: string;
+    districtId?: string | null;
+    leaderMemberId?: string | null;
+    leaderName?: string | null;
+    date?: admin.firestore.Timestamp;
+    time?: string;
+    barrioOrg?: string;
+    /** "completed" interviews must not trigger reminders */
+    status?: string;
+}
 
 interface EligibleUsers {
     inAppUserIds: string[];
@@ -1353,9 +1378,52 @@ export const onNewUserRegistered = functions
         }
     });
 
+/**
+ * Restrict eligible recipients to the user account(s) whose profile is synced
+ * with the given member (district leader). Empty if nobody has that link.
+ */
+function filterEligibleToSyncedMember(
+    allUsers: UserNotificationData[],
+    eligible: EligibleUsers,
+    leaderMemberId: string,
+    docBarrioOrg?: string | null
+): EligibleUsers {
+    const scope = normalizeDocBarrioOrg(docBarrioOrg);
+    if (!scope || !leaderMemberId) {
+        return { inAppUserIds: [], pushUserIds: [] };
+    }
+
+    const leaderUserIds = new Set(
+        allUsers
+            .filter(
+                (u) =>
+                    u.syncedMemberId === leaderMemberId &&
+                    u.barrioOrg === scope
+            )
+            .map((u) => u.userId)
+    );
+
+    return {
+        inAppUserIds: eligible.inAppUserIds.filter((id) => leaderUserIds.has(id)),
+        pushUserIds: eligible.pushUserIds.filter((id) => leaderUserIds.has(id)),
+    };
+}
+
+function formatInterviewTimesList(times: string[]): string {
+    const uniqueSorted = Array.from(
+        new Set(times.map((t) => t.trim()).filter(Boolean))
+    ).sort();
+    if (uniqueSorted.length === 0) return "";
+    const first = uniqueSorted[0] ?? "";
+    if (uniqueSorted.length === 1) return first;
+    const last = uniqueSorted[uniqueSorted.length - 1] ?? "";
+    if (uniqueSorted.length === 2) return `${first} y ${last}`;
+    return `${uniqueSorted.slice(0, -1).join(", ")} y ${last}`;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DAILY NOTIFICATIONS – 09:00 Ecuador (America/Guayaquil)
-// Covers: Birthdays, Future Members, Services, Activities
+// Covers: Birthdays, Future Members, Services, Activities, Ministering interviews
 // ─────────────────────────────────────────────────────────────────────────────
 export const dailyNotifications = functions
     .runWith({ maxInstances: MAX_INSTANCES_SCHEDULED })
@@ -1369,6 +1437,8 @@ export const dailyNotifications = functions
         });
         const today = getEcuadorToday();
         const in14Days = addDays(today, 14);
+        const in4Days = addDays(today, 4);
+        const in1Day = addDays(today, 1);
         const in3Days = addDays(today, 3);
 
         const allUsers = await getAllUsersNotificationData();
@@ -1651,6 +1721,150 @@ export const dailyNotifications = functions
                         activitiesTrace
                     );
                 }
+            }
+        }
+
+        // ── Entrevistas de ministración – 4 días y 1 día antes ─────────────
+        // Solo al dueño del distrito: cuenta con syncedMemberId = leaderMemberId.
+        // El cuerpo solo indica cantidad de entrevistas del día y sus horas.
+        const interviewsTrace = buildNotificationTrace("dailyNotifications", "ministering");
+        {
+            const interviewsSnap = await getCollectionDocsForBarrios(
+                "c_ministracion_entrevistas",
+                activeBarrioOrgs,
+                (q) =>
+                    q
+                        .where("date", ">=", admin.firestore.Timestamp.fromDate(today))
+                        .where("date", "<=", admin.firestore.Timestamp.fromDate(in4Days))
+            );
+
+            type LeaderDayBucket = {
+                leaderMemberId: string;
+                barrioOrg: string;
+                count: number;
+                times: string[];
+            };
+
+            const buckets4d = new Map<string, LeaderDayBucket>();
+            const buckets1d = new Map<string, LeaderDayBucket>();
+
+            for (const interviewDoc of interviewsSnap.docs) {
+                const interview = interviewDoc.data() as MinisteringInterviewDoc;
+                // Skip completed interviews (no reminder after done)
+                if (interview.status === "completed") continue;
+
+                const docBarrioOrg = interview.barrioOrg || null;
+                const leaderMemberId =
+                    typeof interview.leaderMemberId === "string"
+                        ? interview.leaderMemberId.trim()
+                        : "";
+                if (!docBarrioOrg || !leaderMemberId || !interview.date) continue;
+
+                const interviewDate = interview.date.toDate();
+                const interviewDay = new Date(
+                    interviewDate.getFullYear(),
+                    interviewDate.getMonth(),
+                    interviewDate.getDate()
+                );
+                const time = typeof interview.time === "string" ? interview.time.trim() : "";
+                const bucketKey = `${docBarrioOrg}::${leaderMemberId}`;
+
+                if (isSameDay(interviewDay, in4Days)) {
+                    const existing = buckets4d.get(bucketKey) ?? {
+                        leaderMemberId,
+                        barrioOrg: docBarrioOrg,
+                        count: 0,
+                        times: [],
+                    };
+                    existing.count += 1;
+                    if (time) existing.times.push(time);
+                    buckets4d.set(bucketKey, existing);
+                }
+
+                if (isSameDay(interviewDay, in1Day)) {
+                    const existing = buckets1d.get(bucketKey) ?? {
+                        leaderMemberId,
+                        barrioOrg: docBarrioOrg,
+                        count: 0,
+                        times: [],
+                    };
+                    existing.count += 1;
+                    if (time) existing.times.push(time);
+                    buckets1d.set(bucketKey, existing);
+                }
+            }
+
+            const sendLeaderInterviewReminder = async (
+                bucket: LeaderDayBucket,
+                kind: "4d" | "1d"
+            ) => {
+                const count = bucket.count;
+                const timesLabel = formatInterviewTimesList(bucket.times);
+                const body =
+                    kind === "4d"
+                        ? timesLabel
+                            ? `Tienes ${count} entrevista${count === 1 ? "" : "s"} en 4 días a las ${timesLabel}.`
+                            : `Tienes ${count} entrevista${count === 1 ? "" : "s"} en 4 días.`
+                        : timesLabel
+                            ? `Tienes ${count} entrevista${count === 1 ? "" : "s"} mañana a las ${timesLabel}.`
+                            : `Tienes ${count} entrevista${count === 1 ? "" : "s"} mañana.`;
+
+                const title =
+                    kind === "4d"
+                        ? "Recordatorio de entrevistas (4 días)"
+                        : "Recordatorio de entrevistas (mañana)";
+
+                const eligibleAll = getEligibleUsers(allUsers, "ministering", bucket.barrioOrg);
+                const eligible = filterEligibleToSyncedMember(
+                    allUsers,
+                    eligibleAll,
+                    bucket.leaderMemberId,
+                    bucket.barrioOrg
+                );
+
+                if (eligible.inAppUserIds.length === 0 && eligible.pushUserIds.length === 0) {
+                    functions.logger.log("ministering interview reminder: no eligible leader account", {
+                        kind,
+                        leaderMemberId: bucket.leaderMemberId,
+                        barrioOrg: bucket.barrioOrg,
+                        count,
+                    });
+                    return;
+                }
+
+                // Tag includes leader + kind so one digest per leader per day (idempotent).
+                const dateParts = getDatePartsInTimeZone(
+                    kind === "4d" ? in4Days : in1Day,
+                    ECUADOR_TZ
+                );
+                const interviewDateTag = `${dateParts.year}-${String(dateParts.month).padStart(2, "0")}-${String(dateParts.day).padStart(2, "0")}`;
+                const tag = `ministering-interview-${kind}-${bucket.leaderMemberId}-${interviewDateTag}`;
+
+                await notificationDispatcher.broadcastToUsers(
+                    eligible.inAppUserIds,
+                    {
+                        title,
+                        body,
+                        url: "/ministering",
+                        tag,
+                        barrioOrg: bucket.barrioOrg,
+                        context: {
+                            contextType: "ministering_interview",
+                            contextId: bucket.leaderMemberId,
+                            actionUrl: "/ministering",
+                            actionType: "navigate",
+                        },
+                    },
+                    eligible.pushUserIds,
+                    interviewsTrace
+                );
+            };
+
+            for (const bucket of buckets4d.values()) {
+                await sendLeaderInterviewReminder(bucket, "4d");
+            }
+            for (const bucket of buckets1d.values()) {
+                await sendLeaderInterviewReminder(bucket, "1d");
             }
         }
 
@@ -2203,6 +2417,10 @@ export const syncOnMinisteringWrite = makeDataSyncFn("c_ministracion", "c_minist
 export const syncOnMinisteringDistrictsWrite = makeDataSyncFn(
     "c_ministracion_distritos",
     "c_ministracion_distritos/{docId}"
+);
+export const syncOnMinisteringInterviewsWrite = makeDataSyncFn(
+    "c_ministracion_entrevistas",
+    "c_ministracion_entrevistas/{docId}"
 );
 export const syncOnActivitiesWrite = makeDataSyncFn("c_actividades", "c_actividades/{docId}");
 export const syncOnServicesWrite = makeDataSyncFn("c_servicios", "c_servicios/{docId}");

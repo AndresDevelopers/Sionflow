@@ -14,6 +14,47 @@ export type Companionship = {
     families: Family[];
     /** Distrito asignado (fuente de verdad en el compañerismo para filtrar) */
     districtId?: string | null;
+    /** Multi-tenant scope key: "barrio|organización" */
+    barrioOrg?: string;
+};
+
+/**
+ * Entrevista programada a un compañerismo de ministración.
+ * El dueño del distrito (líder = miembro con cuenta sincronizada) recibe
+ * recordatorios 4 días y 1 día antes vía in-app + push (Cloud Function).
+ */
+export type MinisteringInterviewStatus = 'scheduled' | 'completed';
+
+export type MinisteringInterview = {
+    id: string;
+    companionshipId: string;
+    /** Nombre legible del compañerismo (p. ej. "Juan y Pedro") — generado, no editable */
+    companionshipName: string;
+    /**
+     * Personas del compañerismo que asisten a la entrevista (multi-selección).
+     * Legacy docs may only have intervieweeName.
+     */
+    intervieweeNames: string[];
+    /** @deprecated Prefer intervieweeNames */
+    intervieweeName?: string;
+    districtId?: string | null;
+    /** memberId del líder del distrito al momento de programar */
+    leaderMemberId?: string | null;
+    leaderName?: string | null;
+    /** Día de la entrevista (fecha calendario) */
+    date: Timestamp;
+    /** Hora local "HH:mm" */
+    time: string;
+    /** scheduled por defecto; completed al marcar como realizada */
+    status?: MinisteringInterviewStatus;
+    /** Nota al completar la entrevista (opcional) */
+    observation?: string | null;
+    completedAt?: Timestamp | null;
+    completedBy?: string | null;
+    updatedAt?: Timestamp;
+    barrioOrg: string;
+    createdAt: Timestamp;
+    createdBy: string;
 };
 
 export type MinisteringDistrict = {
@@ -208,7 +249,8 @@ export type AppNotification = {
     | 'investigator'
     | 'urgent_family'
     | 'missionary_assignment'
-    | 'admin_user';
+    | 'admin_user'
+    | 'ministering_interview';
     contextId?: string;
     notificationTag?: string | null;
     barrioOrg?: string | null;

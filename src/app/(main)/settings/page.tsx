@@ -1292,6 +1292,14 @@ export default function SettingsPage() {
       pushDetail: t('settings.cat.detail.council'),
     },
     {
+      key: 'ministering',
+      label: t('settings.cat.ministering.label'),
+      description: t('settings.cat.ministering.description'),
+      page: '/ministering',
+      inAppDetail: t('settings.cat.detail.ministering'),
+      pushDetail: t('settings.cat.detail.ministering'),
+    },
+    {
       key: 'activities',
       label: t('settings.cat.activities.label'),
       description: t('settings.cat.activities.description'),

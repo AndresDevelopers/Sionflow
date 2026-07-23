@@ -236,6 +236,13 @@ service cloud.firestore {
       allow delete: if canDeleteInBarrio();
     }
 
+    match /c_ministracion_entrevistas/{document} {
+      allow read: if isSameBarrio(resource.data.barrioOrg);
+      allow create: if canCreateInBarrio();
+      allow update: if canUpdateInBarrio();
+      allow delete: if canDeleteInBarrio();
+    }
+
     match /c_observaciones_salud/{document} {
       allow read: if isSameBarrio(resource.data.barrioOrg);
       allow create: if canCreateInBarrio();

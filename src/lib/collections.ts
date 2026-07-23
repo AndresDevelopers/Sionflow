@@ -10,6 +10,7 @@ const coll = (path: string) => {
 export const ministeringCollection = coll('c_ministracion');
 export const ministeringDistrictsCollection = coll('c_ministracion_distritos');
 export const ministeringHistoryCollection = coll('c_ministracion_historial');
+export const ministeringInterviewsCollection = coll('c_ministracion_entrevistas');
 export const convertsCollection = coll('c_conversos');
 export const futureMembersCollection = coll('c_futuros_miembros');
 export const activitiesCollection = coll('c_actividades');
