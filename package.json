@@ -103,7 +103,7 @@
     "jsdom": "^30.0.1",
     "patch-package": "^8.0.1",
     "postcss": "^8.5.26",
-    "sharp": "^0.35.3",
+    "sharp": "^0.35.5",
     "tailwindcss": "3.4.18",
     "tsx": "^4.23.12",
     "typescript": "^6.0.3",
@@ -128,7 +128,7 @@
     "uuid": "11.1.1",
     "fast-uri": "^3.1.4",
     "fast-xml-parser": "^5.10.1",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.5"
   },
   "packageManager": "pnpm@11.18.0+sha512.33d83c77da82f49fba836925c6f1b841181ec3132b670639bd012f7075f5c7cf634c5f870147c19aae7478fac01df09d8892e880454896edd23ee9b33757563c"
 }
