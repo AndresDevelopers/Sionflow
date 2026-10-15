@@ -407,7 +407,7 @@ async function callDeepSeek(commits) {
   ].join('\n');
 
   const body = JSON.stringify({
-    model: process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash',
+    model: process.env.DEEPSEEK_MODEL || 'deepseek-flash',
     messages: [
       { role: 'system', content: systemPrompt },
       { role: 'user',   content: userPrompt   },

@@ -1,6 +1,22 @@
 {
-  "current": "1.1.45",
+  "current": "1.1.46",
   "entries": [
+    {
+      "version": "1.1.46",
+      "date": "2026-10-15",
+      "changes": {
+        "es": {
+          "fixed": [
+            "Hemos corregido: update DeepSeek model references from v4-flash to flash."
+          ]
+        },
+        "en": {
+          "fixed": [
+            "We fixed: update DeepSeek model references from v4-flash to flash."
+          ]
+        }
+      }
+    },
     {
       "version": "1.1.45",
       "date": "2026-09-03",

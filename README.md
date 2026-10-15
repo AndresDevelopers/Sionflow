@@ -430,8 +430,8 @@ FIREBASE_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
 # DeepSeek = IA de TODO (texto): dashboard, sugerencias, chat, resúmenes…
 # https://platform.deepseek.com/api_keys
 DEEPSEEK_API_KEY=sk-...
-DEEPSEEK_MODEL=deepseek-v4-flash
-DEEPSEEK_CHAT_MODEL=deepseek-v4-flash
+DEEPSEEK_MODEL=deepseek-flash
+DEEPSEEK_CHAT_MODEL=deepseek-flash
 
 # Gemini = IA SOLO para IMÁGENES (Obra misional + imagen en chat)
 # No reemplaza a DeepSeek. Gratis: https://aistudio.google.com/apikey

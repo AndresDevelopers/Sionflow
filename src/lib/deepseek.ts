@@ -12,7 +12,7 @@
 import { z } from 'zod';
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const DEFAULT_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-v4-flash';
+const DEFAULT_MODEL = process.env.DEEPSEEK_MODEL || 'deepseek-flash';
 /**
  * Default 30s. Floor 25s so stale host env (`DEEPSEEK_TIMEOUT_MS=8000` from older
  * deploys) cannot abort pastoral/chat completions mid-flight.
@@ -76,7 +76,7 @@ export async function requestDeepSeekText(messages: DeepSeekMessage[], model = D
         messages,
         temperature: 0.4,
         max_tokens: DEEPSEEK_MAX_TOKENS,
-        // v4 models can return empty `content` when thinking runs; keep it off.
+        // flash models can return empty `content` when thinking runs; keep it off.
         thinking: { type: 'disabled' },
       }),
       signal: controller.signal,

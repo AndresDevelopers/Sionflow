@@ -44,7 +44,7 @@ Agregar al archivo `.env` / `.env.local`:
 # DeepSeek = IA de TODO en texto (chat, respuestas, contexto)
 DEEPSEEK_API_KEY=tu_api_key
 # opcional para endpoint del chat
-DEEPSEEK_CHAT_MODEL=deepseek-v4-flash
+DEEPSEEK_CHAT_MODEL=deepseek-flash
 # recomendado para listas largas (llamamientos)
 DEEPSEEK_MAX_TOKENS=1600
 DEEPSEEK_TIMEOUT_MS=30000
@@ -54,7 +54,7 @@ DEEPSEEK_TIMEOUT_MS=30000
 GEMINI_API_KEY=tu_gemini_api_key
 ```
 
-Si `DEEPSEEK_CHAT_MODEL` no está definida, el sistema usa `deepseek-v4-flash`.
+Si `DEEPSEEK_CHAT_MODEL` no está definida, el sistema usa `deepseek-flash`.
 Sin `GEMINI_API_KEY`, el chat de texto sigue funcionando; las imágenes no se analizan bien.
 
 ## Endpoints

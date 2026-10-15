@@ -33,7 +33,7 @@ const bodySchema = z.object({
 });
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const DEEPSEEK_CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? 'deepseek-v4-flash';
+const DEEPSEEK_CHAT_MODEL = process.env.DEEPSEEK_CHAT_MODEL ?? 'deepseek-flash';
 /** Listing all callings needs more tokens than a short Q&A (default was 800 and truncated). */
 const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 1600;
 /**
@@ -43,7 +43,7 @@ const DEEPSEEK_MAX_TOKENS = Number(process.env.DEEPSEEK_MAX_TOKENS) || 1600;
 const DEEPSEEK_TIMEOUT_MS = resolveDeepSeekTimeoutMs();
 /** Leave headroom under maxDuration=60 for news/vision/JSON overhead. */
 const DEEPSEEK_TOTAL_BUDGET_MS = Math.min(55_000, DEEPSEEK_TIMEOUT_MS + 25_000);
-/** Public model ids (deepseek-chat aliases to v4-flash). */
+/** Public model ids (deepseek-chat aliases to flash). */
 const FALLBACK_MODELS = ['deepseek-chat', 'deepseek-v4-pro'];
 
 type DeepSeekMessageContent = string | Array<{ text?: string }>;

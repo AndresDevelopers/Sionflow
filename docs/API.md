@@ -111,7 +111,7 @@ Authorization: Bearer <token>
 }
 ```
 
-Chat conversacional con DeepSeek (`deepseek-v4-flash`).
+Chat conversacional con DeepSeek (`deepseek-flash`).
 
 ---
 

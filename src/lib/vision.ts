@@ -10,7 +10,7 @@
  *
  * Env: GEMINI_API_KEY (o GOOGLE_GENERATIVE_AI_API_KEY), GEMINI_VISION_MODEL
  *
- * Por qué Gemini: DeepSeek chat (v4-flash/pro) rechaza `image_url`
+ * Por qué Gemini: DeepSeek chat (flash/v4-pro) rechaza `image_url`
  * ("unknown variant image_url, expected text").
  */
 import { z } from 'zod';
