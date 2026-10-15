@@ -117,7 +117,6 @@ export default function AdminUsersPage() {
   const { toast } = useToast();
   const { t } = useI18n();
   const [users, setUsers] = useState<UserData[]>([]);
-  const [filtered, setFiltered] = useState<UserData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -179,9 +178,9 @@ export default function AdminUsersPage() {
       }
     };
     load();
-  }, [defaultVisiblePages, toast, barrioOrg]);
+  }, [defaultVisiblePages, toast, barrioOrg, t]);
 
-  useEffect(() => {
+  const filtered = useMemo(() => {
     let list = users;
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -193,7 +192,7 @@ export default function AdminUsersPage() {
     if (roleFilter !== "all") {
       list = list.filter((u) => u.role === roleFilter);
     }
-    setFiltered(list);
+    return list;
   }, [users, search, roleFilter]);
 
   const roleCounts = useMemo(() => countRoles(users), [users]);

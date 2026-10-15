@@ -106,6 +106,7 @@ export function MemberSelector({
   }, [includeInactive, statusFilter, toast, value, t, barrioOrg]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronización con sistema externo (fetch de miembros vía Firestore)
     fetchMembers();
   }, [fetchMembers]);
 
@@ -289,7 +290,7 @@ export function useMemberData(memberId?: string) {
           setLoading(false);
         });
     });
-  }, [memberId]);
+  }, [memberId, barrioOrg]);
 
   return { member, loading };
 }

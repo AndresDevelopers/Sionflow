@@ -166,9 +166,11 @@ export default function FamilySearchPage() {
 
     useEffect(() => {
         if (authLoading || !user) return;
-        void fetchData();
-        void fetchAnnotations();
-        void fetchMembersWithoutFs();
+        void (async () => {
+            await fetchData();
+            await fetchAnnotations();
+            await fetchMembersWithoutFs();
+        })();
     }, [authLoading, user, fetchData, fetchAnnotations, fetchMembersWithoutFs]);
 
     useOnManualRefresh(async () => {

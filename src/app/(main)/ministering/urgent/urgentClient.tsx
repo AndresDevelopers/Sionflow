@@ -4,7 +4,7 @@ import { doc, updateDoc, query, where } from 'firebase/firestore';
 import { getDocs, getDoc } from '@/lib/firestore-query';
 import { ministeringCollection } from '@/lib/collections';
 import type { Companionship, Family } from '@/lib/types';
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 
 import { Button } from '@/components/ui/button';
@@ -42,7 +42,7 @@ export function UrgentNeedsClient() {
   const formRef = useRef<HTMLFormElement>(null);
   const { toast } = useToast();
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const snapshot = await getDocs(query(ministeringCollection, where('barrioOrg', '==', barrioOrg)));
     const families: FamilyWithCompanions[] = [];
@@ -69,12 +69,13 @@ export function UrgentNeedsClient() {
     setAllFamilies(families);
     setUrgentFamilies(urgent);
     setLoading(false);
-  };
+  }, [barrioOrg]);
 
   useEffect(() => {
     if (authLoading || !user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async inicial (Firestore)
     fetchData();
-  }, [authLoading, user]);
+  }, [authLoading, user, fetchData]);
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();

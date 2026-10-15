@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import type { Annotation } from '@/lib/types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { annotationsCollection } from '@/lib/collections';
@@ -32,14 +32,15 @@ export function EditAnnotationDialog({
   onAnnotationUpdated,
 }: EditAnnotationDialogProps) {
   const { t } = useI18n();
-  const [editedText, setEditedText] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
+  const [editedText, setEditedText] = useState(annotation?.text ?? '');
+  const [prevAnnotation, setPrevAnnotation] = useState(annotation);
+  if (annotation !== prevAnnotation) {
+    setPrevAnnotation(annotation);
     if (annotation) {
       setEditedText(annotation.text);
     }
-  }, [annotation]);
+  }
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleSave = async () => {
     if (!annotation || !editedText.trim()) return;

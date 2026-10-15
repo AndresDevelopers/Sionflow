@@ -36,10 +36,11 @@ export function OfflineImage({
 }: OfflineImageProps) {
   const resolved = useOfflineImageSrc(src ?? undefined);
   const [failed, setFailed] = React.useState(false);
-
-  React.useEffect(() => {
+  const [prevResolved, setPrevResolved] = React.useState(resolved);
+  if (prevResolved !== resolved) {
+    setPrevResolved(resolved);
     setFailed(false);
-  }, [resolved]);
+  }
 
   if (!resolved || failed) {
     if (fill) {

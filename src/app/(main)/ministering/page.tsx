@@ -584,6 +584,7 @@ export default function MinisteringPage() {
 
   useEffect(() => {
     if (authLoading || !user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async inicial (Firestore)
     void loadData();
   }, [authLoading, user, loadData]);
 
@@ -643,16 +644,18 @@ export default function MinisteringPage() {
     );
   };
 
-  useEffect(() => {
+  const [prevFilteredCompanionshipsLength, setPrevFilteredCompanionshipsLength] = useState(filteredCompanionships.length);
+  if (filteredCompanionships.length !== prevFilteredCompanionshipsLength) {
+    setPrevFilteredCompanionshipsLength(filteredCompanionships.length);
     if (filteredCompanionships.length === 0) {
       setVisibleCount(0);
-      return;
+    } else {
+      setVisibleCount((prev) => {
+        const next = Math.max(prev, PAGE_SIZE);
+        return Math.min(next, filteredCompanionships.length);
+      });
     }
-    setVisibleCount((prev) => {
-      const next = Math.max(prev, PAGE_SIZE);
-      return Math.min(next, filteredCompanionships.length);
-    });
-  }, [filteredCompanionships]);
+  }
 
   useEffect(() => {
     const node = loadMoreTriggerRef.current;
@@ -661,6 +664,7 @@ export default function MinisteringPage() {
     if (visibleCount >= filteredCompanionships.length) return;
 
     if (typeof IntersectionObserver === 'undefined') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fallback sin IntersectionObserver (platform API no disponible)
       setVisibleCount((prev) => {
         const next = Math.min(prev + PAGE_SIZE, filteredCompanionships.length);
         return next === prev ? prev : next;

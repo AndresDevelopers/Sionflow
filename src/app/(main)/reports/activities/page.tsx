@@ -364,6 +364,7 @@ export default function ActivitiesPage() {
 
   useEffect(() => {
     if (authLoading || !user || !firebaseUser) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async de sugerencias IA (fetch + cache)
     void handleGenerateSuggestions();
   }, [authLoading, user, firebaseUser, handleGenerateSuggestions]);
 

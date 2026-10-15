@@ -189,7 +189,6 @@ export function useOffline(): OfflineHook {
             updateQueuedOperations().catch(console.error);
             interval = setInterval(() => {
                 if (mounted) {
-                    // eslint-disable-next-line react-hooks/set-state-in-effect
                     updateQueuedOperations().catch(console.error);
                 }
             }, 5000);

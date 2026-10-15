@@ -82,11 +82,30 @@ export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: B
   const fileInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = !!birthday;
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => birthday?.photoURL ?? null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [entryMode, setEntryMode] = useState<'manual' | 'automatic'>('manual');
+
+  // Ajuste de estado durante el render (patrón recomendado por React docs):
+  // sincroniza preview/entryMode/archivo al abrir el diálogo o cambiar birthday,
+  // sin setState dentro de useEffect.
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  const [prevBirthday, setPrevBirthday] = useState(birthday);
+  if (isOpen !== prevIsOpen || birthday !== prevBirthday) {
+    setPrevIsOpen(isOpen);
+    setPrevBirthday(birthday);
+    if (isOpen) {
+      if (isEditMode && birthday) {
+        setPreviewUrl(birthday.photoURL || null);
+      } else {
+        setPreviewUrl(null);
+      }
+      setEntryMode('manual');
+      setSelectedFile(null);
+    }
+  }
 
   const renderMemberOptions = () => {
     if (loadingMembers) {
@@ -135,41 +154,48 @@ export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: B
 
   // Fetch members when dialog opens
   useEffect(() => {
-    if (isOpen && !isEditMode) {
+    if (!isOpen || isEditMode) return;
+    let cancelled = false;
+    void (async () => {
       setLoadingMembers(true);
-      getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg), orderBy('firstName')))
-        .then(snapshot => {
-          const membersData = snapshot.docs
-            .map(doc => {
-              const memberData = doc.data();
-              return {
-                id: doc.id,
-                ...memberData,
-                status: normalizeMemberStatus(memberData.status),
-              } as Member;
-            })
-            .filter(member => member.status !== 'deceased');
-          setMembers(membersData);
-        })
-        .catch(error => {
-          logger.error({ error, message: 'Failed to fetch members for birthday form' });
-          let errorMessage = t('birthdayForm.loadMembersError');
+      try {
+        const snapshot = await getDocs(query(membersCollection, where('barrioOrg', '==', barrioOrg), orderBy('firstName')));
+        if (cancelled) return;
+        const membersData = snapshot.docs
+          .map(doc => {
+            const memberData = doc.data();
+            return {
+              id: doc.id,
+              ...memberData,
+              status: normalizeMemberStatus(memberData.status),
+            } as Member;
+          })
+          .filter(member => member.status !== 'deceased');
+        setMembers(membersData);
+      } catch (error: any) {
+        if (cancelled) return;
+        logger.error({ error, message: 'Failed to fetch members for birthday form' });
+        let errorMessage = t('birthdayForm.loadMembersError');
 
-          if (error.message?.includes('permission-denied')) {
-            errorMessage = t('birthdayForm.permissionDenied');
-          } else if (error.message?.includes('network')) {
-            errorMessage = t('birthdayForm.networkError');
-          }
+        if (error.message?.includes('permission-denied')) {
+          errorMessage = t('birthdayForm.permissionDenied');
+        } else if (error.message?.includes('network')) {
+          errorMessage = t('birthdayForm.networkError');
+        }
 
-          toast({
-            title: t('birthdays.error'),
-            description: errorMessage,
-            variant: 'destructive'
-          });
-        })
-        .finally(() => setLoadingMembers(false));
-    }
-  }, [isOpen, isEditMode, toast, t]);
+        toast({
+          title: t('birthdays.error'),
+          description: errorMessage,
+          variant: 'destructive'
+        });
+      } finally {
+        if (!cancelled) setLoadingMembers(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, isEditMode, toast, t, barrioOrg]);
 
   useEffect(() => {
     if (isOpen) {
@@ -180,18 +206,13 @@ export function BirthdayForm({ isOpen, onOpenChange, onFormSubmit, birthday }: B
           entryMode: 'manual', // Always manual in edit mode
           selectedMemberId: undefined
         });
-        setPreviewUrl(birthday.photoURL || null);
-        setEntryMode('manual');
       } else {
         form.reset({
           name: '',
           entryMode: 'manual',
           selectedMemberId: undefined,
         });
-        setPreviewUrl(null);
-        setEntryMode('manual');
       }
-      setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }

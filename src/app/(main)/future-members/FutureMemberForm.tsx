@@ -77,9 +77,24 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
   const baptismPhotosInputRef = useRef<HTMLInputElement>(null);
   const isEditMode = !!futureMember;
 
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(() => futureMember?.photoURL ?? null);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [baptismPhotos, setBaptismPhotos] = useState<(string | File)[]>([]);
+  const [baptismPhotos, setBaptismPhotos] = useState<(string | File)[]>(() => futureMember?.baptismPhotos ?? []);
+
+  // Ajuste de estado durante el render (patrón recomendado por React docs):
+  // sincroniza preview/fotos con la prop futureMember sin setState en useEffect.
+  const [prevFutureMember, setPrevFutureMember] = useState(futureMember);
+  if (futureMember !== prevFutureMember) {
+    setPrevFutureMember(futureMember);
+    if (isEditMode && futureMember) {
+      setPreviewUrl(futureMember.photoURL || null);
+      setBaptismPhotos(futureMember.baptismPhotos || []);
+    } else {
+      setPreviewUrl(null);
+      setBaptismPhotos([]);
+    }
+    setSelectedFile(null);
+  }
 
   const form = useForm<FormValues>({
     resolver: zodResolver(createFutureMemberSchema(t)),
@@ -96,14 +111,9 @@ export function FutureMemberForm({ futureMember }: FutureMemberFormProps) {
         baptismDate: futureMember.baptismDate.toDate(),
         isBaptized: futureMember.isBaptized || false,
       });
-      setPreviewUrl(futureMember.photoURL || null);
-      setBaptismPhotos(futureMember.baptismPhotos || []);
     } else {
       form.reset({ name: '', isBaptized: false });
-      setPreviewUrl(null);
-      setBaptismPhotos([]);
     }
-    setSelectedFile(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

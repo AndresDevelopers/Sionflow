@@ -112,6 +112,7 @@ export default function ProfilePage() {
     // Load synced member data when user has a syncedMemberId
     useEffect(() => {
         if (!profileData?.syncedMemberId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- reset al limpiar syncedMember (doc Firestore)
             setSyncedMember(null);
             setLoadingSyncedMember(false);
             return;
@@ -142,7 +143,7 @@ export default function ProfilePage() {
 
         loadSyncedMember();
         return () => { cancelled = true; };
-    }, [profileData?.syncedMemberId, profileData?.syncedMemberName]);
+    }, [profileData, profileData?.syncedMemberId, profileData?.syncedMemberName]);
 
     const loading = authLoading || loadingProfile;
 

@@ -205,7 +205,6 @@ function getStorageAdmin(): Storage {
   }
   try {
     // Dynamic require/import so a broken uuid/gaxios chain cannot break Auth.
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { getStorage } = require('firebase-admin/storage') as typeof import('firebase-admin/storage');
     storageAdmin = getStorage(app);
     return storageAdmin;
@@ -234,7 +233,6 @@ function getMessagingAdmin(): Messaging {
     return makeFailingService<Messaging>('Messaging', messagingInitError);
   }
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { getMessaging } = require('firebase-admin/messaging') as typeof import('firebase-admin/messaging');
     messagingAdmin = getMessaging(app);
     return messagingAdmin;

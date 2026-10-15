@@ -83,7 +83,7 @@ function LoginForm() {
   const { t } = useI18n();
   /** Prevent race: onAuthStateChanged and onSubmit both try to navigate. */
   const navigatingRef = useRef(false);
-  const [restoringSession, setRestoringSession] = useState(true);
+  const [restoringSession, setRestoringSession] = useState(() => !!auth);
 
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
@@ -99,7 +99,6 @@ function LoginForm() {
   // optimistically (that left production stuck on a protected route without cookie).
   useEffect(() => {
     if (!auth) {
-      setRestoringSession(false);
       return;
     }
 
@@ -283,7 +282,9 @@ function LoginForm() {
           ) : (
             <Form {...form}>
               <form
-                onSubmit={form.handleSubmit(onSubmit)}
+                onSubmit={(e) => {
+                  void form.handleSubmit(onSubmit)(e);
+                }}
                 className="space-y-4"
               >
                 <FormField

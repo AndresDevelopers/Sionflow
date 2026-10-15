@@ -60,6 +60,7 @@ const SheetContent = React.forwardRef<
   const [mounted, setMounted] = React.useState(false)
 
   React.useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- montaje inicial para evitar hydration mismatch
     setMounted(true)
   }, [])
 

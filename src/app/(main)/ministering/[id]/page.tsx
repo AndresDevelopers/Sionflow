@@ -200,10 +200,12 @@ export default function ManageCompanionshipPage() {
   }, [companionshipId, barrioOrg]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async inicial del compañerismo (Firestore)
     fetchCompanionship();
   }, [fetchCompanionship]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async inicial de entrevistas (Firestore)
     fetchInterviews();
   }, [fetchInterviews]);
 

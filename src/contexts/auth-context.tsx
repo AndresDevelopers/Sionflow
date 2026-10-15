@@ -239,6 +239,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           : '?',
     };
     stickyUserRef.current = stickyUser;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación inicial desde cache local (localStorage) antes de confirmar con Firebase Auth
     setUser(stickyUser);
     applyProfile({
       role: cached.role,
@@ -282,6 +283,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     if (!auth) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronización inicial con sistema externo (Firebase Auth no disponible)
       setLoading(false);
       return;
     }

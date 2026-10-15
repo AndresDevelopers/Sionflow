@@ -10,19 +10,24 @@ out/
 # Environment variables
 .env
 .env.*
+!.env.example
 .env.*.local
 .env.local
 .env.production
 
 # Firebase
+.firebase/
 firebase-debug.log
+firebase-debug.*.log
 firestore-debug.log
 ui-debug.log
 public/firebase-messaging-sw.js
 
 # Build outputs
+# Note: functions/lib/ is NOT ignored (compiled artifact deployed by firebase.json)
 dist/
 build/
+coverage/
 
 # IDE
 .vscode/
@@ -34,10 +39,20 @@ build/
 .agent/
 .augment/
 .commandcode/
+.freebuff/
 .kiro/
 .kilocode/
 .trae/
 .windsurf/
+
+# Kilo Code (shared config in .kilo/agents and .kilo/kilo.json stays tracked)
+.kilo/worktrees/
+.kilo/agent-manager.json
+.kilo/setup-script*
+
+# ZCode (plans stay tracked, session worktrees/caches ignored)
+.zcode/*
+!.zcode/plans/
 
 # OS
 .DS_Store
@@ -51,6 +66,9 @@ yarn-error.log*
 
 # TypeScript
 *.tsbuildinfo
+
+# Tooling caches
+.eslintcache
 
 #Ignore vscode AI rules
 .github/instructions/codacy.instructions.md
@@ -79,4 +97,7 @@ scripts/storage-orphan-report.json
 # Misc
 .windsurfrules
 opencode.json
-.vercel
+
+# Vercel (project link config stays tracked)
+.vercel/*
+!.vercel/project.json

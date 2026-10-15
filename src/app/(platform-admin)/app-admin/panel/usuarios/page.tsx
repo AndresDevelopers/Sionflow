@@ -199,7 +199,7 @@ export default function UsuariosPage() {
       } catch { /* ignore */ }
 
       await signInWithCustomToken(auth, body.customToken);
-      window.location.assign("/");
+      router.push("/");
     } catch (error) {
       impersonatingRef.current = false;
       toast({

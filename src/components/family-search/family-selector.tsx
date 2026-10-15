@@ -46,7 +46,7 @@ export function FamilySelector({ onFamilySelect, disabled = false }: FamilySelec
     };
 
     fetchMembers();
-  }, []);
+  }, [barrioOrg]);
 
   const handleSubmit = () => {
     if (selectionType === 'existing' && selectedMemberId) {

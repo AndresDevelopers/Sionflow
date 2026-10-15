@@ -131,10 +131,17 @@ export default function MembersPage() {
 
 
   // Handle edit param from URL
+  const handleEditMember = useCallback((member: Member) => {
+    editingRef.current = true;
+    setEditingMember(member);
+    setIsFormOpen(true);
+  }, []);
+
   useEffect(() => {
     const urlParams = new URLSearchParams(window.location.search);
     const editId = urlParams.get('edit');
     const returnToParam = urlParams.get('returnTo');
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync returnTo from URL search params (external system)
     setReturnTo(returnToParam);
     if (editId && members.length > 0) {
       const memberToEdit = members.find(m => m.id === editId);
@@ -142,7 +149,7 @@ export default function MembersPage() {
         handleEditMember(memberToEdit);
       }
     }
-  }, [members]);
+  }, [members, handleEditMember]);
 
   // Scroll to top button visibility
   useEffect(() => {
@@ -186,12 +193,6 @@ export default function MembersPage() {
         variant: 'destructive'
       });
     }
-  };
-
-  const handleEditMember = (member: Member) => {
-    editingRef.current = true;
-    setEditingMember(member);
-    setIsFormOpen(true);
   };
 
   const handleFormClose = (savedMember?: Member | null) => {
@@ -332,20 +333,24 @@ export default function MembersPage() {
   );
 
   const filterSignature = `${searchTerm}|${statusFilter}|${baptismFilter}|${urgentFilter}|${ldsAccountFilter}|${familySearchFilter}`;
-  useEffect(() => {
+  const [prevFilterSignature, setPrevFilterSignature] = useState(filterSignature);
+  if (filterSignature !== prevFilterSignature) {
+    setPrevFilterSignature(filterSignature);
     setVisibleCount(PAGE_SIZE);
-  }, [filterSignature]);
+  }
 
-  useEffect(() => {
+  const [prevFilteredMembersLength, setPrevFilteredMembersLength] = useState(filteredMembers.length);
+  if (filteredMembers.length !== prevFilteredMembersLength) {
+    setPrevFilteredMembersLength(filteredMembers.length);
     if (filteredMembers.length === 0) {
       setVisibleCount(0);
-      return;
+    } else {
+      setVisibleCount((prev) => {
+        const next = Math.max(prev, PAGE_SIZE);
+        return Math.min(next, filteredMembers.length);
+      });
     }
-    setVisibleCount((prev) => {
-      const next = Math.max(prev, PAGE_SIZE);
-      return Math.min(next, filteredMembers.length);
-    });
-  }, [filteredMembers]);
+  }
 
   useEffect(() => {
     const node = loadMoreTriggerRef.current;
@@ -354,6 +359,7 @@ export default function MembersPage() {
     if (visibleCount >= filteredMembers.length) return;
 
     if (typeof IntersectionObserver === 'undefined') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- fallback sin IntersectionObserver (platform API no disponible)
       setVisibleCount((prev) => {
         const next = Math.min(prev + PAGE_SIZE, filteredMembers.length);
         return next === prev ? prev : next;

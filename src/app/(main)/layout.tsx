@@ -30,6 +30,12 @@ function PrivateRoute({ children }: { children: ReactNode }) {
   // Keep SSR + first client paint identical; only read navigator after mount.
   const [isOffline, setIsOffline] = useState(false);
 
+  // Ajuste de estado durante el render (patrón recomendado por React docs):
+  // limpia el flag cuando vuelve a haber carga/usuario, sin setState en efecto.
+  if ((loading || user) && offlineAuthGaveUp) {
+    setOfflineAuthGaveUp(false);
+  }
+
   // Successful shell load — reset login redirect guard (avoids sticky lock after fix).
   useEffect(() => {
     if (!loading && user && profileLoaded) {
@@ -52,7 +58,6 @@ function PrivateRoute({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (loading || user) {
-      setOfflineAuthGaveUp(false);
       return;
     }
 

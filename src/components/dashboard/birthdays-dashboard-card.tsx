@@ -60,7 +60,7 @@ export function BirthdaysDashboardCard() {
     return () => {
       isMounted = false;
     };
-  }, [authLoading, toast, t, user]);
+  }, [authLoading, toast, t, user, barrioOrg]);
 
   const currentLocale = language === "es" ? es : enUS;
   const formatDate = (date: Date) => format(date, "d LLL yyyy", { locale: currentLocale });

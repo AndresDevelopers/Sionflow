@@ -205,6 +205,7 @@ function DashboardPage() {
   // One dashboard load: counts + members-by-status + deceased (single members read)
   useEffect(() => {
     if (authLoading || !user || !barrioOrg) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async inicial del dashboard (Firestore)
     void loadDashboardData();
   }, [authLoading, user, barrioOrg, loadDashboardData]);
 

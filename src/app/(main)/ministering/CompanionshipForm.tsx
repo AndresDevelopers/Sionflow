@@ -556,6 +556,7 @@ export function CompanionshipForm({ companionship, onCancel }: CompanionshipForm
                   control={form.control}
                   name={`companions.${index}.value`}
                   render={({ field }) => {
+                    // eslint-disable-next-line react-hooks/incompatible-library -- form.watch for dynamic nested field inside list render; useWatch cannot be called in a loop
                     const companionMemberId = form.watch(`companions.${index}.memberId`);
                     return (
                     <FormItem>

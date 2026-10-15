@@ -115,6 +115,17 @@ const normalizeMemberStatus = (status?: string | null): MemberStatus => {
   return 'active';
 };
 
+function formatDateForDisplay(date: Date | undefined): string {
+  if (!date || isNaN(date.getTime())) {
+    return '';
+  }
+  try {
+    return format(date, 'dd/MM/yyyy');
+  } catch {
+    return '';
+  }
+}
+
 type MemberFormValues = z.infer<ReturnType<typeof createMemberFormSchema>>;
 
 interface MemberFormProps {
@@ -185,6 +196,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
     let isActive = true;
 
     if (!member?.id) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronización inicial con prop externa (miembro sin ID)
       setResolvedMember(member ?? null);
       return () => {
         isActive = false;
@@ -211,6 +223,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
   // Cargar datos del miembro al formulario
   useEffect(() => {
     // Reset loading state when member changes
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset intencional al cargar otro miembro en el formulario
     setLoading(false);
 
     // Reset duplicate states when loading a member
@@ -367,7 +380,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
     } finally {
       setLoadingMembers(false);
     }
-  }, [member, user]);
+  }, [member, user, barrioOrg]);
 
   // Cargar miembros disponibles cuando el componente se monta
   useEffect(() => {
@@ -417,11 +430,13 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
       setDuplicateDecisionMade(false);
     } finally {
     }
-  }, [member]);
+  }, [member, barrioOrg]);
 
   const watchedFirstName = useWatch({ control: form.control, name: 'firstName' });
   const watchedLastName = useWatch({ control: form.control, name: 'lastName' });
   const watchedStatus = useWatch({ control: form.control, name: 'status' });
+  const watchedInactiveSince = useWatch({ control: form.control, name: 'inactiveSince' });
+  const watchedLessActiveSince = useWatch({ control: form.control, name: 'lessActiveSince' });
   const watchedHasFamilySearchAccount = useWatch({
     control: form.control,
     name: 'hasFamilySearchAccount',
@@ -465,6 +480,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
     const lastName = watchedLastName;
 
     if (!firstName?.trim() || !lastName?.trim()) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset de resultados de duplicados al vaciar nombre/apellido
       setDuplicateMembers([]);
       setShowDuplicateDialog(false);
       setAllowContinueWithDuplicate(false);
@@ -491,6 +507,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
   useEffect(() => {
     if (watchedStatus !== 'deceased') {
       form.setValue('deathDate', undefined);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronización de input local con cambio de estado civil (prop del formulario)
       setDeathDateInput('');
     }
   }, [form, watchedStatus]);
@@ -536,18 +553,6 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
     }
 
     return date;
-  };
-
-  // Función para formatear fecha para mostrar
-  const formatDateForDisplay = (date: Date | undefined): string => {
-    if (!date || isNaN(date.getTime())) {
-      return '';
-    }
-    try {
-      return format(date, 'dd/MM/yyyy');
-    } catch (error) {
-      return '';
-    }
   };
 
   const handlePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -1298,8 +1303,8 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
               <Avatar className="w-20 h-20">
                 <AvatarImage src={photoPreview || undefined} />
                 <AvatarFallback className="text-lg">
-                  {form.watch('firstName')?.[0]?.toUpperCase()}
-                  {form.watch('lastName')?.[0]?.toUpperCase()}
+                  {watchedFirstName?.[0]?.toUpperCase()}
+                  {watchedLastName?.[0]?.toUpperCase()}
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col gap-2">
@@ -2153,12 +2158,12 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                               variant="outline"
                               className={cn(
                                 'flex-1 pl-3 text-left font-normal',
-                                !form.watch('inactiveSince') && 'text-muted-foreground'
+                                !watchedInactiveSince && 'text-muted-foreground'
                               )}
                             >
-                              {form.watch('inactiveSince') ? (
+                              {watchedInactiveSince ? (
                                 <span className="capitalize">
-                                  {format(form.watch('inactiveSince')!, "d 'de' LLLL 'de' yyyy", { locale: getDateFnsLocale() })}
+                                  {format(watchedInactiveSince, "d 'de' LLLL 'de' yyyy", { locale: getDateFnsLocale() })}
                                 </span>
                               ) : (
                                 <span>{t('common.selectDate')}</span>
@@ -2170,9 +2175,9 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={form.watch('inactiveSince')}
+                            selected={watchedInactiveSince}
                             onSelect={(date) => form.setValue('inactiveSince', date, { shouldDirty: true, shouldValidate: true })}
-                            defaultMonth={form.watch('inactiveSince')}
+                            defaultMonth={watchedInactiveSince}
                             disabled={(date) =>
                               date > new Date() || date < new Date('1900-01-01')
                             }
@@ -2180,7 +2185,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                           />
                         </PopoverContent>
                       </Popover>
-                      {form.watch('inactiveSince') && (
+                      {watchedInactiveSince && (
                         <Button
                           type="button"
                           variant="outline"
@@ -2244,12 +2249,12 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                               variant="outline"
                               className={cn(
                                 'flex-1 pl-3 text-left font-normal',
-                                !form.watch('lessActiveSince') && 'text-muted-foreground'
+                                !watchedLessActiveSince && 'text-muted-foreground'
                               )}
                             >
-                              {form.watch('lessActiveSince') ? (
+                              {watchedLessActiveSince ? (
                                 <span className="capitalize">
-                                  {format(form.watch('lessActiveSince')!, "d 'de' LLLL 'de' yyyy", { locale: getDateFnsLocale() })}
+                                  {format(watchedLessActiveSince, "d 'de' LLLL 'de' yyyy", { locale: getDateFnsLocale() })}
                                 </span>
                               ) : (
                                 <span>{t('common.selectDate')}</span>
@@ -2261,9 +2266,9 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                         <PopoverContent className="w-auto p-0" align="start">
                           <Calendar
                             mode="single"
-                            selected={form.watch('lessActiveSince')}
+                            selected={watchedLessActiveSince}
                             onSelect={(date) => form.setValue('lessActiveSince', date, { shouldDirty: true, shouldValidate: true })}
-                            defaultMonth={form.watch('lessActiveSince')}
+                            defaultMonth={watchedLessActiveSince}
                             disabled={(date) =>
                               date > new Date() || date < new Date('1900-01-01')
                             }
@@ -2271,7 +2276,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                           />
                         </PopoverContent>
                       </Popover>
-                      {form.watch('lessActiveSince') && (
+                      {watchedLessActiveSince && (
                         <Button
                           type="button"
                           variant="outline"

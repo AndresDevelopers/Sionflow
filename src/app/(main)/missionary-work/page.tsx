@@ -984,11 +984,11 @@ export default function MissionaryWorkPage() {
   const { toast } = useToast();
   const { t } = useI18n();
 
-  useEffect(() => {
-    if (isMissionaryTab(tabFromUrl)) {
-      setActiveTab(tabFromUrl);
-    }
-  }, [tabFromUrl]);
+  const [prevTabFromUrl, setPrevTabFromUrl] = useState(tabFromUrl);
+  if (isMissionaryTab(tabFromUrl) && tabFromUrl !== prevTabFromUrl) {
+    setPrevTabFromUrl(tabFromUrl);
+    setActiveTab(tabFromUrl);
+  }
 
    const fetchData = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setLoading(true);
@@ -1057,6 +1057,7 @@ export default function MissionaryWorkPage() {
 
   useEffect(() => {
     if (authLoading || !user) return; // Wait for authentication
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carga async inicial (Firestore)
     void fetchData();
     void fetchAnnotations();
   }, [authLoading, user, fetchData, fetchAnnotations]);

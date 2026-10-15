@@ -73,7 +73,7 @@ import {
 
 import { saveCurrentDeviceGpsPermission, getCurrentDevicePermissions } from '@/lib/device-permissions';
 
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 
 import { zodResolver } from '@hookform/resolvers/zod';
 
@@ -309,9 +309,9 @@ export default function ObservationsPage() {
 
   });
 
-  const watchFirstName = healthForm.watch('firstName');
+  const watchFirstName = useWatch({ control: healthForm.control, name: 'firstName' });
 
-  const watchLastName = healthForm.watch('lastName');
+  const watchLastName = useWatch({ control: healthForm.control, name: 'lastName' });
 
   const isEditingHealthConcern = Boolean(editingHealthConcern);
 
@@ -458,21 +458,11 @@ export default function ObservationsPage() {
 
 
   useEffect(() => {
-
-
-
-    void fetchMembers();
-
-
-
-    void fetchCompanionships();
-
-
-
-    void loadHealthConcerns();
-
-
-
+    void (async () => {
+      await fetchMembers();
+      await fetchCompanionships();
+      await loadHealthConcerns();
+    })();
   }, [fetchMembers, fetchCompanionships, loadHealthConcerns]);
 
   useOnManualRefresh(async () => {
@@ -4439,7 +4429,7 @@ export default function ObservationsPage() {
             </DialogDescription>
           </DialogHeader>
           <Form {...healthForm}>
-            <form onSubmit={healthForm.handleSubmit(handleHealthSubmit)} className="flex flex-col flex-1 min-h-0">
+            <form onSubmit={(e) => void healthForm.handleSubmit(handleHealthSubmit)(e)} className="flex flex-col flex-1 min-h-0">
               <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-4 space-y-6">
                 <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                   <Avatar className="h-16 w-16">

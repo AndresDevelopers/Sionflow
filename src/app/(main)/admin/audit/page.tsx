@@ -131,7 +131,7 @@ export default function AdminAuditPage() {
       }
     };
     load();
-  }, [toast, barrioOrg]);
+  }, [toast, barrioOrg, t]);
 
   const filtered = filter === "all" ? entries : entries.filter((e) => e.action === filter);
 

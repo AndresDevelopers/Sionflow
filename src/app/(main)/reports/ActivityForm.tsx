@@ -108,6 +108,7 @@ export function ActivityForm({ activity }: ActivityFormProps) {
         context: activity.context || '',
         learning: activity.learning || '',
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync prop activity a previews (form edit)
       setPreviewUrls(activity.imageUrls || []);
     } else {
        form.reset({ title: '', date: undefined, time: '', description: '', location: '', context: '', learning: '' });

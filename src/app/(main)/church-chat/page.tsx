@@ -428,7 +428,7 @@ export default function ChurchChatPage() {
     } catch (error) {
       logger.warn({ error, message: 'No fue posible guardar historial de church-chat en Firestore.' });
     }
-  }, [storageKey, user?.uid]);
+  }, [storageKey, user]);
 
   const updateSessions = (updater: (current: ChatSession[]) => ChatSession[]) => {
     setSessions((current) => {
@@ -470,11 +470,14 @@ export default function ChurchChatPage() {
     void bootstrap();
   }, [persistSessions, storageKey, user?.uid]);
 
-  useEffect(() => {
-    if (!activeSessionId && sessions.length > 0) {
-      setActiveSessionId(sessions[0].id);
+  // Ajuste de estado durante el render (patrón recomendado por React docs):
+  // si aún no hay sesión activa, selecciona la primera sin usar useEffect.
+  if (!activeSessionId && sessions.length > 0) {
+    const firstId = sessions[0]?.id;
+    if (firstId) {
+      setActiveSessionId(firstId);
     }
-  }, [activeSessionId, sessions]);
+  }
 
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const viewport = messagesViewportRef.current;

@@ -325,7 +325,9 @@ export default function ConvertsPage() {
 
   useEffect(() => {
     if (authLoading || !user) return;
-    void loadData();
+    void (async () => {
+      await loadData();
+    })();
   }, [authLoading, user, loadData]);
 
   useOnManualRefresh(async () => {

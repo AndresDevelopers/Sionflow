@@ -30,6 +30,7 @@ export function DisclaimerPopup({ persistent = false }: DisclaimerPopupProps) {
       if (dismissedUntil) {
         const expiryDate = new Date(dismissedUntil);
         if (expiryDate > new Date()) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- sincronización con sistema externo (localStorage: descarte persistente del disclaimer)
           setOpen(false);
           return;
         }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getDocs, query, where } from "firebase/firestore";
 import { usersCollection } from "@/lib/collections";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -48,13 +48,7 @@ export default function MigratePage() {
   const [isMigrating, setIsMigrating] = useState(false);
   const [migrationCounts, setMigrationCounts] = useState<Record<string, CollectionStat>>({});
 
-  useEffect(() => {
-    if (!barrioOrg) return;
-    void loadUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload when barrioOrg changes
-  }, [barrioOrg]);
-
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!barrioOrg) return;
     setIsLoadingUsers(true);
     try {
@@ -79,7 +73,14 @@ export default function MigratePage() {
     } finally {
       setIsLoadingUsers(false);
     }
-  };
+  }, [barrioOrg, t]);
+
+  useEffect(() => {
+    if (!barrioOrg) return;
+    void (async () => {
+      await loadUsers();
+    })();
+  }, [barrioOrg, loadUsers]);
 
   const callMigrateApi = async (action: "analyze" | "migrate") => {
     if (!barrioOrg || !user) {

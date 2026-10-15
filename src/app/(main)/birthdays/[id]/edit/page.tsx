@@ -51,7 +51,9 @@ export default function EditBirthdayPage() {
   }, [birthdayId, user, router, toast, t]);
 
   useEffect(() => {
-    fetchBirthday();
+    void (async () => {
+      await fetchBirthday();
+    })();
   }, [fetchBirthday]);
 
   const handleFormClose = useCallback(() => {

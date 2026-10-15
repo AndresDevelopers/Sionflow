@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { createUserWithEmailAndPassword, deleteUser, updateProfile } from "firebase/auth";
@@ -119,8 +119,8 @@ export default function RegisterPage() {
     },
   });
 
-  const watchedBarrio = form.watch("barrio");
-  const watchedOrganizacion = form.watch("organizacion");
+  const watchedBarrio = useWatch({ control: form.control, name: "barrio" });
+  const watchedOrganizacion = useWatch({ control: form.control, name: "organizacion" });
 
   useEffect(() => {
     const fetchOptions = async () => {

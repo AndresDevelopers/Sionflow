@@ -427,6 +427,32 @@ export default function CouncilPage() {
     deceased: 1,
   });
 
+  const sendDailyUrgentNotifications = useCallback(async (members: Member[]) => {
+    const now = new Date();
+    for (const member of members) {
+      const lastNotified = member.urgentNotifiedAt?.toDate();
+      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+      if (!lastNotified || lastNotified < twentyFourHoursAgo) {
+        try {
+          const memberName = `${member.firstName} ${member.lastName}`;
+          await createNotificationsForAll({
+            title: t("council.notification.urgentMemberTitle"),
+            body: member.urgentReason
+              ? t("council.notification.urgentMemberBodyWithReason", { name: memberName, reason: member.urgentReason })
+              : t("council.notification.urgentMemberBody", { name: memberName }),
+            contextType: 'member',
+            contextId: member.id,
+            actionUrl: '/council'
+          }, barrioOrg);
+          await updateMember(member.id, { urgentNotifiedAt: Timestamp.now() } as Partial<Member>);
+        } catch (error) {
+          logger.error({ error, memberId: member.id, message: 'Error sending daily urgent notification' });
+        }
+      }
+    }
+  }, [t, barrioOrg]);
+
   const fetchAllData = useCallback(async (opts?: { quiet?: boolean }) => {
     if (!opts?.quiet) setLoading(true);
     try {
@@ -466,11 +492,13 @@ export default function CouncilPage() {
         } finally {
           setLoading(false);
         }
-  }, [toast, barrioOrg]);
+  }, [toast, barrioOrg, t, sendDailyUrgentNotifications]);
 
   useEffect(() => {
     if (authLoading || !user) return;
-    void fetchAllData();
+    void (async () => {
+      await fetchAllData();
+    })();
   }, [authLoading, user, fetchAllData]);
 
   useOnManualRefresh(async () => {
@@ -734,32 +762,6 @@ export default function CouncilPage() {
     } catch (error) {
       logger.error({ error, memberId, message: 'Error marking less active member as completed' });
       toast({ title: t("council.error.markCompletedFailedTitle"), description: t("council.error.markCompletedFailedDescription"), variant: 'destructive' });
-    }
-  };
-
-  const sendDailyUrgentNotifications = async (members: Member[]) => {
-    const now = new Date();
-    for (const member of members) {
-      const lastNotified = member.urgentNotifiedAt?.toDate();
-      const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-
-      if (!lastNotified || lastNotified < twentyFourHoursAgo) {
-        try {
-          const memberName = `${member.firstName} ${member.lastName}`;
-          await createNotificationsForAll({
-            title: t("council.notification.urgentMemberTitle"),
-            body: member.urgentReason
-              ? t("council.notification.urgentMemberBodyWithReason", { name: memberName, reason: member.urgentReason })
-              : t("council.notification.urgentMemberBody", { name: memberName }),
-            contextType: 'member',
-            contextId: member.id,
-            actionUrl: '/council'
-          }, barrioOrg);
-          await updateMember(member.id, { urgentNotifiedAt: Timestamp.now() } as Partial<Member>);
-        } catch (error) {
-          logger.error({ error, memberId: member.id, message: 'Error sending daily urgent notification' });
-        }
-      }
     }
   };
 

@@ -142,12 +142,12 @@ export function useMembersLocal(): UseMembersLocalReturn {
     loadingRef.current = loading;
   }, [loading]);
 
-  // Sync loadingRef to loading state (avoids setState in initialization effect)
+  // Sincroniza el espejo loadingRef hacia el estado loading.
   useEffect(() => {
     if (loadingRef.current !== loading) {
       setLoading(loadingRef.current);
     }
-  }, [loadingRef.current]);
+  }, [loading]);
 
   /** Lee miembros desde localStorage (desactivado en development). */
   const loadFromLocal = useCallback((): { members: Member[]; ts: number } | null => {
@@ -242,6 +242,7 @@ export function useMembersLocal(): UseMembersLocalReturn {
       // Avoid infinite skeleton when auth finished but profile has no barrio
       if (!authLoading && user && !barrioOrg) {
         loadingRef.current = false;
+        queueMicrotask(() => setLoading(false));
       }
       return;
     }
@@ -256,9 +257,9 @@ export function useMembersLocal(): UseMembersLocalReturn {
         initialLoadDone.current = true;
         // eslint-disable-next-line react-hooks/set-state-in-effect
         setMembers(cached.members);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLastSyncTime(new Date(cached.ts));
         loadingRef.current = false;
+        setLoading(false);
         return;
       }
     }
@@ -279,6 +280,7 @@ export function useMembersLocal(): UseMembersLocalReturn {
       })
       .finally(() => {
         loadingRef.current = false;
+        setLoading(false);
       });
   }, [authLoading, user, barrioOrg, firebaseUser, loadFromLocal, syncFromServer]);
 

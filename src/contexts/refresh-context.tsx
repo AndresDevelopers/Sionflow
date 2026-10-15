@@ -200,6 +200,7 @@ export function RefreshProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const stored = readStoredLastSync(barrioOrg);
     if (stored) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- hidratación desde sistema externo (localStorage: última sincronización por barrioOrg)
       setLastSyncTime(new Date(stored.ts));
       setLastSyncSource(stored.source);
     } else {

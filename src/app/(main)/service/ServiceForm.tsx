@@ -105,6 +105,7 @@ export function ServiceForm({ service }: ServiceFormProps) {
         description: service.description,
         time: service.time || '',
       });
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- sync prop service a previews (form edit)
       setPreviewUrls(service.imageUrls || []);
     } else {
        form.reset({ title: '', date: undefined, description: '', time: '' });

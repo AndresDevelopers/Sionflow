@@ -42,23 +42,14 @@ export function PushOnboardingGuide() {
   const { t } = useI18n();
   const [showGuide, setShowGuide] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
-  const [isSupported, setIsSupported] = useState(false);
+  const [isSupported] = useState<boolean>(() => {
+    if (!isBrowserPushApiAvailable()) return false;
+    // iOS only supports web push when installed to home screen
+    if (isIosLikeDevice() && !isStandaloneDisplayMode()) return false;
+    return true;
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
-
-  // Verificar si el navegador soporta notificaciones push (Android antiguos → 16, desktop, iOS PWA)
-  useEffect(() => {
-    if (!isBrowserPushApiAvailable()) {
-      setIsSupported(false);
-      return;
-    }
-    // iOS only supports web push when installed to home screen
-    if (isIosLikeDevice() && !isStandaloneDisplayMode()) {
-      setIsSupported(false);
-      return;
-    }
-    setIsSupported(true);
-  }, []);
 
   /** True only if THIS device already opted in (not another phone on the same account). */
   const checkSubscription = useCallback(async () => {

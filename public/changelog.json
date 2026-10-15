@@ -6,11 +6,17 @@
       "date": "2026-10-15",
       "changes": {
         "es": {
+          "improved": [
+            "Hemos mejorado: update .gitignore and ESLint configurations."
+          ],
           "fixed": [
             "Hemos corregido: update DeepSeek model references from v4-flash to flash."
           ]
         },
         "en": {
+          "improved": [
+            "We improved: update .gitignore and ESLint configurations."
+          ],
           "fixed": [
             "We fixed: update DeepSeek model references from v4-flash to flash."
           ]

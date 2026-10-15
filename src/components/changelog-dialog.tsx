@@ -115,6 +115,7 @@ export function ChangelogDialog({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     let cancelled = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset de carga antes de sincronizar con fetch externo de changelog.json
     setLoading(true);
 
     fetch(`/changelog.json?v=${Date.now()}`)

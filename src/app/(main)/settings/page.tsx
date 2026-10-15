@@ -361,7 +361,7 @@ export default function SettingsPage() {
     }
     loadMembers();
     return () => { cancelled = true; };
-  }, [user]);
+  }, [user, barrioOrg]);
 
   // Filter members for sync dropdown
   const filteredSyncMembers = membersForSync.filter(m =>
@@ -1468,7 +1468,9 @@ export default function SettingsPage() {
             </CardDescription>
           </CardHeader>
           <Form {...form}>
-            <form onSubmit={form.handleSubmit(onProfileSubmit)}>
+            <form onSubmit={(e) => {
+              void form.handleSubmit(onProfileSubmit)(e);
+            }}>
               <CardContent className="space-y-4">
                 {isProfileLoading ? (
                   <div className="space-y-4">

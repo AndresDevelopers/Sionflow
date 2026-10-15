@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 
 // Fallback translations for global error (when i18n context might not be available)
@@ -37,6 +38,7 @@ interface GlobalErrorProps {
 }
 
 export default function GlobalError({ error, reset }: GlobalErrorProps) {
+  const router = useRouter()
   const lang = getLanguage()
   const t = translations[lang]
 
@@ -45,7 +47,7 @@ export default function GlobalError({ error, reset }: GlobalErrorProps) {
   }, [error])
 
   const handleGoHome = () => {
-    window.location.href = '/'
+    router.push('/')
   }
 
   return (

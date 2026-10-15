@@ -35,12 +35,10 @@ export function useOfflineImageSrc(
       return;
     }
     if (src.startsWith('blob:') || src.startsWith('data:')) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResolved(src);
       return;
     }
     if (!isCacheableImageUrl(src)) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setResolved(src);
       return;
     }
