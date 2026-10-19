@@ -1,4 +1,4 @@
-import { getEcuadorDateParts, getTodayInEcuador } from '@/lib/date-utils';
+import { createEcuadorCalendarDate, getEcuadorDateParts } from '@/lib/date-utils';
 import type { Birthday } from '@/lib/types';
 
 export type BirthdayOverviewItem = Birthday & {
@@ -19,41 +19,45 @@ type GetBirthdaysOverviewOptions = {
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
-function normalizeToDateOnly(date: Date): Date {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
-}
-
-function buildOverviewItem(birthday: Birthday, today: Date): BirthdayOverviewItem | null {
-  const birthParts = getEcuadorDateParts(birthday.birthDate);
-  if (!birthParts) return null;
-
-  const todayOnly = normalizeToDateOnly(today);
-
-  const candidate = new Date(todayOnly.getFullYear(), birthParts.month - 1, birthParts.day);
-  if (candidate < todayOnly) {
-    candidate.setFullYear(candidate.getFullYear() + 1);
-  }
-
-  const daysUntil = Math.round((candidate.getTime() - todayOnly.getTime()) / MS_PER_DAY);
-  const turnsAge = Number.isFinite(birthParts.year) ? candidate.getFullYear() - birthParts.year : null;
-
-  return {
-    ...birthday,
-    nextBirthday: candidate,
-    turnsAge,
-    daysUntil,
-  };
-}
-
 export function getBirthdaysOverview(
   birthdays: Birthday[],
   options: GetBirthdaysOverviewOptions = {}
 ): BirthdaysOverview {
-  const today = options.today ? normalizeToDateOnly(options.today) : getTodayInEcuador();
+  // All calendar comparisons use Ecuador's civil day, never the host's timezone.
+  const todayParts = getEcuadorDateParts(options.today ?? new Date());
+  if (!todayParts) return { today: [], upcoming: [] };
+
   const daysAhead = options.daysAhead ?? 14;
+  const todayUtcDay = Date.UTC(todayParts.year, todayParts.month - 1, todayParts.day);
 
   const items = birthdays
-    .map((birthday) => buildOverviewItem(birthday, today))
+    .map((birthday): BirthdayOverviewItem | null => {
+      const birth = getEcuadorDateParts(birthday.birthDate);
+      if (!birth) return null;
+
+      let nextBirthday = createEcuadorCalendarDate(todayParts.year, birth.month, birth.day);
+      let nextUtcDay = Date.UTC(
+        nextBirthday.getUTCFullYear(),
+        nextBirthday.getUTCMonth(),
+        nextBirthday.getUTCDate()
+      );
+
+      if (nextUtcDay < todayUtcDay) {
+        nextBirthday = createEcuadorCalendarDate(todayParts.year + 1, birth.month, birth.day);
+        nextUtcDay = Date.UTC(
+          nextBirthday.getUTCFullYear(),
+          nextBirthday.getUTCMonth(),
+          nextBirthday.getUTCDate()
+        );
+      }
+
+      return {
+        ...birthday,
+        nextBirthday,
+        turnsAge: nextBirthday.getUTCFullYear() - birth.year,
+        daysUntil: Math.round((nextUtcDay - todayUtcDay) / MS_PER_DAY),
+      };
+    })
     .filter((item): item is BirthdayOverviewItem => item !== null)
     .sort((a, b) => a.nextBirthday.getTime() - b.nextBirthday.getTime());
 
@@ -62,4 +66,3 @@ export function getBirthdaysOverview(
     upcoming: items.filter((item) => item.daysUntil > 0 && item.daysUntil <= daysAhead),
   };
 }
-

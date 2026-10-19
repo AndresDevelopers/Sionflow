@@ -141,11 +141,12 @@ export function getAge(birthTimestamp: unknown): number | null {
     const birthDate = safeGetDate(birthTimestamp);
     if (!birthDate) return null;
 
-    const today = new Date();
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const monthDiff = today.getMonth() - birthDate.getMonth();
+    const birth = getEcuadorDateParts(birthDate);
+    const today = getEcuadorDateParts(new Date());
+    if (!birth || !today) return null;
 
-    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+    let age = today.year - birth.year;
+    if (today.month < birth.month || (today.month === birth.month && today.day < birth.day)) {
         age--;
     }
 
@@ -184,5 +185,22 @@ export function getEcuadorDateParts(timestamp: unknown): DateParts | null {
  */
 export function getTodayInEcuador(): Date {
     const today = parseDateParts(new Date(), ECUADOR_TIME_ZONE);
-    return new Date(today.year, today.month - 1, today.day);
+    return createEcuadorCalendarDate(today.year, today.month, today.day);
+}
+
+/**
+ * Represents an Ecuador calendar day at noon in mainland Ecuador (17:00 UTC).
+ * This Date has the same Ecuador day regardless of the server/browser timezone.
+ */
+export function createEcuadorCalendarDate(year: number, month: number, day: number): Date {
+    return new Date(Date.UTC(year, month - 1, day, ECUADOR_NOON_UTC_HOUR));
+}
+
+/**
+ * For formatting Ecuador calendar dates with local-time formatters (e.g. date-fns).
+ * Calculations must use getEcuadorDateParts instead.
+ */
+export function getEcuadorDateForDisplay(date: Date): Date {
+    const { year, month, day } = parseDateParts(date, ECUADOR_TIME_ZONE);
+    return new Date(year, month - 1, day, 12);
 }

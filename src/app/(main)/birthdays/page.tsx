@@ -48,39 +48,21 @@ import { useAuth } from '@/contexts/auth-context';
 import { usePermission } from '@/hooks/use-permission';
 import { useI18n } from '@/contexts/i18n-context';
 import { buildMemberEditUrl } from '@/lib/navigation';
-import { getEcuadorDateParts, getTodayInEcuador } from '@/lib/date-utils';
+import { getEcuadorDateForDisplay } from '@/lib/date-utils';
+import { getBirthdaysOverview, type BirthdayOverviewItem } from '@/lib/birthdays-utils';
 import { fetchBirthdays as fetchBirthdaysData } from '@/lib/birthdays-data';
 
-type BirthdayWithNext = Birthday & { nextBirthday: Date };
-
-function getUpcomingBirthdays(birthdays: Birthday[]): BirthdayWithNext[] {
-  const today = getTodayInEcuador();
-  
-  return birthdays
-    .map(b => {
-      const birthDateParts = getEcuadorDateParts(b.birthDate);
-      if (!birthDateParts) {
-        return null;
-      }
-
-      let nextBirthday = new Date(
-        today.getFullYear(),
-        birthDateParts.month - 1,
-        birthDateParts.day
-      );
-      if (nextBirthday < today) {
-        nextBirthday.setFullYear(today.getFullYear() + 1);
-      }
-      return { ...b, nextBirthday };
-    })
-    .filter((birthday): birthday is BirthdayWithNext => birthday !== null)
+function getUpcomingBirthdays(birthdays: Birthday[]): BirthdayOverviewItem[] {
+  // 366 days covers every upcoming birthday, including a leap year.
+  const overview = getBirthdaysOverview(birthdays, { daysAhead: 366 });
+  return [...overview.today, ...overview.upcoming]
     .sort((a, b) => a.nextBirthday.getTime() - b.nextBirthday.getTime());
 }
 
 export default function BirthdaysPage() {
   const { user, loading: authLoading, barrioOrg } = useAuth();
   const { canWrite } = usePermission();
-  const [birthdays, setBirthdays] = useState<BirthdayWithNext[]>([]);
+  const [birthdays, setBirthdays] = useState<BirthdayOverviewItem[]>([]);
   const [loading, setLoading] = useState(true);
 
   const { toast } = useToast();
@@ -154,12 +136,7 @@ export default function BirthdaysPage() {
     }
   };
 
-  const upcomingIn14Days = birthdays.filter(b => {
-    const today = new Date();
-    const twoWeeksFromNow = new Date();
-    twoWeeksFromNow.setDate(today.getDate() + 14);
-    return b.nextBirthday >= today && b.nextBirthday <= twoWeeksFromNow;
-  });
+  const upcomingIn14Days = birthdays.filter(b => b.daysUntil >= 0 && b.daysUntil <= 14);
 
   const loadingRowIds = ['loading-1', 'loading-2', 'loading-3'];
 
@@ -194,7 +171,7 @@ export default function BirthdaysPage() {
             </div>
         </TableCell>
         <TableCell>
-          {format(item.nextBirthday, t("birthdays.dateLong"), { locale: getDateFnsLocale() })}
+          {format(getEcuadorDateForDisplay(item.nextBirthday), t("birthdays.dateLong"), { locale: getDateFnsLocale() })}
         </TableCell>
         <TableCell className="text-right flex gap-2 justify-end">
           {canWrite ? (
@@ -274,7 +251,7 @@ export default function BirthdaysPage() {
                     <TooltipContent>
                       <p className="font-semibold">{b.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        {format((b as any).nextBirthday, `'${t('birthdays.birthsOn')}' ${t('birthdays.dateLong')}`, { locale: getDateFnsLocale() })}
+                        {format(getEcuadorDateForDisplay(b.nextBirthday), `'${t('birthdays.birthsOn')}' ${t('birthdays.dateLong')}`, { locale: getDateFnsLocale() })}
                       </p>
                     </TooltipContent>
                   </Tooltip>
@@ -343,7 +320,7 @@ export default function BirthdaysPage() {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{item.name}</p>
                     <p className="text-xs text-muted-foreground">
-                      {format(item.nextBirthday, t("birthdays.dateLong"), { locale: getDateFnsLocale() })}
+                      {format(getEcuadorDateForDisplay(item.nextBirthday), t("birthdays.dateLong"), { locale: getDateFnsLocale() })}
                     </p>
                   </div>
                   <div className="flex items-center gap-0.5 shrink-0">
