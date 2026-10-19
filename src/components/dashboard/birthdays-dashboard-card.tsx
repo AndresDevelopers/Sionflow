@@ -18,6 +18,7 @@ import { useAuth } from "@/contexts/auth-context";
 import { useI18n } from "@/contexts/i18n-context";
 import { useToast } from "@/hooks/use-toast";
 import logger from "@/lib/logger";
+import { getEcuadorDateForDisplay } from "@/lib/date-utils";
 import { fetchBirthdays } from "@/lib/birthdays-data";
 import type { BirthdaysOverview } from "@/lib/birthdays-utils";
 import { getBirthdaysOverview } from "@/lib/birthdays-utils";
@@ -63,7 +64,7 @@ export function BirthdaysDashboardCard() {
   }, [authLoading, toast, t, user, barrioOrg]);
 
   const currentLocale = language === "es" ? es : enUS;
-  const formatDate = (date: Date) => format(date, "d LLL yyyy", { locale: currentLocale });
+  const formatDate = (date: Date) => format(getEcuadorDateForDisplay(date), "d LLL yyyy", { locale: currentLocale });
 
   const hasData = Boolean((overview?.today.length ?? 0) > 0 || (overview?.upcoming.length ?? 0) > 0);
 
