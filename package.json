@@ -61,7 +61,7 @@
     "docx": "^9.11.0",
     "dotenv": "^18.0.7",
     "embla-carousel-react": "^8.6.0",
-    "firebase": "^12.19.0",
+    "firebase": "^13.0.0",
     "firebase-admin": "^14.5.0",
     "jose": "^6.2.12",
     "jszip": "^3.10.2",
@@ -84,7 +84,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
-    "@firebase/rules-unit-testing": "^5.0.2",
+    "@firebase/rules-unit-testing": "^6.0.0",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
