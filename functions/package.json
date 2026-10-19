@@ -17,7 +17,7 @@
   "main": "lib/index.js",
   "dependencies": {
     "@google-cloud/functions-framework": "^5.0.5",
-    "@xmldom/xmldom": "^0.9.10",
+    "@xmldom/xmldom": "^0.9.12",
     "date-fns": "^4.4.0",
     "firebase-admin": "^13.10.0",
     "firebase-functions": "^7.3.2"
