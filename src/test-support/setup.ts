@@ -117,7 +117,7 @@ if (typeof window !== 'undefined') {
     } as unknown as typeof ResizeObserver;
   }
 
-  if (!window.scrollTo) {
-    window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
-  }
+  // JSDOM provides a scrollTo stub that throws "Not implemented" when called.
+  // Replace it unconditionally so page tests do not emit unhandled async errors.
+  window.scrollTo = vi.fn() as unknown as typeof window.scrollTo;
 }
