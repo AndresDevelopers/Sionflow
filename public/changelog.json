@@ -1,6 +1,22 @@
 {
-  "current": "1.1.46",
+  "current": "1.1.47",
   "entries": [
+    {
+      "version": "1.1.47",
+      "date": "2026-10-25",
+      "changes": {
+        "es": {
+          "added": [
+            "Hemos añadido: add temple recommend tracking and expiry notifications."
+          ]
+        },
+        "en": {
+          "added": [
+            "We added: add temple recommend tracking and expiry notifications."
+          ]
+        }
+      }
+    },
     {
       "version": "1.1.46",
       "date": "2026-10-15",

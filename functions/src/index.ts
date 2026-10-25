@@ -801,6 +801,14 @@ function getDatePartsInTimeZone(date: Date, timeZone: string): { year: number; m
     return { year, month, day };
 }
 
+/** Calendar day of a stored date, expressed in Ecuador local time. */
+function getDateOnlyInEcuador(value: unknown): Date | null {
+    const date = resolveDateValue(value);
+    if (!date) return null;
+    const parts = getDatePartsInTimeZone(date, ECUADOR_TZ);
+    return new Date(parts.year, parts.month - 1, parts.day);
+}
+
 function getBirthdayDateInEcuador(
     birthDate: admin.firestore.Timestamp | Date | string | number | { seconds: number },
     year: number
@@ -1441,6 +1449,8 @@ export const dailyNotifications = functions
         const in4Days = addDays(today, 4);
         const in1Day = addDays(today, 1);
         const in3Days = addDays(today, 3);
+        const in30Days = addDays(today, 30);
+        const in5Days = addDays(today, 5);
 
         const allUsers = await getAllUsersNotificationData();
         const activeBarrioOrgs = getActiveBarrioOrgs(allUsers);
@@ -1869,6 +1879,73 @@ export const dailyNotifications = functions
             }
         }
 
+        // ── Recomendación para el templo – 30 y 5 días antes del vencimiento ──
+        const templeRecommendTrace = buildNotificationTrace("dailyNotifications", "observations");
+        {
+            const recommendSnap = await getCollectionDocsForBarrios(
+                "c_miembros",
+                activeBarrioOrgs,
+                (q) => q.where("hasTempleRecommend", "==", true)
+            );
+
+            for (const doc of recommendSnap.docs) {
+                const m = doc.data() as MemberBasic & {
+                    hasTempleRecommend?: boolean;
+                    templeRecommendExpirationDate?: unknown;
+                    barrioOrg?: string;
+                };
+                if (m.hasTempleRecommend !== true) continue;
+                if (
+                    m.status === "deceased" ||
+                    m.status === "fallecido" ||
+                    m.status === "fallecida"
+                ) {
+                    continue;
+                }
+
+                const expiryDay = getDateOnlyInEcuador(m.templeRecommendExpirationDate);
+                if (!expiryDay) continue;
+
+                const daysLeft = isSameDay(expiryDay, in30Days)
+                    ? 30
+                    : isSameDay(expiryDay, in5Days)
+                        ? 5
+                        : null;
+                if (daysLeft === null) continue;
+
+                const docBarrioOrg = m.barrioOrg || null;
+                if (!docBarrioOrg) continue;
+
+                const eligible = getEligibleUsers(allUsers, "observations", docBarrioOrg);
+                if (eligible.inAppUserIds.length === 0 && eligible.pushUserIds.length === 0) {
+                    continue;
+                }
+
+                const memberName =
+                    `${m.firstName ?? ""} ${m.lastName ?? ""}`.trim() || "Un miembro";
+                const formattedExpiry = format(expiryDay, "d 'de' MMMM 'de' yyyy", { locale: es });
+
+                await notificationDispatcher.broadcastToUsers(
+                    eligible.inAppUserIds,
+                    {
+                        title: "Renovación de recomendación para el templo",
+                        body: `La recomendación para el templo de ${memberName} vence en ${daysLeft} días (${formattedExpiry}).`,
+                        url: "/observations",
+                        tag: `temple-recommend-${daysLeft}d-${doc.id}`,
+                        barrioOrg: docBarrioOrg,
+                        context: {
+                            contextType: "member",
+                            contextId: doc.id,
+                            actionUrl: "/observations",
+                            actionType: "navigate",
+                        },
+                    },
+                    eligible.pushUserIds,
+                    templeRecommendTrace
+                );
+            }
+        }
+
         functions.logger.log("dailyNotifications: done.");
         return null;
     });
@@ -2129,6 +2206,8 @@ export const weeklyNotifications = functions
                     ministeringTeachers?: string[];
                     barrioOrg?: string;
                     inactiveObservation?: string;
+                    calling?: string;
+                    hasTempleRecommend?: boolean;
                 };
                 const status = String(m.status || "").toLowerCase();
                 if (["deceased", "fallecido", "fallecida"].includes(status)) return;
@@ -2149,8 +2228,11 @@ export const weeklyNotifications = functions
                 if (!Array.isArray(m.ministeringTeachers) || m.ministeringTeachers.length === 0) {
                     s.sinMinistrantesMaestros++;
                 }
-                if (!info?.calling?.trim()) s.sinLlamamiento++;
-                if (info?.recommendationActive !== true) s.sinRecomendacion++;
+                // c_miembros es la fuente de verdad; c_conversos_info queda como respaldo
+                if (!m.calling?.trim() && !info?.calling?.trim()) s.sinLlamamiento++;
+                if (m.hasTempleRecommend !== true && info?.recommendationActive !== true) {
+                    s.sinRecomendacion++;
+                }
                 if (info?.selfRelianceCourse !== true) s.sinAutosuficiencia++;
             });
 

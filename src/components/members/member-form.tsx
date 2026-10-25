@@ -75,6 +75,8 @@ const createMemberFormSchema = (t: (key: string) => string) =>
     lastName: z.string().min(1, t('memberForm.validation.lastName')),
     phoneNumber: z.string().optional(),
     memberId: z.string().optional(),
+    /** Llamamiento actual (texto libre) */
+    calling: z.string().optional(),
     address: z.string().optional(),
     birthDate: z.date().optional(),
     baptismDate: z.date().optional(),
@@ -91,6 +93,10 @@ const createMemberFormSchema = (t: (key: string) => string) =>
     hasFamilySearchAccount: z.boolean().optional(),
     /** Opcional: bendición patriarcal */
     hasPatriarchalBlessing: z.boolean().optional(),
+    /** Recomendación para el templo: vigencia */
+    hasTempleRecommend: z.boolean().optional(),
+    templeRecommendIssueDate: z.date().optional(),
+    templeRecommendExpirationDate: z.date().optional(),
     /** Opcional: número de generaciones (string en form para input vacío) */
     familySearchGenerations: z.string().optional(),
     familySearchTreeStatus: z.enum(['complete', 'partial']).optional().nullable(),
@@ -99,6 +105,20 @@ const createMemberFormSchema = (t: (key: string) => string) =>
     inactiveObservation: z.string().optional(),
     lessActiveSince: z.date().optional(),
     lessActiveObservation: z.string().optional(),
+  }).superRefine((values, ctx) => {
+    if (values.hasTempleRecommend !== true) return;
+
+    if (
+      values.templeRecommendIssueDate &&
+      values.templeRecommendExpirationDate &&
+      values.templeRecommendIssueDate > values.templeRecommendExpirationDate
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['templeRecommendIssueDate'],
+        message: t('memberForm.validation.templeRecommendIssueAfterExpiration'),
+      });
+    }
   });
 
 const normalizeMemberStatus = (status?: string | null): MemberStatus => {
@@ -170,6 +190,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
       lastName: '',
       phoneNumber: '',
       memberId: '',
+      calling: '',
       address: '',
       status: 'active',
       photoURL: undefined,
@@ -181,6 +202,9 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
       hasLdsAccount: false,
       hasFamilySearchAccount: false,
       hasPatriarchalBlessing: false,
+      hasTempleRecommend: false,
+      templeRecommendIssueDate: undefined,
+      templeRecommendExpirationDate: undefined,
       familySearchGenerations: '',
       familySearchTreeStatus: null,
       familySearchPartialDetails: '',
@@ -246,6 +270,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         lastName: currentMember.lastName || '',
         phoneNumber: currentMember.phoneNumber || '',
         memberId: currentMember.memberId || '',
+        calling: currentMember.calling || '',
         address: currentMember.address || '',
         birthDate: birthDateValue,
         baptismDate: baptismDateValue,
@@ -263,6 +288,11 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         hasLdsAccount: currentMember.hasLdsAccount === true,
         hasFamilySearchAccount: currentMember.hasFamilySearchAccount === true,
         hasPatriarchalBlessing: currentMember.hasPatriarchalBlessing === true,
+        hasTempleRecommend: currentMember.hasTempleRecommend === true,
+        templeRecommendIssueDate:
+          safeGetDate(currentMember.templeRecommendIssueDate) ?? undefined,
+        templeRecommendExpirationDate:
+          safeGetDate(currentMember.templeRecommendExpirationDate) ?? undefined,
         familySearchGenerations:
           currentMember.familySearchGenerations != null && currentMember.familySearchGenerations > 0
             ? String(currentMember.familySearchGenerations)
@@ -309,6 +339,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         lastName: '',
         phoneNumber: '',
         memberId: '',
+        calling: '',
         address: '',
         status: 'active',
         photoURL: undefined,
@@ -324,6 +355,9 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         hasLdsAccount: false,
         hasFamilySearchAccount: false,
         hasPatriarchalBlessing: false,
+        hasTempleRecommend: false,
+        templeRecommendIssueDate: undefined,
+        templeRecommendExpirationDate: undefined,
         familySearchGenerations: '',
         familySearchTreeStatus: null,
         familySearchPartialDetails: '',
@@ -441,10 +475,30 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
     control: form.control,
     name: 'hasFamilySearchAccount',
   });
+  const watchedHasTempleRecommend = useWatch({
+    control: form.control,
+    name: 'hasTempleRecommend',
+  });
   const watchedFamilySearchTreeStatus = useWatch({
     control: form.control,
     name: 'familySearchTreeStatus',
   });
+
+  /** Normaliza la recomendación para el templo: sin el switch, se limpian las fechas */
+  const buildTempleRecommendFields = (values: MemberFormValues) => {
+    const hasRecommend = values.hasTempleRecommend === true;
+    return {
+      hasTempleRecommend: hasRecommend,
+      templeRecommendIssueDate:
+        hasRecommend && values.templeRecommendIssueDate
+          ? Timestamp.fromDate(normalizeDateForEcuadorStorage(values.templeRecommendIssueDate))
+          : null,
+      templeRecommendExpirationDate:
+        hasRecommend && values.templeRecommendExpirationDate
+          ? Timestamp.fromDate(normalizeDateForEcuadorStorage(values.templeRecommendExpirationDate))
+          : null,
+    };
+  };
 
   /** Normaliza campos FS opcionales para guardar en el miembro */
   const buildFamilySearchFields = (values: MemberFormValues) => {
@@ -949,6 +1003,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         // Manejar campos opcionales: usar el valor del formulario si está presente, sino undefined para limpiar
         phoneNumber: values.phoneNumber?.trim() ? values.phoneNumber.trim() : undefined,
         memberId: values.memberId?.trim() ? values.memberId.trim() : undefined,
+        calling: values.calling?.trim() ? values.calling.trim() : '',
         address: addressToSave || '',
         birthDate: values.birthDate ? values.birthDate.toISOString() : undefined,
         baptismDate: values.baptismDate ? values.baptismDate.toISOString() : undefined,
@@ -962,6 +1017,13 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
         ordinances: values.status === 'deceased' ? [] : (values.ordinances || []),
         templeOrdinances: values.status === 'deceased' ? (values.ordinances || []) : [],
         ministeringTeachers: values.ministeringTeachers || [],
+        hasTempleRecommend: values.hasTempleRecommend === true,
+        templeRecommendIssueDate: values.templeRecommendIssueDate
+          ? values.templeRecommendIssueDate.toISOString()
+          : null,
+        templeRecommendExpirationDate: values.templeRecommendExpirationDate
+          ? values.templeRecommendExpirationDate.toISOString()
+          : null,
       };
 
       console.log('📤 Final member data to send:', memberData);
@@ -1008,6 +1070,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           status: values.status,
           phoneNumber: values.phoneNumber?.trim() ? values.phoneNumber.trim() : undefined,
           memberId: values.memberId?.trim() ? values.memberId.trim() : undefined,
+          calling: values.calling?.trim() || '',
           address: addressToSave || '',
           birthDate: values.birthDate
             ? Timestamp.fromDate(normalizeDateForEcuadorStorage(values.birthDate))
@@ -1027,6 +1090,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           isInCouncil: values.isInCouncil || false,
           hasLdsAccount: values.hasLdsAccount === true,
           hasPatriarchalBlessing: values.hasPatriarchalBlessing === true,
+          ...buildTempleRecommendFields(values),
           ...buildFamilySearchFields(values),
           inactiveSince: values.status === 'inactive'
             ? values.inactiveSince
@@ -1107,6 +1171,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           status: values.status,
           phoneNumber: values.phoneNumber?.trim() ? values.phoneNumber.trim() : undefined,
           memberId: values.memberId?.trim() ? values.memberId.trim() : undefined,
+          calling: values.calling?.trim() ? values.calling.trim() : undefined,
           address: addressToSave || '',
           birthDate: values.birthDate
             ? Timestamp.fromDate(normalizeDateForEcuadorStorage(values.birthDate))
@@ -1123,6 +1188,7 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
           isInCouncil: values.isInCouncil || false,
           hasLdsAccount: values.hasLdsAccount === true,
           hasPatriarchalBlessing: values.hasPatriarchalBlessing === true,
+          ...buildTempleRecommendFields(values),
           ...buildFamilySearchFields(values),
           inactiveSince: values.status === 'inactive'
             ? values.inactiveSince
@@ -1832,6 +1898,166 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
             )}
           />
 
+          {/* Recomendación para el templo */}
+          <FormField
+            control={form.control}
+            name="hasTempleRecommend"
+            render={({ field }) => (
+              <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                <div className="space-y-0.5 pr-4">
+                  <FormLabel className="text-base">
+                    {t('memberForm.hasTempleRecommend')}
+                  </FormLabel>
+                  <FormDescription>
+                    {t('memberForm.hasTempleRecommendDesc')}
+                  </FormDescription>
+                </div>
+                <FormControl>
+                  <Switch
+                    checked={field.value === true}
+                    onCheckedChange={(checked) => {
+                      const on = checked === true;
+                      field.onChange(on);
+                      if (!on) {
+                        form.setValue('templeRecommendIssueDate', undefined);
+                        form.setValue('templeRecommendExpirationDate', undefined);
+                        form.clearErrors([
+                          'templeRecommendIssueDate',
+                          'templeRecommendExpirationDate',
+                        ]);
+                      }
+                    }}
+                  />
+                </FormControl>
+              </FormItem>
+            )}
+          />
+
+          {watchedHasTempleRecommend === true && (
+            <div className="grid gap-4 rounded-lg border border-dashed bg-muted/30 p-4 sm:grid-cols-2">
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                {t('memberForm.templeRecommendDatesDesc')}
+              </p>
+
+              {/* Inicio de la recomendación */}
+              <FormField
+                control={form.control}
+                name="templeRecommendIssueDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>{t('memberForm.templeRecommendIssueDate')}</FormLabel>
+                    <div className="flex gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                'flex-1 pl-3 text-left font-normal',
+                                !field.value && 'text-muted-foreground'
+                              )}
+                            >
+                              {field.value ? (
+                                <span className="capitalize">
+                                  {format(field.value, "d 'de' LLLL 'de' yyyy", { locale: getDateFnsLocale() })}
+                                </span>
+                              ) : (
+                                <span>{t('common.selectDate')}</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            defaultMonth={field.value}
+                            disabled={(date) => date < new Date('1900-01-01')}
+                            locale={getDateFnsLocale()}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {field.value && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => field.onChange(undefined)}
+                          title={t('memberForm.clearDate')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Vencimiento de la recomendación */}
+              <FormField
+                control={form.control}
+                name="templeRecommendExpirationDate"
+                render={({ field }) => (
+                  <FormItem className="flex flex-col">
+                    <FormLabel>{t('memberForm.templeRecommendExpirationDate')}</FormLabel>
+                    <div className="flex gap-2">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <FormControl>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                'flex-1 pl-3 text-left font-normal',
+                                !field.value && 'text-muted-foreground'
+                              )}
+                            >
+                              {field.value ? (
+                                <span className="capitalize">
+                                  {format(field.value, "d 'de' LLLL 'de' yyyy", { locale: getDateFnsLocale() })}
+                                </span>
+                              ) : (
+                                <span>{t('common.selectDate')}</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </FormControl>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0" align="start">
+                          <Calendar
+                            mode="single"
+                            selected={field.value}
+                            onSelect={field.onChange}
+                            defaultMonth={field.value}
+                            disabled={(date) => date < new Date('1900-01-01')}
+                            locale={getDateFnsLocale()}
+                          />
+                        </PopoverContent>
+                      </Popover>
+                      {field.value && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => field.onChange(undefined)}
+                          title={t('memberForm.clearDate')}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                    <FormDescription>
+                      {t('memberForm.templeRecommendExpirationDateDesc')}
+                    </FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
+          )}
+
           {/* Maestros Ministrantes */}
           <FormField
             control={form.control}
@@ -1931,6 +2157,28 @@ export function MemberForm({ member, onClose }: MemberFormProps) {
                   {t('memberForm.statusDescription')}
                 </FormDescription>
 
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          {/* Llamamiento */}
+          <FormField
+            control={form.control}
+            name="calling"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>{t('memberForm.calling')}</FormLabel>
+                <FormControl>
+                  <Input
+                    placeholder={t('memberForm.callingPlaceholder')}
+                    {...field}
+                    value={field.value || ''}
+                  />
+                </FormControl>
+                <FormDescription>
+                  {t('memberForm.callingDescription')}
+                </FormDescription>
                 <FormMessage />
               </FormItem>
             )}

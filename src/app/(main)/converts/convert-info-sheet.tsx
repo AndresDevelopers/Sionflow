@@ -14,7 +14,12 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { OfflineImage } from '@/components/offline-image';
-import { PlusCircle, Trash2, UserPlus, Users } from 'lucide-react';
+import { CalendarIcon, PlusCircle, Trash2, UserPlus, Users, X } from 'lucide-react';
+import type { Timestamp } from 'firebase/firestore';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { safeGetDate } from '@/lib/date-utils';
 import { MemberSelector } from '@/components/members/member-selector';
 import type { Convert, Member, NewConvertFriendship, Ordinance, FamilySearchTreeStatus } from '@/lib/types';
 import { useI18n } from '@/contexts/i18n-context';
@@ -28,6 +33,9 @@ export type ConvertWithInfo = Convert & {
   calling?: string;
   notes?: string;
   recommendationActive?: boolean;
+  /** Fechas de la recomendación (viven en el miembro) */
+  recommendationIssueDate?: Timestamp | null;
+  recommendationExpirationDate?: Timestamp | null;
   selfRelianceCourse?: boolean;
   hasLdsAccount?: boolean;
   hasFamilySearchAccount?: boolean;
@@ -41,6 +49,9 @@ export type ConvertInfoSavePayload = {
   calling: string;
   notes: string;
   recommendationActive: boolean;
+  /** Opcionales: se puede guardar la recomendación sin fechas */
+  recommendationIssueDate?: Date | null;
+  recommendationExpirationDate?: Date | null;
   selfRelianceCourse: boolean;
   hasLdsAccount: boolean;
   hasFamilySearchAccount: boolean;
@@ -77,6 +88,12 @@ export function ConvertInfoSheet({
   const [calling, setCalling] = useState(convert?.calling || '');
   const [notes, setNotes] = useState(convert?.notes || '');
   const [recommendationActive, setRecommendationActive] = useState(!!convert?.recommendationActive);
+  const [recommendationIssueDate, setRecommendationIssueDate] = useState<Date | undefined>(
+    safeGetDate(convert?.recommendationIssueDate) ?? undefined
+  );
+  const [recommendationExpirationDate, setRecommendationExpirationDate] = useState<Date | undefined>(
+    safeGetDate(convert?.recommendationExpirationDate) ?? undefined
+  );
   const [selfRelianceCourse, setSelfRelianceCourse] = useState(!!convert?.selfRelianceCourse);
   const [hasLdsAccount, setHasLdsAccount] = useState(
     !!(convert?.hasLdsAccount ?? convert?.memberData?.hasLdsAccount)
@@ -118,6 +135,10 @@ export function ConvertInfoSheet({
         setCalling(convert?.calling || '');
         setNotes(convert?.notes || '');
         setRecommendationActive(!!convert?.recommendationActive);
+        setRecommendationIssueDate(safeGetDate(convert?.recommendationIssueDate) ?? undefined);
+        setRecommendationExpirationDate(
+          safeGetDate(convert?.recommendationExpirationDate) ?? undefined
+        );
         setSelfRelianceCourse(!!convert?.selfRelianceCourse);
         setHasLdsAccount(!!(convert?.hasLdsAccount ?? convert?.memberData?.hasLdsAccount));
         setHasFamilySearchAccount(
@@ -159,6 +180,8 @@ export function ConvertInfoSheet({
     convert?.calling,
     convert?.notes,
     convert?.recommendationActive,
+    convert?.recommendationIssueDate,
+    convert?.recommendationExpirationDate,
     convert?.selfRelianceCourse,
     convert?.hasLdsAccount,
     convert?.hasFamilySearchAccount,
@@ -186,6 +209,10 @@ export function ConvertInfoSheet({
 
   const handleRecommendationChange = (value: boolean) => {
     setRecommendationActive(value);
+    if (!value) {
+      setRecommendationIssueDate(undefined);
+      setRecommendationExpirationDate(undefined);
+    }
     setHasChanges(true);
   };
 
@@ -283,6 +310,9 @@ export function ConvertInfoSheet({
       calling,
       notes,
       recommendationActive,
+      recommendationIssueDate: recommendationActive ? recommendationIssueDate ?? null : null,
+      recommendationExpirationDate:
+        recommendationActive ? recommendationExpirationDate ?? null : null,
       selfRelianceCourse,
       hasLdsAccount,
       hasFamilySearchAccount,
@@ -552,8 +582,134 @@ export function ConvertInfoSheet({
                   <Switch
                     checked={recommendationActive}
                     onCheckedChange={handleRecommendationChange}
+                    aria-label={t('converts.sheet.recommendation')}
                   />
                 </div>
+
+                {recommendationActive && (
+                  <div className="space-y-3 rounded-lg border border-dashed bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">
+                      {t('converts.sheet.recommendationDatesHelp')}
+                    </p>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">
+                        {t('converts.sheet.recommendationIssueDate')}
+                      </Label>
+                      <div className="flex gap-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                'flex-1 justify-start pl-3 text-left font-normal',
+                                !recommendationIssueDate && 'text-muted-foreground'
+                              )}
+                            >
+                              {recommendationIssueDate ? (
+                                <span className="capitalize">
+                                  {format(recommendationIssueDate, "d 'de' LLLL 'de' yyyy", {
+                                    locale: getDateFnsLocale(),
+                                  })}
+                                </span>
+                              ) : (
+                                <span>{t('common.selectDate')}</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={recommendationIssueDate}
+                              onSelect={(date) => {
+                                setRecommendationIssueDate(date);
+                                setHasChanges(true);
+                              }}
+                              defaultMonth={recommendationIssueDate}
+                              disabled={(date) => date < new Date('1900-01-01')}
+                              locale={getDateFnsLocale()}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        {recommendationIssueDate && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setRecommendationIssueDate(undefined);
+                              setHasChanges(true);
+                            }}
+                            title={t('converts.sheet.clearDate')}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label className="text-sm">
+                        {t('converts.sheet.recommendationExpirationDate')}
+                      </Label>
+                      <div className="flex gap-2">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              className={cn(
+                                'flex-1 justify-start pl-3 text-left font-normal',
+                                !recommendationExpirationDate && 'text-muted-foreground'
+                              )}
+                            >
+                              {recommendationExpirationDate ? (
+                                <span className="capitalize">
+                                  {format(recommendationExpirationDate, "d 'de' LLLL 'de' yyyy", {
+                                    locale: getDateFnsLocale(),
+                                  })}
+                                </span>
+                              ) : (
+                                <span>{t('common.selectDate')}</span>
+                              )}
+                              <CalendarIcon className="ml-auto h-4 w-4 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={recommendationExpirationDate}
+                              onSelect={(date) => {
+                                setRecommendationExpirationDate(date);
+                                setHasChanges(true);
+                              }}
+                              defaultMonth={recommendationExpirationDate}
+                              disabled={(date) => date < new Date('1900-01-01')}
+                              locale={getDateFnsLocale()}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        {recommendationExpirationDate && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                              setRecommendationExpirationDate(undefined);
+                              setHasChanges(true);
+                            }}
+                            title={t('converts.sheet.clearDate')}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between rounded-lg border p-3">
                   <div className="space-y-1">
                     <Label className="text-sm font-semibold text-muted-foreground">{t('converts.sheet.selfRelianceCourse')}</Label>

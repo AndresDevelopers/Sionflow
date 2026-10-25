@@ -101,6 +101,10 @@ export async function createMember(memberData: Omit<Member, 'id'>, barrioOrg: st
       cleanData.photoURL = memberData.photoURL.trim();
     }
 
+    if (memberData.calling?.trim()) {
+      cleanData.calling = memberData.calling.trim();
+    }
+
     if (memberData.birthDate) {
       cleanData.birthDate = memberData.birthDate;
     }
@@ -139,6 +143,18 @@ export async function createMember(memberData: Omit<Member, 'id'>, barrioOrg: st
 
     if (memberData.hasPatriarchalBlessing !== undefined) {
       cleanData.hasPatriarchalBlessing = memberData.hasPatriarchalBlessing === true;
+    }
+
+    if (memberData.hasTempleRecommend !== undefined) {
+      cleanData.hasTempleRecommend = memberData.hasTempleRecommend === true;
+    }
+
+    if (memberData.templeRecommendIssueDate) {
+      cleanData.templeRecommendIssueDate = memberData.templeRecommendIssueDate;
+    }
+
+    if (memberData.templeRecommendExpirationDate) {
+      cleanData.templeRecommendExpirationDate = memberData.templeRecommendExpirationDate;
     }
 
     if (memberData.familySearchGenerations !== undefined && memberData.familySearchGenerations !== null) {
@@ -261,6 +277,10 @@ export async function updateMember(
       hasLdsAccount: memberData.hasLdsAccount,
       hasFamilySearchAccount: memberData.hasFamilySearchAccount,
       hasPatriarchalBlessing: memberData.hasPatriarchalBlessing,
+      calling: memberData.calling,
+      hasTempleRecommend: memberData.hasTempleRecommend,
+      templeRecommendIssueDate: memberData.templeRecommendIssueDate,
+      templeRecommendExpirationDate: memberData.templeRecommendExpirationDate,
       needsFamilySearchHelp: memberData.needsFamilySearchHelp,
       familySearchCreateAccountAnnotationId: memberData.familySearchCreateAccountAnnotationId,
       familySearchGenerations: memberData.familySearchGenerations,

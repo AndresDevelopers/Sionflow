@@ -68,7 +68,12 @@ vi.mock('@/contexts/auth-context', () => ({
 
 vi.mock('@/contexts/refresh-context', () => ({
   useOnManualRefresh: () => {},
-  useRefresh: () => ({ triggerRefresh: vi.fn(), refreshKey: 0 }),
+  useRefresh: () => ({
+    triggerRefresh: vi.fn(),
+    refreshKey: 0,
+    requestRefresh: vi.fn(async () => {}),
+    isRefreshing: false,
+  }),
   RefreshProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
@@ -186,6 +191,11 @@ vi.mock('@/lib/members-data', async (importOriginal) => {
     getLessActiveMembers: empty,
     getActiveMembers: empty,
     getInactiveMembers: empty,
+    // Writes need a backend: stub them so forms can be exercised in tests
+    createMember: vi.fn(async () => 'new-member-id'),
+    updateMember: vi.fn(async () => {}),
+    searchMembersByName: vi.fn(async () => []),
+    getMemberById: vi.fn(async () => null),
   };
 });
 

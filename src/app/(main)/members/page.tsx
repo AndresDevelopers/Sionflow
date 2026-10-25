@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { OfflineImage } from '@/components/offline-image';
-import { Plus, Search, Filter, Edit, Trash2, Users, UserCheck, UserX, Eye, ChevronUp, AlertTriangle, KeyRound, Library } from 'lucide-react';
+import { Plus, Search, Filter, Edit, Trash2, Users, UserCheck, UserX, Eye, ChevronUp, AlertTriangle, KeyRound, Library, BadgeCheck, MapPin } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -111,10 +111,11 @@ export default function MembersPage() {
     t(`ordinance.${ordinance}`) || ordinance;
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<MemberStatus | 'all'>('all');
-  const [baptismFilter, setBaptismFilter] = useState<'all' | 'baptized' | 'not_baptized'>('all');
   const [urgentFilter, setUrgentFilter] = useState<'all' | 'urgent' | 'not_urgent'>('all');
   const [ldsAccountFilter, setLdsAccountFilter] = useState<'all' | 'with' | 'without'>('all');
   const [familySearchFilter, setFamilySearchFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [templeRecommendFilter, setTempleRecommendFilter] = useState<'all' | 'with' | 'without'>('all');
+  const [addressFilter, setAddressFilter] = useState<'all' | 'with' | 'without'>('all');
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -299,15 +300,6 @@ export default function MembersPage() {
     const term = searchTerm.toLowerCase();
     const matchesSearch = firstName.includes(term) || lastName.includes(term);
     const matchesStatus = statusFilter === 'all' || member.status === statusFilter;
-    const isBaptized = member.ordinances?.includes('baptism') ?? false;
-
-    // Safely get baptism date
-    const baptismDate = safeGetDate(member.baptismDate);
-    const hasFutureBaptism = baptismDate && baptismDate > new Date();
-
-    const matchesBaptism = baptismFilter === 'all' ||
-      (baptismFilter === 'baptized' && isBaptized) ||
-      (baptismFilter === 'not_baptized' && !isBaptized && hasFutureBaptism);
 
     // Filter for urgent status
     const matchesUrgent = urgentFilter === 'all' ||
@@ -324,7 +316,17 @@ export default function MembersPage() {
       (familySearchFilter === 'with' && hasFs) ||
       (familySearchFilter === 'without' && !hasFs);
 
-    return matchesSearch && matchesStatus && matchesBaptism && matchesUrgent && matchesLds && matchesFamilySearch;
+    const hasTempleRecommend = member.hasTempleRecommend === true;
+    const matchesTempleRecommend = templeRecommendFilter === 'all' ||
+      (templeRecommendFilter === 'with' && hasTempleRecommend) ||
+      (templeRecommendFilter === 'without' && !hasTempleRecommend);
+
+    const hasAddress = Boolean(member.address?.trim());
+    const matchesAddress = addressFilter === 'all' ||
+      (addressFilter === 'with' && hasAddress) ||
+      (addressFilter === 'without' && !hasAddress);
+
+    return matchesSearch && matchesStatus && matchesUrgent && matchesLds && matchesFamilySearch && matchesTempleRecommend && matchesAddress;
   });
 
   const visibleMembers = useMemo(
@@ -332,7 +334,7 @@ export default function MembersPage() {
     [filteredMembers, visibleCount],
   );
 
-  const filterSignature = `${searchTerm}|${statusFilter}|${baptismFilter}|${urgentFilter}|${ldsAccountFilter}|${familySearchFilter}`;
+  const filterSignature = `${searchTerm}|${statusFilter}|${urgentFilter}|${ldsAccountFilter}|${familySearchFilter}|${templeRecommendFilter}|${addressFilter}`;
   const [prevFilterSignature, setPrevFilterSignature] = useState(filterSignature);
   if (filterSignature !== prevFilterSignature) {
     setPrevFilterSignature(filterSignature);
@@ -388,8 +390,6 @@ export default function MembersPage() {
     less_active: members.filter(m => m.status === 'less_active').length,
     inactive: members.filter(m => m.status === 'inactive').length,
     urgent: members.filter(m => m.isUrgent).length,
-    withoutLdsAccount: members.filter(m => m.hasLdsAccount !== true).length,
-    withoutFamilySearch: members.filter(m => m.hasFamilySearchAccount !== true).length,
     total: members.length
   };
 
@@ -486,54 +486,6 @@ export default function MembersPage() {
             <p className="text-xs text-muted-foreground">{t('members.stats.urgentDesc')}</p>
           </CardContent>
         </Card>
-        <Card
-          className={`cursor-pointer transition-colors hover:bg-muted/50 ${
-            ldsAccountFilter === 'without' ? 'ring-2 ring-blue-500 bg-blue-50/50 dark:bg-blue-950/20' : ''
-          }`}
-          onClick={() => setLdsAccountFilter((prev) => (prev === 'without' ? 'all' : 'without'))}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setLdsAccountFilter((prev) => (prev === 'without' ? 'all' : 'without'));
-            }
-          }}
-          aria-pressed={ldsAccountFilter === 'without'}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('members.stats.withoutLds')}</CardTitle>
-            <KeyRound className="h-4 w-4 text-blue-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{memberCounts.withoutLdsAccount}</div>
-            <p className="text-xs text-muted-foreground">{t('members.stats.withoutLdsDesc')}</p>
-          </CardContent>
-        </Card>
-        <Card
-          className={`cursor-pointer transition-colors hover:bg-muted/50 ${
-            familySearchFilter === 'without' ? 'ring-2 ring-teal-500 bg-teal-50/50 dark:bg-teal-950/20' : ''
-          }`}
-          onClick={() => setFamilySearchFilter((prev) => (prev === 'without' ? 'all' : 'without'))}
-          role="button"
-          tabIndex={0}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              setFamilySearchFilter((prev) => (prev === 'without' ? 'all' : 'without'));
-            }
-          }}
-          aria-pressed={familySearchFilter === 'without'}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">{t('members.stats.withoutFamilySearch')}</CardTitle>
-            <Library className="h-4 w-4 text-teal-600" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-teal-600">{memberCounts.withoutFamilySearch}</div>
-            <p className="text-xs text-muted-foreground">{t('members.stats.withoutFamilySearchDesc')}</p>
-          </CardContent>
-        </Card>
       </div>
 
       {/* Filters */}
@@ -566,17 +518,6 @@ export default function MembersPage() {
                 <SelectItem value="less_active">{t('members.filter.lessActive')}</SelectItem>
                 <SelectItem value="inactive">{t('members.filter.inactive')}</SelectItem>
                 <SelectItem value="deceased">{t('members.filter.deceased')}</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={baptismFilter} onValueChange={(value: 'all' | 'baptized' | 'not_baptized') => setBaptismFilter(value)}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <Filter className="mr-2 h-4 w-4" />
-                <SelectValue placeholder={t('members.filterBaptismPlaceholder')} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">{t('common.all')}</SelectItem>
-                <SelectItem value="baptized">{t('members.filter.baptized')}</SelectItem>
-                <SelectItem value="not_baptized">{t('members.filter.notBaptizedFuture')}</SelectItem>
               </SelectContent>
             </Select>
             <Select value={urgentFilter} onValueChange={(value: 'all' | 'urgent' | 'not_urgent') => setUrgentFilter(value)}>
@@ -616,6 +557,34 @@ export default function MembersPage() {
                 <SelectItem value="all">{t('common.all')}</SelectItem>
                 <SelectItem value="with">{t('members.filter.withFamilySearch')}</SelectItem>
                 <SelectItem value="without">{t('members.filter.withoutFamilySearch')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={templeRecommendFilter}
+              onValueChange={(value: 'all' | 'with' | 'without') => setTempleRecommendFilter(value)}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <BadgeCheck className="mr-2 h-4 w-4" />
+                <SelectValue placeholder={t('members.filterTempleRecommendPlaceholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="with">{t('members.filter.withTempleRecommend')}</SelectItem>
+                <SelectItem value="without">{t('members.filter.withoutTempleRecommend')}</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={addressFilter}
+              onValueChange={(value: 'all' | 'with' | 'without') => setAddressFilter(value)}
+            >
+              <SelectTrigger className="w-full sm:w-[200px]">
+                <MapPin className="mr-2 h-4 w-4" />
+                <SelectValue placeholder={t('members.filterAddressPlaceholder')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">{t('common.all')}</SelectItem>
+                <SelectItem value="with">{t('members.filter.withAddress')}</SelectItem>
+                <SelectItem value="without">{t('members.filter.withoutAddress')}</SelectItem>
               </SelectContent>
             </Select>
 
@@ -658,10 +627,11 @@ export default function MembersPage() {
                     <TableCell colSpan={10} className="h-24 text-center">
                       {searchTerm ||
                       statusFilter !== 'all' ||
-                      baptismFilter !== 'all' ||
                       urgentFilter !== 'all' ||
                       ldsAccountFilter !== 'all' ||
-                      familySearchFilter !== 'all'
+                      familySearchFilter !== 'all' ||
+                      templeRecommendFilter !== 'all' ||
+                      addressFilter !== 'all'
                         ? t('members.empty.filtered')
                         : syncStatus === 'syncing'
                           ? t('members.empty.loading')
@@ -884,10 +854,11 @@ export default function MembersPage() {
                 <p className="text-muted-foreground">
                   {searchTerm ||
                   statusFilter !== 'all' ||
-                  baptismFilter !== 'all' ||
                   urgentFilter !== 'all' ||
                   ldsAccountFilter !== 'all' ||
-                  familySearchFilter !== 'all'
+                  familySearchFilter !== 'all' ||
+                  templeRecommendFilter !== 'all' ||
+                  addressFilter !== 'all'
                     ? t('members.empty.filtered')
                     : syncStatus === 'syncing'
                       ? t('members.empty.loading')

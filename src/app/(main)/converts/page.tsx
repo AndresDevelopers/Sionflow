@@ -23,6 +23,7 @@ import { getDocs } from '@/lib/firestore-query';
 import { membersCollection, ministeringCollection, newConvertFriendsCollection } from '@/lib/collections';
 import type { Member, NewConvertFriendship, Companionship } from '@/lib/types';
 import { normalizeMemberStatus, getMembersForSelector } from '@/lib/members-data';
+import { normalizeDateForEcuadorStorage } from '@/lib/date-utils';
 import {
   getMemberPhotoURL,
   getRecentConvertCutoff,
@@ -249,9 +250,13 @@ async function getConvertsWithInfo(barrioOrg: string): Promise<ConvertWithInfo[]
       friendship,
       memberData,
       ministeringTeachers,
-      calling: info?.calling || '',
+      // El miembro es la fuente de verdad cuando ya existe; c_conversos_info queda como respaldo
+      calling: memberData?.calling?.trim() || info?.calling || '',
       notes: info?.notes || '',
-      recommendationActive: info?.recommendationActive || false,
+      recommendationActive:
+        memberData?.hasTempleRecommend ?? info?.recommendationActive ?? false,
+      recommendationIssueDate: memberData?.templeRecommendIssueDate ?? null,
+      recommendationExpirationDate: memberData?.templeRecommendExpirationDate ?? null,
       selfRelianceCourse: info?.selfRelianceCourse || false,
       hasLdsAccount: memberData?.hasLdsAccount === true,
       hasFamilySearchAccount: memberData?.hasFamilySearchAccount === true,
@@ -342,6 +347,8 @@ export default function ConvertsPage() {
         calling,
         notes,
         recommendationActive,
+        recommendationIssueDate,
+        recommendationExpirationDate,
         selfRelianceCourse,
         hasLdsAccount,
         hasFamilySearchAccount,
@@ -374,19 +381,36 @@ export default function ConvertsPage() {
             ? (familySearchPartialDetails ?? null)
             : null,
       };
+      // Llamamiento y recomendación también viven en el miembro (fuente de verdad).
+      // Las fechas son opcionales: se puede activar la recomendación sin fechas.
+      const memberFields = {
+        ...fsFields,
+        calling: calling.trim(),
+        hasTempleRecommend: recommendationActive,
+        templeRecommendIssueDate:
+          recommendationActive && recommendationIssueDate
+            ? Timestamp.fromDate(normalizeDateForEcuadorStorage(recommendationIssueDate))
+            : null,
+        templeRecommendExpirationDate:
+          recommendationActive && recommendationExpirationDate
+            ? Timestamp.fromDate(normalizeDateForEcuadorStorage(recommendationExpirationDate))
+            : null,
+      };
       if (memberId) {
         const { updateMember } = await import('@/lib/members-data');
-        await updateMember(memberId, fsFields);
+        await updateMember(memberId, memberFields);
       }
 
       const mergeLocal = (c: ConvertWithInfo): ConvertWithInfo => ({
         ...c,
-        calling,
+        calling: calling.trim(),
         notes,
         recommendationActive,
+        recommendationIssueDate: memberFields.templeRecommendIssueDate,
+        recommendationExpirationDate: memberFields.templeRecommendExpirationDate,
         selfRelianceCourse,
         ...fsFields,
-        memberData: c.memberData ? { ...c.memberData, ...fsFields } : c.memberData,
+        memberData: c.memberData ? { ...c.memberData, ...memberFields } : c.memberData,
       });
 
       // Update local state

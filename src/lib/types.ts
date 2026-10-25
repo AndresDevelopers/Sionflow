@@ -362,6 +362,14 @@ export type Member = {
     hasFamilySearchAccount?: boolean;
     /** Ha recibido la bendición patriarcal (opcional) */
     hasPatriarchalBlessing?: boolean;
+    /** Llamamiento actual (texto libre, ej. "Instructor de Escuela Dominical") */
+    calling?: string;
+    /** Tiene recomendación vigente para el templo */
+    hasTempleRecommend?: boolean;
+    /** Fecha de inicio de la recomendación para el templo */
+    templeRecommendIssueDate?: Timestamp | null;
+    /** Fecha de vencimiento de la recomendación para el templo */
+    templeRecommendExpirationDate?: Timestamp | null;
     /**
      * Marcado en Ayuda FS: el miembro sin cuenta necesita acompañamiento
      * para crear/configurar FamilySearch (genera una anotación).

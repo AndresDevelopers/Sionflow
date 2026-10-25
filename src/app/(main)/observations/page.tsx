@@ -3,11 +3,17 @@
 
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import type { ReactNode } from 'react';
 import { OfflineImage } from '@/components/offline-image';
 
 import type { ChangeEvent } from 'react';
 
-import { Users, AlertTriangle, UserX, UserCheck, Eye, ChevronUp, HeartPulse, Plus, Trash2, Loader2, Check, ChevronsUpDown, X, Pencil, MapPin } from 'lucide-react';
+import { Users, AlertTriangle, UserX, UserCheck, Eye, ChevronUp, HeartPulse, Plus, Trash2, Loader2, Check, ChevronsUpDown, X, Pencil, MapPin, BadgeCheck, CalendarClock, FileX2 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import {
+  ObservationListDialog,
+  OBSERVATION_LIST_PAGE_SIZE,
+} from '@/components/observations/observation-list-dialog';
 
 import {
 
@@ -23,29 +29,11 @@ import {
 
 } from '@/components/ui/card';
 
-import {
-
-  Table,
-
-  TableBody,
-
-  TableCell,
-
-  TableHead,
-
-  TableHeader,
-
-  TableRow,
-
-} from '@/components/ui/table';
-
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 import { Button } from '@/components/ui/button';
 
 import { Badge } from '@/components/ui/badge';
-
-import { Skeleton } from '@/components/ui/skeleton';
 
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
@@ -90,9 +78,17 @@ import type { Member, Companionship, Family, HealthConcern } from '@/lib/types';
 
 import { getMembersByStatus } from '@/lib/members-data';
 
+import { getAge, safeGetDate } from '@/lib/date-utils';
+import { offlineDataKey, readOfflineData, writeOfflineData } from '@/lib/offline-data-store';
+
+import {
+  getTempleRecommendDaysLeft,
+  getTempleRecommendStatus,
+} from '@/lib/temple-recommend';
+
 import { fetchHealthConcerns, createHealthConcern, deleteHealthConcern, updateHealthConcern } from '@/lib/health-concerns';
 
-import { format, subMonths, differenceInYears } from 'date-fns';
+import { format, subMonths } from 'date-fns';
 
 import { getDateFnsLocale } from "@/lib/i18n-date";
 
@@ -209,14 +205,142 @@ const getInitials = (first: string, last: string) => `${(first?.[0] ?? '').toUpp
 
 const renderPhoneWithAge = (member: Member, fallback: string, ageLabel: (age: number) => string) => {
   let text = member.phoneNumber || fallback;
-  if (member.birthDate) {
-    const age = differenceInYears(new Date(), member.birthDate.toDate());
+  const age = getAge(member.birthDate);
+  if (age !== null) {
     text += ` - ${ageLabel(age)}`;
   }
   return text;
 };
 
 
+
+const formatRecommendDate = (value: unknown): string => {
+  const date = safeGetDate(value);
+  if (!date) return '';
+  return format(date, 'd MMM yyyy', { locale: getDateFnsLocale() });
+};
+
+type ObservationListKey =
+  | 'health'
+  | 'withoutEndowment'
+  | 'withoutElder'
+  | 'withoutHigherPriesthood'
+  | 'withoutMinistering'
+  | 'withTempleRecommend'
+  | 'withoutTempleRecommend'
+  | 'templeRecommendExpiring'
+  | 'inactiveNewConverts'
+  | 'inactive'
+  | 'familyFocus'
+  | 'problematic';
+
+type ObservationsCacheSnapshot = {
+  members: Member[];
+  companionships: Companionship[];
+  healthConcerns: HealthConcern[];
+  savedAt?: number;
+};
+
+function OrdinancesBadges({ ordinances, t }: { ordinances?: string[]; t: TranslateFn }) {
+  if (!ordinances || ordinances.length === 0) {
+    return <span className="text-xs text-muted-foreground">{t('common.none')}</span>;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {ordinances.map((ordinance) => (
+        <Badge key={ordinance} variant="outline" className="text-[10px]">
+          {t(`ordinance.${ordinance}`)}
+        </Badge>
+      ))}
+    </div>
+  );
+}
+
+function TempleRecommendExpirationBadge({ expiration, t }: { expiration: unknown; t: TranslateFn }) {
+  const daysLeft = getTempleRecommendDaysLeft(expiration);
+  const dateLabel = formatRecommendDate(expiration);
+
+  if (daysLeft === null) {
+    return <span className="text-xs text-muted-foreground">{t('common.notSpecified')}</span>;
+  }
+
+  const expired = daysLeft < 0;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+      {dateLabel && (
+        <span>{t('observations.templeRecommend.expiresOn', { date: dateLabel })}</span>
+      )}
+      <Badge
+        variant={expired || daysLeft <= 5 ? 'destructive' : 'secondary'}
+        className="text-[10px]"
+      >
+        {expired
+          ? t('observations.templeRecommend.expired')
+          : t('observations.templeRecommend.daysLeft', { days: daysLeft })}
+      </Badge>
+    </div>
+  );
+}
+
+function MemberObservationRow({
+  member,
+  extra,
+  onViewProfile,
+  t,
+}: {
+  member: Member;
+  extra?: ReactNode;
+  onViewProfile: (memberId: string) => void;
+  t: TranslateFn;
+}) {
+  const statusInfo = statusConfig[member.status] ?? statusConfig.active;
+  const StatusIcon = statusInfo.icon;
+
+  return (
+    <div className="flex items-start gap-3 py-3">
+      {member.photoURL ? (
+        <OfflineImage
+          src={member.photoURL}
+          alt={`${member.firstName} ${member.lastName}`}
+          width={36}
+          height={36}
+          className="h-9 w-9 shrink-0 rounded-full object-cover"
+        />
+      ) : (
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted">
+          <Users className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="font-medium leading-tight">
+          {member.firstName} {member.lastName}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {renderPhoneWithAge(member, t('common.notSpecified'), (age) =>
+            t('observations.ageSuffix', { age })
+          )}
+        </p>
+        {extra}
+      </div>
+      <div className="flex shrink-0 flex-col items-end gap-2">
+        <Badge variant={statusInfo.variant} className="gap-1">
+          <StatusIcon className="h-3 w-3" />
+          {t(`member.status.${member.status}`)}
+        </Badge>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onViewProfile(member.id)}
+          title={t('common.viewProfile')}
+        >
+          <Eye className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export default function ObservationsPage() {
 
@@ -280,26 +404,23 @@ export default function ObservationsPage() {
 
   const [healthPickerStep, setHealthPickerStep] = useState<'options' | 'memberList'>('options');
 
+  /** Solo un listado abierto a la vez; se pagina de 15 en 15 desde el cache local */
+  const [openList, setOpenList] = useState<ObservationListKey | null>(null);
+
+  const [listPage, setListPage] = useState(1);
 
 
-  const healthConcernsRef = useRef<HTMLDivElement>(null);
-
-  const withoutEndowmentRef = useRef<HTMLDivElement>(null);
-  const withoutElderOrdinationRef = useRef<HTMLDivElement>(null);
-
-  const withoutHigherPriesthoodRef = useRef<HTMLDivElement>(null);
-
-  const withoutMinisteringRef = useRef<HTMLDivElement>(null);
-
-  const inactiveRef = useRef<HTMLDivElement>(null);
-
-  const inactiveNewConvertsRef = useRef<HTMLDivElement>(null);
-
-  const familyFocusCompanionshipsRef = useRef<HTMLDivElement>(null);
-
-  const problematicCompanionshipsRef = useRef<HTMLDivElement>(null);
 
   const photoInputRef = useRef<HTMLInputElement>(null);
+
+  const observationsCacheKey = useMemo(
+    () => (barrioOrg ? offlineDataKey('observations', barrioOrg) : null),
+    [barrioOrg]
+  );
+
+  const hydratedCacheKeyRef = useRef<string | null>(null);
+
+  const hasServerSnapshotRef = useRef(false);
 
   const healthForm = useForm<HealthConcernFormValues>({
 
@@ -345,6 +466,8 @@ export default function ObservationsPage() {
 
       const allMembers = await getMembersByStatus(undefined, { barrioOrg });
 
+      hasServerSnapshotRef.current = true;
+
       setMembers(allMembers);
 
     } catch (error) {
@@ -385,6 +508,8 @@ export default function ObservationsPage() {
 
       const comps = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Companionship));
 
+      hasServerSnapshotRef.current = true;
+
       setCompanionships(comps);
 
     } catch (error) {
@@ -404,7 +529,7 @@ export default function ObservationsPage() {
     }
 
   }, [toast, t, barrioOrg]);
-  const loadHealthConcerns = useCallback(async () => {
+  const loadHealthConcerns = useCallback(async (opts?: { quiet?: boolean }) => {
 
     if (authLoading || !user) {
 
@@ -414,13 +539,15 @@ export default function ObservationsPage() {
 
 
 
-    setHealthLoading(true);
+    if (!opts?.quiet) setHealthLoading(true);
 
 
 
     try {
 
       const healthData = await fetchHealthConcerns(barrioOrg);
+
+      hasServerSnapshotRef.current = true;
 
       setHealthConcerns(healthData);
 
@@ -457,13 +584,64 @@ export default function ObservationsPage() {
 
 
 
+  const hydrateFromCache = useCallback(() => {
+    if (!observationsCacheKey) return false;
+
+    const cached = readOfflineData<ObservationsCacheSnapshot>(observationsCacheKey);
+    if (!cached) return false;
+
+    if (Array.isArray(cached.members)) setMembers(cached.members);
+    if (Array.isArray(cached.companionships)) setCompanionships(cached.companionships);
+    if (Array.isArray(cached.healthConcerns)) setHealthConcerns(cached.healthConcerns);
+    setLoading(false);
+    setHealthLoading(false);
+    return true;
+  }, [observationsCacheKey]);
+
+  // Cache first (works offline), then refresh in the background.
+  // Cloud Function sync signals call the same fetchers via useOnManualRefresh below.
   useEffect(() => {
+    if (authLoading || !user || !observationsCacheKey) return;
+    if (hydratedCacheKeyRef.current === observationsCacheKey) return;
+
+    hydratedCacheKeyRef.current = observationsCacheKey;
+    const hadCache = hydrateFromCache();
+
+    if (!hadCache) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- cambio de barrioOrg: limpiar el tenant anterior antes del fetch
+      setMembers([]);
+      setCompanionships([]);
+      setHealthConcerns([]);
+    }
+
     void (async () => {
-      await fetchMembers();
-      await fetchCompanionships();
-      await loadHealthConcerns();
+      await Promise.all([
+        fetchMembers({ quiet: hadCache }),
+        fetchCompanionships(),
+        loadHealthConcerns({ quiet: hadCache }),
+      ]);
     })();
-  }, [fetchMembers, fetchCompanionships, loadHealthConcerns]);
+  }, [
+    authLoading,
+    user,
+    observationsCacheKey,
+    hydrateFromCache,
+    fetchMembers,
+    fetchCompanionships,
+    loadHealthConcerns,
+  ]);
+
+  // Keep the local snapshot fresh for the next visit / offline use
+  useEffect(() => {
+    if (!observationsCacheKey || !hasServerSnapshotRef.current) return;
+
+    writeOfflineData(observationsCacheKey, {
+      members,
+      companionships,
+      healthConcerns,
+      savedAt: Date.now(),
+    } satisfies ObservationsCacheSnapshot);
+  }, [observationsCacheKey, members, companionships, healthConcerns]);
 
   useOnManualRefresh(async () => {
     await Promise.all([
@@ -1230,16 +1408,36 @@ export default function ObservationsPage() {
 
   );
 
+  // Recomendación para el templo
+  const membersWithTempleRecommend = members.filter((member) => {
+    const status = getTempleRecommendStatus(member);
+    return status === 'active' || status === 'expiring_soon';
+  });
+
+  const membersWithoutTempleRecommend = members.filter(
+    (member) => member.hasTempleRecommend !== true
+  );
+
+  const membersTempleRecommendExpiring = members
+    .filter((member) => {
+      const status = getTempleRecommendStatus(member);
+      return status === 'expiring_soon' || status === 'expired';
+    })
+    .sort((a, b) => {
+      const aDays = getTempleRecommendDaysLeft(a.templeRecommendExpirationDate) ?? 0;
+      const bDays = getTempleRecommendDaysLeft(b.templeRecommendExpirationDate) ?? 0;
+      return aDays - bDays;
+    });
+
 
 
   const inactiveMembers = members.filter(member => member.status === 'inactive');
 
   const twentyFourMonthsAgo = subMonths(new Date(), 24);
-  const inactiveNewConverts = members.filter(member =>
-    member.status === 'inactive' &&
-    member.baptismDate?.toDate &&
-    member.baptismDate.toDate() > twentyFourMonthsAgo
-  );
+  const inactiveNewConverts = members.filter(member => {
+    const baptismDate = safeGetDate(member.baptismDate);
+    return member.status === 'inactive' && baptismDate !== null && baptismDate > twentyFourMonthsAgo;
+  });
 
 
 
@@ -1399,6 +1597,12 @@ export default function ObservationsPage() {
 
     withoutMinistering: membersWithoutMinistering.length,
 
+    withTempleRecommend: membersWithTempleRecommend.length,
+
+    withoutTempleRecommend: membersWithoutTempleRecommend.length,
+
+    templeRecommendExpiring: membersTempleRecommendExpiring.length,
+
     inactiveNewConverts: inactiveNewConverts.length,
 
     inactive: inactiveMembers.length,
@@ -1411,7 +1615,157 @@ export default function ObservationsPage() {
 
   };
 
+  const listPageFor = (total: number) =>
+    Math.min(listPage, Math.max(1, Math.ceil(total / OBSERVATION_LIST_PAGE_SIZE)));
 
+  const openObservationList = (key: ObservationListKey) => {
+    setListPage(1);
+    setOpenList(key);
+  };
+
+  const healthListPage = listPageFor(healthConcerns.length);
+  const healthListStart = (healthListPage - 1) * OBSERVATION_LIST_PAGE_SIZE;
+  const familyFocusListPage = listPageFor(familyFocusCompanionships.length);
+  const familyFocusListStart = (familyFocusListPage - 1) * OBSERVATION_LIST_PAGE_SIZE;
+  const problematicListPage = listPageFor(problematicCompanionships.length);
+  const problematicListStart = (problematicListPage - 1) * OBSERVATION_LIST_PAGE_SIZE;
+
+  const memberLists: Array<{
+    key: ObservationListKey;
+    title: string;
+    description: string;
+    emptyText: string;
+    icon: LucideIcon;
+    iconClassName: string;
+    items: Member[];
+    renderExtra?: (member: Member) => ReactNode;
+  }> = [
+    {
+      key: 'withoutEndowment',
+      title: t('observations.endowment.sectionTitle'),
+      description: t('observations.endowment.sectionDescription'),
+      emptyText: t('observations.endowment.empty'),
+      icon: AlertTriangle,
+      iconClassName: 'text-orange-600',
+      items: membersWithoutEndowment,
+      renderExtra: (member) => (
+        <OrdinancesBadges ordinances={member.ordinances} t={t} />
+      ),
+    },
+    {
+      key: 'withoutElder',
+      title: t('observations.elder.sectionTitle'),
+      description: t('observations.elder.sectionDescription'),
+      emptyText: t('observations.elder.empty'),
+      icon: UserCheck,
+      iconClassName: 'text-purple-600',
+      items: membersWithoutElderOrdination,
+      renderExtra: (member) => (
+        <OrdinancesBadges ordinances={member.ordinances} t={t} />
+      ),
+    },
+    {
+      key: 'withoutHigherPriesthood',
+      title: t('observations.higherPriesthood.sectionTitle'),
+      description: t('observations.higherPriesthood.sectionDescription'),
+      emptyText: t('observations.higherPriesthood.empty'),
+      icon: UserCheck,
+      iconClassName: 'text-indigo-600',
+      items: membersWithoutHigherPriesthood,
+      renderExtra: (member) => (
+        <OrdinancesBadges ordinances={member.ordinances} t={t} />
+      ),
+    },
+    {
+      key: 'withoutMinistering',
+      title: t('observations.ministering.sectionTitle'),
+      description: t('observations.ministering.sectionDescription'),
+      emptyText: t('observations.ministering.empty'),
+      icon: UserX,
+      iconClassName: 'text-blue-600',
+      items: membersWithoutMinistering,
+    },
+    {
+      key: 'withTempleRecommend',
+      title: t('observations.templeRecommend.withTitle'),
+      description: t('observations.templeRecommend.withDescription'),
+      emptyText: t('observations.templeRecommend.withEmpty'),
+      icon: BadgeCheck,
+      iconClassName: 'text-emerald-600',
+      items: membersWithTempleRecommend,
+      renderExtra: (member) => (
+        <TempleRecommendExpirationBadge
+          expiration={member.templeRecommendExpirationDate}
+          t={t}
+        />
+      ),
+    },
+    {
+      key: 'withoutTempleRecommend',
+      title: t('observations.templeRecommend.withoutTitle'),
+      description: t('observations.templeRecommend.withoutDescription'),
+      emptyText: t('observations.templeRecommend.withoutEmpty'),
+      icon: FileX2,
+      iconClassName: 'text-slate-600',
+      items: membersWithoutTempleRecommend,
+    },
+    {
+      key: 'templeRecommendExpiring',
+      title: t('observations.templeRecommend.expiringTitle'),
+      description: t('observations.templeRecommend.expiringDescription'),
+      emptyText: t('observations.templeRecommend.expiringEmpty'),
+      icon: CalendarClock,
+      iconClassName: 'text-rose-600',
+      items: membersTempleRecommendExpiring,
+      renderExtra: (member) => (
+        <TempleRecommendExpirationBadge
+          expiration={member.templeRecommendExpirationDate}
+          t={t}
+        />
+      ),
+    },
+    {
+      key: 'inactiveNewConverts',
+      title: t('observations.inactiveConverts.sectionTitle'),
+      description: t('observations.inactiveConverts.sectionDescription'),
+      emptyText: t('observations.inactiveConverts.empty'),
+      icon: UserX,
+      iconClassName: 'text-amber-600',
+      items: inactiveNewConverts,
+      renderExtra: (member) => {
+        const baptismDate = safeGetDate(member.baptismDate);
+        if (!baptismDate) return null;
+        return (
+          <p className="text-xs text-muted-foreground">
+            {t('observations.baptismLabel', {
+              date: format(baptismDate, 'd MMM yyyy', { locale: getDateFnsLocale() }),
+            })}
+          </p>
+        );
+      },
+    },
+    {
+      key: 'inactive',
+      title: t('observations.inactive.sectionTitle'),
+      description: t('observations.inactive.sectionDescription'),
+      emptyText: t('observations.inactive.empty'),
+      icon: UserX,
+      iconClassName: 'text-red-600',
+      items: inactiveMembers,
+      renderExtra: (member) => {
+        const lastActive = safeGetDate(member.lastActiveDate);
+        return (
+          <p className="text-xs text-muted-foreground">
+            {t('observations.lastActivityLabel', {
+              date: lastActive
+                ? format(lastActive, 'd MMM yyyy', { locale: getDateFnsLocale() })
+                : t('observations.never'),
+            })}
+          </p>
+        );
+      },
+    },
+  ];
 
   return (
 
@@ -1437,7 +1791,7 @@ export default function ObservationsPage() {
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
 
-        <Card className="cursor-pointer" onClick={() => withoutEndowmentRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('withoutEndowment')}>
 
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 
@@ -1458,7 +1812,7 @@ export default function ObservationsPage() {
         </Card>
 
         {isElderesQuorum && (
-        <Card className="cursor-pointer" onClick={() => withoutElderOrdinationRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('withoutElder')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('observations.stats.withoutElder')}</CardTitle>
             <UserCheck className="h-4 w-4 text-purple-600" />
@@ -1470,7 +1824,7 @@ export default function ObservationsPage() {
         </Card>
         )}
         {isElderesQuorum && (
-        <Card className="cursor-pointer" onClick={() => withoutHigherPriesthoodRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('withoutHigherPriesthood')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('observations.stats.withoutHigherPriesthood')}</CardTitle>
             <UserCheck className="h-4 w-4 text-indigo-600" />
@@ -1482,7 +1836,7 @@ export default function ObservationsPage() {
         </Card>
         )}
 
-        <Card className="cursor-pointer" onClick={() => withoutMinisteringRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('withoutMinistering')}>
 
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 
@@ -1502,7 +1856,40 @@ export default function ObservationsPage() {
 
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => inactiveNewConvertsRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('withTempleRecommend')}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('observations.stats.templeRecommend')}</CardTitle>
+            <BadgeCheck className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-emerald-600">{observationCounts.withTempleRecommend}</div>
+            <p className="text-xs text-muted-foreground">{t('observations.stats.templeRecommendDesc')}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer" onClick={() => openObservationList('withoutTempleRecommend')}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('observations.stats.withoutTempleRecommend')}</CardTitle>
+            <FileX2 className="h-4 w-4 text-slate-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-slate-600">{observationCounts.withoutTempleRecommend}</div>
+            <p className="text-xs text-muted-foreground">{t('observations.stats.withoutTempleRecommendDesc')}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer" onClick={() => openObservationList('templeRecommendExpiring')}>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">{t('observations.stats.templeRecommendExpiring')}</CardTitle>
+            <CalendarClock className="h-4 w-4 text-rose-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-rose-600">{observationCounts.templeRecommendExpiring}</div>
+            <p className="text-xs text-muted-foreground">{t('observations.stats.templeRecommendExpiringDesc')}</p>
+          </CardContent>
+        </Card>
+
+        <Card className="cursor-pointer" onClick={() => openObservationList('inactiveNewConverts')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('observations.stats.inactiveNewConverts')}</CardTitle>
             <UserX className="h-4 w-4 text-amber-600" />
@@ -1513,7 +1900,7 @@ export default function ObservationsPage() {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => inactiveRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('inactive')}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">{t('observations.stats.inactive')}</CardTitle>
             <UserX className="h-4 w-4 text-red-600" />
@@ -1524,7 +1911,7 @@ export default function ObservationsPage() {
           </CardContent>
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => familyFocusCompanionshipsRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('familyFocus')}>
 
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 
@@ -1546,7 +1933,7 @@ export default function ObservationsPage() {
 
 
 
-        <Card className="cursor-pointer" onClick={() => problematicCompanionshipsRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('problematic')}>
 
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 
@@ -1566,7 +1953,7 @@ export default function ObservationsPage() {
 
         </Card>
 
-        <Card className="cursor-pointer" onClick={() => healthConcernsRef.current?.scrollIntoView({ behavior: 'smooth' })}>
+        <Card className="cursor-pointer" onClick={() => openObservationList('health')}>
 
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
 
@@ -1590,2723 +1977,491 @@ export default function ObservationsPage() {
 
 
 
-      {/* Sección Salud */}
-      <Card ref={healthConcernsRef}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <HeartPulse className="h-5 w-5 text-rose-600" />
-            {t('observations.health.sectionTitle')}
-          </CardTitle>
-          <CardDescription>
-            {t('observations.health.sectionDescription')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <p className="max-w-3xl text-sm text-muted-foreground">
-              {t('observations.health.sectionHint')}
-            </p>
-            {canWrite && (
+      {/* Listados: se abren desde las tarjetas y solo montan 15 registros por página */}
+
+      {memberLists.map((list) => {
+
+        const page = listPageFor(list.items.length);
+
+        const start = (page - 1) * OBSERVATION_LIST_PAGE_SIZE;
+
+        return (
+
+          <ObservationListDialog
+
+            key={list.key}
+
+            open={openList === list.key}
+
+            onOpenChange={(open) => setOpenList(open ? list.key : null)}
+
+            title={list.title}
+
+            description={list.description}
+
+            icon={list.icon}
+
+            iconClassName={list.iconClassName}
+
+            total={list.items.length}
+
+            page={page}
+
+            onPageChange={setListPage}
+
+            emptyText={list.emptyText}
+
+            loading={loading}
+
+          >
+
+            {list.items.slice(start, start + OBSERVATION_LIST_PAGE_SIZE).map((member) => (
+
+              <MemberObservationRow
+
+                key={member.id}
+
+                member={member}
+
+                extra={list.renderExtra?.(member)}
+
+                onViewProfile={handleViewProfile}
+
+                t={t}
+
+              />
+
+            ))}
+
+          </ObservationListDialog>
+
+        );
+
+      })}
+
+      {/* Apoyo de salud */}
+
+      <ObservationListDialog
+
+        open={openList === 'health'}
+
+        onOpenChange={(open) => setOpenList(open ? 'health' : null)}
+
+        title={t('observations.health.sectionTitle')}
+
+        description={t('observations.health.sectionDescription')}
+
+        icon={HeartPulse}
+
+        iconClassName="text-rose-600"
+
+        total={healthConcerns.length}
+
+        page={healthListPage}
+
+        onPageChange={setListPage}
+
+        emptyText={t('observations.health.empty')}
+
+        loading={healthLoading}
+
+        actions={
+          canWrite ? (
             <Button
+              size="sm"
               onClick={() => {
                 setHealthPickerStep('options');
                 setHealthPickerOpen(true);
               }}
               disabled={savingHealthConcern}
-              size="sm"
             >
               <Plus className="mr-2 h-4 w-4" />
               {t('observations.health.addPerson')}
             </Button>
-            )}
-          </div>
-          <div className="hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('observations.health.col.person')}</TableHead>
-                  <TableHead>{t('observations.health.col.address')}</TableHead>
-                  <TableHead>{t('observations.health.col.observation')}</TableHead>
-                  <TableHead>{t('observations.health.col.helpers')}</TableHead>
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {healthLoading ? (
-                  Array.from({ length: 3 }).map((_, index) => (
-                    <TableRow key={index}>
-                      <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-64" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-36" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : healthConcerns.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
-                      {t('observations.health.empty')}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  healthConcerns.map((concern) => {
-                    const helperLabels = getHealthHelperLabels(
-                      concern,
-                      membersById,
-                      t('observations.health.memberUnregistered')
-                    );
+          ) : undefined
+        }
 
-                    const createdAtLabel = concern.createdAt
-                      ? format(concern.createdAt.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                      : t('observations.health.dateUnavailable');
+      >
 
-                    return (
-                      <TableRow key={concern.id}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage
-                                src={concern.photoURL || undefined}
-                                alt={`${concern.firstName} ${concern.lastName}`}
-                              />
-                              <AvatarFallback>{getInitials(concern.firstName, concern.lastName)}</AvatarFallback>
-                            </Avatar>
-                            <div>
-                              <p className="font-medium">{concern.firstName} {concern.lastName}</p>
-                              <p className="text-xs text-muted-foreground">{t('observations.health.registeredOn', { date: createdAtLabel })}</p>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="max-w-[220px]">
-                          <p className="text-sm text-muted-foreground break-words">{concern.address}</p>
-                        </TableCell>
-                        <TableCell className="max-w-[260px]">
-                          <p className="text-sm text-muted-foreground break-words">{concern.observation}</p>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-2">
-                            {helperLabels.length > 0
-                              ? helperLabels.map((helperName, index) => (
-                                  <Badge
-                                    key={`${concern.id}-helper-${index}-${helperName}`}
-                                    variant="outline"
-                                    className="text-xs font-normal"
-                                  >
-                                    {helperName}
-                                  </Badge>
-                                ))
-                              : (
-                                <span className="text-sm text-muted-foreground">{t('common.unassigned')}</span>
-                              )}
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {canWrite && (
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleOpenHealthDialog(concern)}
-                              disabled={savingHealthConcern}
-                              title={t('observations.health.editTitle')}
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeleteHealthConcern(concern)}
-                              disabled={deletingHealthConcernId === concern.id}
-                              title={t('observations.health.deleteTitle')}
-                            >
-                              {deletingHealthConcernId === concern.id ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </Button>
-                          </div>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="md:hidden space-y-4">
-            {healthLoading ? (
-              Array.from({ length: 2 }).map((_, index) => (
-                <Skeleton key={index} className="h-36 w-full" />
-              ))
-            ) : healthConcerns.length === 0 ? (
-              <div className="py-12 text-center">
-                <HeartPulse className="mx-auto mb-4 h-12 w-12 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                  {t('observations.health.empty')}
-                </p>
-              </div>
-            ) : (
-              healthConcerns.map((concern) => {
-                const helperLabels = getHealthHelperLabels(
-                  concern,
-                  membersById,
-                  t('observations.health.memberUnregistered')
-                );
+        {healthConcerns
 
-                const createdAtLabel = concern.createdAt
-                  ? format(concern.createdAt.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                  : t('observations.health.dateUnavailable');
+          .slice(healthListStart, healthListStart + OBSERVATION_LIST_PAGE_SIZE)
 
-                return (
-                  <Card key={concern.id}>
-                    <CardContent className="space-y-4 pt-4">
-                      <div className="flex items-start gap-3">
-                        <Avatar className="h-12 w-12">
-                          <AvatarImage
-                            src={concern.photoURL || undefined}
-                            alt={`${concern.firstName} ${concern.lastName}`}
-                          />
-                          <AvatarFallback>{getInitials(concern.firstName, concern.lastName)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h3 className="font-semibold">{concern.firstName} {concern.lastName}</h3>
-                          <p className="text-sm text-muted-foreground">{concern.address}</p>
-                          <p className="text-xs text-muted-foreground mt-1">{t('observations.health.registeredOn', { date: createdAtLabel })}</p>
-                        </div>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">{t('observations.health.col.observation')}</p>
-                        <p className="mt-1 text-sm text-muted-foreground">{concern.observation}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs uppercase text-muted-foreground">{t('observations.health.col.helpers')}</p>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          {helperLabels.length > 0
-                            ? helperLabels.map((helperName, index) => (
-                                <Badge
-                                  key={`${concern.id}-helper-${index}-${helperName}`}
-                                  variant="outline"
-                                  className="text-xs font-normal"
-                                >
-                                  {helperName}
-                                </Badge>
-                              ))
-                            : (
-                              <span className="text-sm text-muted-foreground">{t('common.unassigned')}</span>
-                            )}
-                        </div>
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        {canWrite && (
-                        <Button
+          .map((concern) => {
+
+            const helperLabels = getHealthHelperLabels(
+
+              concern,
+
+              membersById,
+
+              t('observations.health.memberUnregistered')
+
+            );
+
+            const createdAtDate = safeGetDate(concern.createdAt);
+
+            const createdAtLabel = createdAtDate
+
+              ? format(createdAtDate, 'd MMM yyyy', { locale: getDateFnsLocale() })
+
+              : t('observations.health.dateUnavailable');
+
+            return (
+
+              <div key={concern.id} className="flex items-start gap-3 py-3">
+
+                <Avatar className="h-9 w-9 shrink-0">
+
+                  <AvatarImage
+
+                    src={concern.photoURL || undefined}
+
+                    alt={`${concern.firstName} ${concern.lastName}`}
+
+                  />
+
+                  <AvatarFallback>{getInitials(concern.firstName, concern.lastName)}</AvatarFallback>
+
+                </Avatar>
+
+                <div className="min-w-0 flex-1 space-y-1">
+
+                  <p className="font-medium leading-tight">
+
+                    {concern.firstName} {concern.lastName}
+
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+
+                    {t('observations.health.registeredOn', { date: createdAtLabel })}
+
+                  </p>
+
+                  <p className="text-sm text-muted-foreground break-words">{concern.address}</p>
+
+                  <p className="text-sm break-words">{concern.observation}</p>
+
+                  <div className="flex flex-wrap gap-1">
+
+                    {helperLabels.length > 0 ? (
+
+                      helperLabels.map((helperName, index) => (
+
+                        <Badge
+
+                          key={`${concern.id}-helper-${index}-${helperName}`}
+
                           variant="outline"
-                          size="sm"
-                          onClick={() => handleOpenHealthDialog(concern)}
-                          disabled={savingHealthConcern}
-                          title={t('observations.health.editTitle')}
+
+                          className="text-xs font-normal"
+
                         >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        )}
-                        {canWrite && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteHealthConcern(concern)}
-                          disabled={deletingHealthConcernId === concern.id}
-                          title={t('observations.health.deleteTitle')}
-                        >
-                          {deletingHealthConcernId === concern.id ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-4 w-4" />
-                          )}
-                        </Button>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })
-            )}
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Sección Sin Investidura */}
-
-      <Card ref={withoutEndowmentRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <AlertTriangle className="h-5 w-5 text-orange-600" />
-
-            {t('observations.endowment.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>
-
-            {t('observations.endowment.sectionDescription')}
-
-          </CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('common.name')}</TableHead>
-
-                  <TableHead>{t('common.phone')}</TableHead>
-
-                  <TableHead>{t('common.status')}</TableHead>
-
-                  <TableHead>{t('observations.col.ordinancesReceived')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-
-                      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-36" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : membersWithoutEndowment.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={5} className="h-24 text-center">
-
-                      {t('observations.endowment.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  membersWithoutEndowment.map((member) => {
-
-                    const statusInfo = statusConfig[member.status];
-
-                    const StatusIcon = statusInfo.icon;
-
-
-
-                    return (
-
-                      <TableRow key={member.id}>
-
-                        <TableCell className="font-medium">
-
-                          <div className="flex items-center gap-3">
-
-                            {member.photoURL ? (
-
-                              <OfflineImage
-                                src={member.photoURL}
-                                alt={`${member.firstName} ${member.lastName}`}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-
-                            ) : (
-
-                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-
-                                <Users className="h-4 w-4 text-muted-foreground" />
-
-                              </div>
-
-                            )}
-
-                            <span>{member.firstName} {member.lastName}</span>
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell>{renderPhoneWithAge(member, t('common.notSpecified'), (age) => t('observations.ageSuffix', { age }))}</TableCell>
-
-                        <TableCell>
-
-                          <Badge variant={statusInfo.variant} className="gap-1">
-
-                            <StatusIcon className="h-3 w-3" />
-
-                            {t(`member.status.${member.status}`)}
-
-                          </Badge>
-
-                        </TableCell>
-
-                        <TableCell>
-
-                          <div className="flex flex-wrap gap-1">
-
-                            {member.ordinances && member.ordinances.length > 0 ? (
-
-                              member.ordinances.map((ordinance) => (
-
-                                <Badge key={ordinance} variant="outline" className="text-xs">
-
-                                  {t(`ordinance.${ordinance}`)}
-
-                                </Badge>
-
-                              ))
-
-                            ) : (
-
-                              <span className="text-muted-foreground text-sm">{t('common.none')}</span>
-
-                            )}
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell className="text-right">
-
-                          <Button
-
-                            variant="outline"
-
-                            size="sm"
-
-                            onClick={() => handleViewProfile(member.id)}
-
-                            title={t('common.viewProfile')}
-
-                          >
-
-                            <Eye className="h-4 w-4" />
-
-                          </Button>
-
-                        </TableCell>
-
-                      </TableRow>
-
-                    );
-
-                  })
-
-                )}
-
-              </TableBody>
-
-            </Table>
-
-          </div>
-
-
-
-          {/* Mobile Cards */}
-
-          <div className="md:hidden space-y-4">
-
-            {loading ? (
-
-              Array.from({ length: 2 }).map((_, i) => (
-
-                <Skeleton key={i} className="h-32 w-full" />
-
-              ))
-
-            ) : membersWithoutEndowment.length === 0 ? (
-
-              <div className="text-center py-12">
-
-                <AlertTriangle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-
-                <p className="text-muted-foreground">
-
-                  {t('observations.endowment.empty')}
-
-                </p>
-
-              </div>
-
-            ) : (
-
-              membersWithoutEndowment.map((member) => {
-
-                const statusInfo = statusConfig[member.status];
-
-                const StatusIcon = statusInfo.icon;
-
-
-
-                return (
-
-                  <Card key={member.id}>
-
-                    <CardContent className="pt-4">
-
-                      <div className="flex items-start justify-between mb-3">
-
-                        <div className="flex items-center gap-3">
-
-                          {member.photoURL ? (
-                            <OfflineImage
-                              src={member.photoURL}
-                              alt={`${member.firstName} ${member.lastName}`}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-
-                              <Users className="h-5 w-5 text-muted-foreground" />
-
-                            </div>
-
-                          )}
-
-                          <div>
-
-                            <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-
-                            <p className="text-sm text-muted-foreground">
-
-                              {renderPhoneWithAge(member, t('common.noPhone'), (age) => t('observations.ageSuffix', { age }))}
-
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                        <Badge variant={statusInfo.variant} className="gap-1">
-
-                          <StatusIcon className="h-3 w-3" />
-
-                          {t(`member.status.${member.status}`)}
+                          {helperName}
 
                         </Badge>
 
-                      </div>
+                      ))
 
+                    ) : (
 
+                      <span className="text-xs text-muted-foreground">{t('common.unassigned')}</span>
 
-                      <div className="mb-3">
+                    )}
 
-                        <p className="text-sm font-medium mb-2">{t('observations.label.ordinances')}</p>
+                  </div>
 
-                        <div className="flex flex-wrap gap-1">
+                </div>
 
-                          {member.ordinances && member.ordinances.length > 0 ? (
+                {canWrite && (
 
-                            member.ordinances.map((ordinance) => (
+                  <div className="flex shrink-0 flex-col gap-2">
 
-                              <Badge key={ordinance} variant="outline" className="text-xs">
+                    <Button
 
-                                {t(`ordinance.${ordinance}`)}
+                      variant="outline"
 
-                              </Badge>
+                      size="sm"
 
-                            ))
+                      onClick={() => handleOpenHealthDialog(concern)}
 
-                          ) : (
+                      disabled={savingHealthConcern}
 
-                            <span className="text-muted-foreground text-sm">{t('common.none')}</span>
+                      title={t('observations.health.editTitle')}
 
-                          )}
+                    >
 
-                        </div>
+                      <Pencil className="h-4 w-4" />
 
-                      </div>
+                    </Button>
 
+                    <Button
 
+                      variant="outline"
 
-                      <div className="flex justify-end">
+                      size="sm"
 
-                        <Button
+                      onClick={() => handleDeleteHealthConcern(concern)}
 
-                          variant="outline"
+                      disabled={deletingHealthConcernId === concern.id}
 
-                          size="sm"
+                      title={t('observations.health.deleteTitle')}
 
-                          onClick={() => handleViewProfile(member.id)}
+                    >
 
-                        >
+                      {deletingHealthConcernId === concern.id ? (
 
-                          <Eye className="mr-2 h-4 w-4" />
+                        <Loader2 className="h-4 w-4 animate-spin" />
 
-                          {t('common.viewProfile')}
+                      ) : (
 
-                        </Button>
+                        <Trash2 className="h-4 w-4" />
 
-                      </div>
+                      )}
 
-                    </CardContent>
+                    </Button>
 
-                  </Card>
-
-                );
-
-              })
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
-
-      {/* Sección Sin Ordenanza de Elderes - Solo visible para Quórum de Élderes */}
-      {isElderesQuorum && (
-      <Card ref={withoutElderOrdinationRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <UserCheck className="h-5 w-5 text-purple-600" />
-
-            {t('observations.elder.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>
-
-            {t('observations.elder.sectionDescription')}
-
-          </CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('common.name')}</TableHead>
-
-                  <TableHead>{t('common.phone')}</TableHead>
-
-                  <TableHead>{t('common.status')}</TableHead>
-
-                  <TableHead>{t('observations.col.ordinancesReceived')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-
-                      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-36" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : membersWithoutElderOrdination.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={5} className="h-24 text-center">
-
-                      {t('observations.elder.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  membersWithoutElderOrdination.map((member) => {
-
-                    const statusInfo = statusConfig[member.status];
-
-                    const StatusIcon = statusInfo.icon;
-
-
-
-                    return (
-
-                      <TableRow key={member.id}>
-
-                        <TableCell className="font-medium">
-
-                          <div className="flex items-center gap-3">
-
-                            {member.photoURL ? (
-                              <OfflineImage
-                                src={member.photoURL}
-                                alt={`${member.firstName} ${member.lastName}`}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            ) : (
-
-                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-
-                                <Users className="h-4 w-4 text-muted-foreground" />
-
-                              </div>
-
-                            )}
-
-                            <span>{member.firstName} {member.lastName}</span>
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell>{renderPhoneWithAge(member, t('common.notSpecified'), (age) => t('observations.ageSuffix', { age }))}</TableCell>
-
-                        <TableCell>
-
-                          <Badge variant={statusInfo.variant} className="gap-1">
-
-                            <StatusIcon className="h-3 w-3" />
-
-                            {t(`member.status.${member.status}`)}
-
-                          </Badge>
-
-                        </TableCell>
-
-                        <TableCell>
-
-                          <div className="flex flex-wrap gap-1">
-
-                            {member.ordinances && member.ordinances.length > 0 ? (
-
-                              member.ordinances.map((ordinance) => (
-
-                                <Badge key={ordinance} variant="outline" className="text-xs">
-
-                                  {t(`ordinance.${ordinance}`)}
-
-                                </Badge>
-
-                              ))
-
-                            ) : (
-
-                              <span className="text-muted-foreground text-sm">{t('common.none')}</span>
-
-                            )}
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell className="text-right">
-
-                          <Button
-
-                            variant="outline"
-
-                            size="sm"
-
-                            onClick={() => handleViewProfile(member.id)}
-
-                            title={t('common.viewProfile')}
-
-                          >
-
-                            <Eye className="h-4 w-4" />
-
-                          </Button>
-
-                        </TableCell>
-
-                      </TableRow>
-
-                    );
-
-                  })
+                  </div>
 
                 )}
 
-              </TableBody>
+              </div>
 
-            </Table>
+            );
 
-          </div>
+          })}
 
+      </ObservationListDialog>
 
+      {/* Familias en seguimiento */}
 
-          {/* Mobile Cards */}
+      <ObservationListDialog
 
-          <div className="md:hidden space-y-4">
+        open={openList === 'familyFocus'}
 
-            {loading ? (
+        onOpenChange={(open) => setOpenList(open ? 'familyFocus' : null)}
 
-              Array.from({ length: 2 }).map((_, i) => (
+        title={t('observations.familyFocus.sectionTitle')}
 
-                <Skeleton key={i} className="h-32 w-full" />
+        description={t('observations.familyFocus.sectionDescription')}
 
-              ))
+        icon={Users}
 
-            ) : membersWithoutElderOrdination.length === 0 ? (
+        iconClassName="text-sky-600"
 
-              <div className="text-center py-12">
+        total={familyFocusCompanionships.length}
 
-                <UserCheck className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+        page={familyFocusListPage}
 
-                <p className="text-muted-foreground">
+        onPageChange={setListPage}
 
-                  {t('observations.elder.empty')}
+        emptyText={t('observations.familyFocus.empty')}
+
+        loading={loading}
+
+      >
+
+        {familyFocusCompanionships
+
+          .slice(familyFocusListStart, familyFocusListStart + OBSERVATION_LIST_PAGE_SIZE)
+
+          .map((companionship) => (
+
+            <div key={companionship.id} className="flex items-start gap-3 py-3">
+
+              <div className="min-w-0 flex-1 space-y-2">
+
+                <p className="font-medium leading-tight">
+
+                  {companionship.companions.join(' · ')}
 
                 </p>
 
-              </div>
+                {companionship.flaggedFamilies.map((flagged) => (
 
-            ) : (
+                  <div key={flagged.family.name} className="space-y-1">
 
-              membersWithoutElderOrdination.map((member) => {
+                    <p className="text-xs font-medium text-muted-foreground">
 
-                const statusInfo = statusConfig[member.status];
-
-                const StatusIcon = statusInfo.icon;
-
-
-
-                return (
-
-                  <Card key={member.id}>
-
-                    <CardContent className="pt-4">
-
-                      <div className="flex items-start justify-between mb-3">
-
-                        <div className="flex items-center gap-3">
-
-                          {member.photoURL ? (
-                            <OfflineImage
-                              src={member.photoURL}
-                              alt={`${member.firstName} ${member.lastName}`}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-
-                              <Users className="h-5 w-5 text-muted-foreground" />
-
-                            </div>
-
-                          )}
-
-                          <div>
-
-                            <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-
-                            <p className="text-sm text-muted-foreground">
-
-                              {renderPhoneWithAge(member, t('common.noPhone'), (age) => t('observations.ageSuffix', { age }))}
-
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                        <Badge variant={statusInfo.variant} className="gap-1">
-
-                          <StatusIcon className="h-3 w-3" />
-
-                          {t(`member.status.${member.status}`)}
-
-                        </Badge>
-
-                      </div>
-
-
-
-                      <div className="mb-3">
-
-                        <p className="text-sm font-medium mb-2">{t('observations.label.ordinances')}</p>
-
-                        <div className="flex flex-wrap gap-1">
-
-                          {member.ordinances && member.ordinances.length > 0 ? (
-
-                            member.ordinances.map((ordinance) => (
-
-                              <Badge key={ordinance} variant="outline" className="text-xs">
-
-                                {t(`ordinance.${ordinance}`)}
-
-                              </Badge>
-
-                            ))
-
-                          ) : (
-
-                            <span className="text-muted-foreground text-sm">{t('common.none')}</span>
-
-                          )}
-
-                        </div>
-
-                      </div>
-
-
-
-                      <div className="flex justify-end">
-
-                        <Button
-
-                          variant="outline"
-
-                          size="sm"
-
-                          onClick={() => handleViewProfile(member.id)}
-
-                        >
-
-                          <Eye className="mr-2 h-4 w-4" />
-
-                          {t('common.viewProfile')}
-
-                        </Button>
-
-                      </div>
-
-                    </CardContent>
-
-                  </Card>
-
-                );
-
-              })
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-      )}
-
-      {/* Sección Sin Sacerdocio Mayor - Solo visible para Quórum de Élderes */}
-      {isElderesQuorum && (
-      <Card ref={withoutHigherPriesthoodRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <UserCheck className="h-5 w-5 text-indigo-600" />
-
-            {t('observations.higherPriesthood.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>
-
-            {t('observations.higherPriesthood.sectionDescription')}
-
-          </CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('common.name')}</TableHead>
-
-                  <TableHead>{t('common.phone')}</TableHead>
-
-                  <TableHead>{t('common.status')}</TableHead>
-
-                  <TableHead>{t('observations.col.ordinancesReceived')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-
-                      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-36" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : membersWithoutHigherPriesthood.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={5} className="h-24 text-center">
-
-                      {t('observations.higherPriesthood.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  membersWithoutHigherPriesthood.map((member) => {
-
-                    const statusInfo = statusConfig[member.status];
-
-                    const StatusIcon = statusInfo.icon;
-
-
-
-                    return (
-
-                      <TableRow key={member.id}>
-
-                        <TableCell className="font-medium">
-
-                          <div className="flex items-center gap-3">
-
-                            {member.photoURL ? (
-                              <OfflineImage
-                                src={member.photoURL}
-                                alt={`${member.firstName} ${member.lastName}`}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            ) : (
-
-                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-
-                                <Users className="h-4 w-4 text-muted-foreground" />
-
-                              </div>
-
-                            )}
-
-                            <span>{member.firstName} {member.lastName}</span>
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell>{renderPhoneWithAge(member, t('common.notSpecified'), (age) => t('observations.ageSuffix', { age }))}</TableCell>
-
-                        <TableCell>
-
-                          <Badge variant={statusInfo.variant} className="gap-1">
-
-                            <StatusIcon className="h-3 w-3" />
-
-                            {t(`member.status.${member.status}`)}
-
-                          </Badge>
-
-                        </TableCell>
-
-                        <TableCell>
-
-                          <div className="flex flex-wrap gap-1">
-
-                            {member.ordinances && member.ordinances.length > 0 ? (
-
-                              member.ordinances.map((ordinance) => (
-
-                                <Badge key={ordinance} variant="outline" className="text-xs">
-
-                                  {t(`ordinance.${ordinance}`)}
-
-                                </Badge>
-
-                              ))
-
-                            ) : (
-
-                              <span className="text-muted-foreground text-sm">{t('common.none')}</span>
-
-                            )}
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell className="text-right">
-
-                          <Button
-
-                            variant="outline"
-
-                            size="sm"
-
-                            onClick={() => handleViewProfile(member.id)}
-
-                            title={t('common.viewProfile')}
-
-                          >
-
-                            <Eye className="h-4 w-4" />
-
-                          </Button>
-
-                        </TableCell>
-
-                      </TableRow>
-
-                    );
-
-                  })
-
-                )}
-
-              </TableBody>
-
-            </Table>
-
-          </div>
-
-
-
-          {/* Mobile Cards */}
-
-          <div className="md:hidden space-y-4">
-
-            {loading ? (
-
-              Array.from({ length: 2 }).map((_, i) => (
-
-                <Skeleton key={i} className="h-32 w-full" />
-
-              ))
-
-            ) : membersWithoutHigherPriesthood.length === 0 ? (
-
-              <div className="text-center py-12">
-
-                <UserCheck className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-
-                <p className="text-muted-foreground">
-
-                  {t('observations.higherPriesthood.empty')}
-
-                </p>
-
-              </div>
-
-            ) : (
-
-              membersWithoutHigherPriesthood.map((member) => {
-
-                const statusInfo = statusConfig[member.status];
-
-                const StatusIcon = statusInfo.icon;
-
-
-
-                return (
-
-                  <Card key={member.id}>
-
-                    <CardContent className="pt-4">
-
-                      <div className="flex items-start justify-between mb-3">
-
-                        <div className="flex items-center gap-3">
-
-                          {member.photoURL ? (
-                            <OfflineImage
-                              src={member.photoURL}
-                              alt={`${member.firstName} ${member.lastName}`}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-
-                              <Users className="h-5 w-5 text-muted-foreground" />
-
-                            </div>
-
-                          )}
-
-                          <div>
-
-                            <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-
-                            <p className="text-sm text-muted-foreground">
-
-                              {renderPhoneWithAge(member, t('common.noPhone'), (age) => t('observations.ageSuffix', { age }))}
-
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                        <Badge variant={statusInfo.variant} className="gap-1">
-
-                          <StatusIcon className="h-3 w-3" />
-
-                          {t(`member.status.${member.status}`)}
-
-                        </Badge>
-
-                      </div>
-
-
-
-                      <div className="mb-3">
-
-                        <p className="text-sm font-medium mb-2">{t('observations.label.ordinances')}</p>
-
-                        <div className="flex flex-wrap gap-1">
-
-                          {member.ordinances && member.ordinances.length > 0 ? (
-
-                            member.ordinances.map((ordinance) => (
-
-                              <Badge key={ordinance} variant="outline" className="text-xs">
-
-                                {t(`ordinance.${ordinance}`)}
-
-                              </Badge>
-
-                            ))
-
-                          ) : (
-
-                            <span className="text-muted-foreground text-sm">{t('common.none')}</span>
-
-                          )}
-
-                        </div>
-
-                      </div>
-
-
-
-                      <div className="flex justify-end">
-
-                        <Button
-
-                          variant="outline"
-
-                          size="sm"
-
-                          onClick={() => handleViewProfile(member.id)}
-
-                        >
-
-                          <Eye className="mr-2 h-4 w-4" />
-
-                          {t('common.viewProfile')}
-
-                        </Button>
-
-                      </div>
-
-                    </CardContent>
-
-                  </Card>
-
-                );
-
-              })
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-      )}
-
-      {/* Sección Sin Maestros Ministrantes */}
-
-      <Card ref={withoutMinisteringRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <UserX className="h-5 w-5 text-blue-600" />
-
-            {t('observations.ministering.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>
-
-            {t('observations.ministering.sectionDescription')}
-
-          </CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('common.name')}</TableHead>
-
-                  <TableHead>{t('common.phone')}</TableHead>
-
-                  <TableHead>{t('common.status')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-
-                      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : membersWithoutMinistering.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={4} className="h-24 text-center">
-
-                      {t('observations.ministering.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  membersWithoutMinistering.map((member) => {
-
-                    const statusInfo = statusConfig[member.status];
-
-                    const StatusIcon = statusInfo.icon;
-
-
-
-                    return (
-
-                      <TableRow key={member.id}>
-
-                        <TableCell className="font-medium">
-
-                          <div className="flex items-center gap-3">
-
-                            {member.photoURL ? (
-                              <OfflineImage
-                                src={member.photoURL}
-                                alt={`${member.firstName} ${member.lastName}`}
-                                width={32}
-                                height={32}
-                                className="w-8 h-8 rounded-full object-cover"
-                              />
-                            ) : (
-
-                              <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-
-                                <Users className="h-4 w-4 text-muted-foreground" />
-
-                              </div>
-
-                            )}
-
-                            <span>{member.firstName} {member.lastName}</span>
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell>{renderPhoneWithAge(member, t('common.notSpecified'), (age) => t('observations.ageSuffix', { age }))}</TableCell>
-
-                        <TableCell>
-
-                          <Badge variant={statusInfo.variant} className="gap-1">
-
-                            <StatusIcon className="h-3 w-3" />
-
-                            {t(`member.status.${member.status}`)}
-
-                          </Badge>
-
-                        </TableCell>
-
-                        <TableCell className="text-right">
-
-                          <Button
-
-                            variant="outline"
-
-                            size="sm"
-
-                            onClick={() => handleViewProfile(member.id)}
-
-                            title={t('common.viewProfile')}
-
-                          >
-
-                            <Eye className="h-4 w-4" />
-
-                          </Button>
-
-                        </TableCell>
-
-                      </TableRow>
-
-                    );
-
-                  })
-
-                )}
-
-              </TableBody>
-
-            </Table>
-
-          </div>
-
-
-
-          {/* Mobile Cards */}
-
-          <div className="md:hidden space-y-4">
-
-            {loading ? (
-
-              Array.from({ length: 2 }).map((_, i) => (
-
-                <Skeleton key={i} className="h-32 w-full" />
-
-              ))
-
-            ) : membersWithoutMinistering.length === 0 ? (
-
-              <div className="text-center py-12">
-
-                <UserX className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-
-                <p className="text-muted-foreground">
-
-                  {t('observations.ministering.empty')}
-
-                </p>
-
-              </div>
-
-            ) : (
-
-              membersWithoutMinistering.map((member) => {
-
-                const statusInfo = statusConfig[member.status];
-
-                const StatusIcon = statusInfo.icon;
-
-
-
-                return (
-
-                  <Card key={member.id}>
-
-                    <CardContent className="pt-4">
-
-                      <div className="flex items-start justify-between mb-3">
-
-                        <div className="flex items-center gap-3">
-
-                          {member.photoURL ? (
-                            <OfflineImage
-                              src={member.photoURL}
-                              alt={`${member.firstName} ${member.lastName}`}
-                              width={40}
-                              height={40}
-                              className="w-10 h-10 rounded-full object-cover"
-                            />
-                          ) : (
-
-                            <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-
-                              <Users className="h-5 w-5 text-muted-foreground" />
-
-                            </div>
-
-                          )}
-
-                          <div>
-
-                            <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-
-                            <p className="text-sm text-muted-foreground">
-
-                              {renderPhoneWithAge(member, t('common.noPhone'), (age) => t('observations.ageSuffix', { age }))}
-
-                            </p>
-
-                          </div>
-
-                        </div>
-
-                        <Badge variant={statusInfo.variant} className="gap-1">
-
-                          <StatusIcon className="h-3 w-3" />
-
-                          {t(`member.status.${member.status}`)}
-
-                        </Badge>
-
-                      </div>
-
-
-
-                      <div className="flex justify-end">
-
-                        <Button
-
-                          variant="outline"
-
-                          size="sm"
-
-                          onClick={() => handleViewProfile(member.id)}
-
-                        >
-
-                          <Eye className="mr-2 h-4 w-4" />
-
-                          {t('common.viewProfile')}
-
-                        </Button>
-
-                      </div>
-
-                    </CardContent>
-
-                  </Card>
-
-                );
-
-              })
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
-
-      {/* Sección Nuevos Conversos Inactivos */}
-      <Card ref={inactiveNewConvertsRef}>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <UserX className="h-5 w-5 text-amber-600" />
-            {t('observations.inactiveConverts.sectionTitle')}
-          </CardTitle>
-          <CardDescription>
-            {t('observations.inactiveConverts.sectionDescription')}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="hidden md:block">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{t('common.name')}</TableHead>
-                  <TableHead>{t('observations.col.baptismDate')}</TableHead>
-                  <TableHead>{t('observations.col.lastActivity')}</TableHead>
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {loading ? (
-                  Array.from({ length: 3 }).map((_, i) => (
-                    <TableRow key={i}>
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : inactiveNewConverts.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center">
-                      {t('observations.inactiveConverts.empty')}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  inactiveNewConverts.map((member) => (
-                    <TableRow key={member.id}>
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-3">
-                          {member.photoURL ? (
-                            <OfflineImage
-                              src={member.photoURL}
-                              alt={`${member.firstName} ${member.lastName}`}
-                              width={32}
-                              height={32}
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-                              <Users className="h-4 w-4 text-muted-foreground" />
-                            </div>
-                          )}
-                          <span>{member.firstName} {member.lastName}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {member.baptismDate
-                          ? format(member.baptismDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                          : t('common.notSpecifiedFeminine')}
-                      </TableCell>
-                      <TableCell>
-                        {member.lastActiveDate
-                          ? format(member.lastActiveDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                          : t('observations.never')}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleViewProfile(member.id)}
-                          title={t('common.viewProfile')}
-                        >
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          <div className="md:hidden space-y-4">
-            {loading ? (
-              Array.from({ length: 2 }).map((_, i) => (
-                <Skeleton key={i} className="h-32 w-full" />
-              ))
-            ) : inactiveNewConverts.length === 0 ? (
-              <div className="text-center py-12">
-                <UserX className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-                <p className="text-muted-foreground">
-                  {t('observations.inactiveConverts.empty')}
-                </p>
-              </div>
-            ) : (
-              inactiveNewConverts.map((member) => (
-                <Card key={member.id}>
-                  <CardContent className="pt-4">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        {member.photoURL ? (
-                          <OfflineImage
-                            src={member.photoURL}
-                            alt={`${member.firstName} ${member.lastName}`}
-                            width={40}
-                            height={40}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-                            <Users className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                        )}
-                        <div>
-                          <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-                          <p className="text-sm text-muted-foreground">
-                            {t('observations.baptismLabel', {
-                              date: member.baptismDate
-                                ? format(member.baptismDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                                : t('common.notSpecifiedFeminine'),
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {t('observations.lastActivityLabel', {
-                        date: member.lastActiveDate
-                          ? format(member.lastActiveDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                          : t('observations.never'),
-                      })}
-                    </p>
-
-                    <div className="flex justify-end">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewProfile(member.id)}
-                      >
-                        <Eye className="mr-2 h-4 w-4" />
-                        {t('common.viewProfile')}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))
-            )}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Sección Miembros Inactivos */}
-
-      <Card ref={inactiveRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <UserX className="h-5 w-5 text-red-600" />
-
-            {t('observations.inactive.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>
-
-            {t('observations.inactive.sectionDescription')}
-
-          </CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('common.name')}</TableHead>
-
-                  <TableHead>{t('common.phone')}</TableHead>
-
-                  <TableHead>{t('observations.col.birthDate')}</TableHead>
-
-                  <TableHead>{t('observations.col.lastActivity')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-32" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : inactiveMembers.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={5} className="h-24 text-center">
-
-                      {t('observations.inactive.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  inactiveMembers.map((member) => (
-
-                    <TableRow key={member.id}>
-
-                      <TableCell className="font-medium">
-
-                        <div className="flex items-center gap-3">
-
-                          {member.photoURL ? (
-
-                            <OfflineImage
-                              src={member.photoURL}
-                              alt={`${member.firstName} ${member.lastName}`}
-                              width={32}
-                              height={32}
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-
-                          ) : (
-
-                            <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
-
-                              <Users className="h-4 w-4 text-muted-foreground" />
-
-                            </div>
-
-                          )}
-
-                          <span>{member.firstName} {member.lastName}</span>
-
-                        </div>
-
-                      </TableCell>
-
-                      <TableCell>{renderPhoneWithAge(member, t('common.notSpecified'), (age) => t('observations.ageSuffix', { age }))}</TableCell>
-
-                      <TableCell>
-
-                        {member.birthDate
-
-                          ? format(member.birthDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-
-                          : t('common.notSpecifiedFeminine')}
-
-                      </TableCell>
-
-                      <TableCell>
-
-                        {member.lastActiveDate
-
-                          ? format(member.lastActiveDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-
-                          : t('observations.never')}
-
-                      </TableCell>
-
-                      <TableCell className="text-right">
-
-                        <Button
-
-                          variant="outline"
-
-                          size="sm"
-
-                          onClick={() => handleViewProfile(member.id)}
-
-                          title={t('common.viewProfile')}
-
-                        >
-
-                          <Eye className="h-4 w-4" />
-
-                        </Button>
-
-                      </TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                )}
-
-              </TableBody>
-
-            </Table>
-
-          </div>
-
-
-
-          {/* Mobile Cards */}
-
-          <div className="md:hidden space-y-4">
-
-            {loading ? (
-
-              Array.from({ length: 2 }).map((_, i) => (
-
-                <Skeleton key={i} className="h-32 w-full" />
-
-              ))
-
-            ) : inactiveMembers.length === 0 ? (
-
-              <div className="text-center py-12">
-
-                <UserX className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-
-                <p className="text-muted-foreground">
-
-                  {t('observations.inactive.empty')}
-
-                </p>
-
-              </div>
-
-            ) : (
-
-              inactiveMembers.map((member) => (
-
-                <Card key={member.id}>
-
-                  <CardContent className="pt-4">
-
-                    <div className="flex items-start justify-between mb-3">
-
-                      <div className="flex items-center gap-3">
-
-                        {member.photoURL ? (
-
-                          <OfflineImage
-                            src={member.photoURL}
-                            alt={`${member.firstName} ${member.lastName}`}
-                            width={40}
-                            height={40}
-                            className="w-10 h-10 rounded-full object-cover"
-                          />
-
-                        ) : (
-
-                          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center">
-
-                            <Users className="h-5 w-5 text-muted-foreground" />
-
-                          </div>
-
-                        )}
-
-                        <div>
-
-                          <h3 className="font-semibold">{member.firstName} {member.lastName}</h3>
-
-                          <p className="text-sm text-muted-foreground">
-
-                            {renderPhoneWithAge(member, t('common.noPhone'), (age) => t('observations.ageSuffix', { age }))}
-
-                          </p>
-
-                        </div>
-
-                      </div>
-
-                    </div>
-
-
-
-
-
-
-                    <p className="text-sm text-muted-foreground mb-3">
-
-                      {t('observations.lastActivityLabel', {
-                        date: member.lastActiveDate
-                          ? format(member.lastActiveDate.toDate(), 'd MMM yyyy', { locale: getDateFnsLocale() })
-                          : t('observations.never'),
-                      })}
+                      {flagged.family.name}
 
                     </p>
 
+                    <div className="flex flex-wrap gap-1">
 
+                      {flagged.members.map((member) => {
 
-                    <div className="flex justify-end">
+                        const statusInfo = statusConfig[member.status];
 
-                      <Button
+                        const StatusIcon = statusInfo.icon;
 
-                        variant="outline"
+                        return (
 
-                        size="sm"
+                          <Badge key={member.id} variant={statusInfo.variant} className="gap-1 text-[10px]">
 
-                        onClick={() => handleViewProfile(member.id)}
+                            <StatusIcon className="h-3 w-3" />
 
-                      >
+                            {member.firstName} {member.lastName}
 
-                        <Eye className="mr-2 h-4 w-4" />
+                          </Badge>
 
-                        {t('common.viewProfile')}
+                        );
 
-                      </Button>
+                      })}
 
                     </div>
 
-                  </CardContent>
+                  </div>
 
-                </Card>
-
-              ))
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
-
-      {/* Sección Compañerismos con familias menos activas */}
-
-      <Card ref={familyFocusCompanionshipsRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <Users className="h-5 w-5 text-sky-600" />
-
-            {t('observations.familyFocus.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>{t('observations.familyFocus.sectionDescription')}</CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          {/* Desktop Table */}
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('observations.col.companionship')}</TableHead>
-
-                  <TableHead>{t('observations.col.familiesAndStatus')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-52" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : familyFocusCompanionships.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-
-                      {t('observations.familyFocus.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  familyFocusCompanionships.map((companionship) => (
-
-                    <TableRow key={companionship.id}>
-
-                      <TableCell className="font-medium">
-
-                        {companionship.companions.map((c, i) => (
-
-                          <div key={i}>
-
-                            <span>{c}</span>
-
-                            {i < companionship.companions.length - 1 && <hr className="my-1" />}
-
-                          </div>
-
-                        ))}
-
-                      </TableCell>
-
-                      <TableCell>
-
-                        {companionship.flaggedFamilies.map((flagged, index) => (
-
-                          <div key={flagged.family.name} className="space-y-1 py-1">
-
-                            <p className="font-medium">{flagged.family.name}</p>
-
-                            <div className="flex flex-wrap gap-1">
-
-                              {flagged.members.map((member) => {
-
-                                const statusInfo = statusConfig[member.status];
-
-                                const StatusIcon = statusInfo.icon;
-
-                                return (
-
-                                  <Badge key={member.id} variant={statusInfo.variant} className="gap-1">
-
-                                    <StatusIcon className="h-3 w-3" />
-
-                                    {member.firstName} {member.lastName}
-
-                                  </Badge>
-
-                                );
-
-                              })}
-
-                            </div>
-
-                            {index < companionship.flaggedFamilies.length - 1 && <div className="my-2 h-px bg-muted" />}
-
-                          </div>
-
-                        ))}
-
-                      </TableCell>
-
-                      <TableCell className="text-right">
-
-                        <Button
-
-                          variant="outline"
-
-                          size="sm"
-
-                          onClick={() => router.push(`/ministering/${companionship.id}`)}
-
-                          title={t('observations.viewCompanionship')}
-
-                        >
-
-                          <Eye className="h-4 w-4" />
-
-                        </Button>
-
-                      </TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                )}
-
-              </TableBody>
-
-            </Table>
-
-          </div>
-
-
-
-          {/* Mobile Cards */}
-
-          <div className="md:hidden space-y-4">
-
-            {loading ? (
-
-              Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)
-
-            ) : familyFocusCompanionships.length === 0 ? (
-
-              <div className="text-center py-12">
-
-                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-
-                <p className="text-muted-foreground">{t('observations.familyFocus.empty')}</p>
+                ))}
 
               </div>
 
-            ) : (
+              <Button
 
-              familyFocusCompanionships.map((companionship) => (
+                variant="outline"
 
-                <Card key={companionship.id}>
+                size="sm"
 
-                  <CardContent className="pt-4 space-y-4">
+                onClick={() => router.push(`/ministering/${companionship.id}`)}
 
-                    <div>
+                title={t('observations.viewCompanionship')}
 
-                      <p className="text-sm font-medium mb-2">{t('observations.companionsLabel')}</p>
+              >
 
-                      {companionship.companions.map((c, i) => (
+                <Eye className="h-4 w-4" />
 
-                        <div key={i}>
+              </Button>
 
-                          <p>{c}</p>
+            </div>
 
-                          {i < companionship.companions.length - 1 && <hr className="my-1" />}
+          ))}
 
-                        </div>
+      </ObservationListDialog>
 
-                      ))}
+      {/* Compañerías problemáticas */}
 
-                    </div>
+      <ObservationListDialog
 
-                    <div>
+        open={openList === 'problematic'}
 
-                      <p className="text-sm font-medium mb-2">{t('observations.familiesToEncourage')}</p>
+        onOpenChange={(open) => setOpenList(open ? 'problematic' : null)}
 
-                      {companionship.flaggedFamilies.map((flagged) => (
+        title={t('observations.problematic.sectionTitle')}
 
-                        <div key={flagged.family.name} className="mb-3 last:mb-0">
+        description={t('observations.problematic.sectionDescription')}
 
-                          <p className="font-semibold">{flagged.family.name}</p>
+        icon={Users}
 
-                          <div className="mt-1 flex flex-wrap gap-1">
+        iconClassName="text-orange-600"
 
-                            {flagged.members.map((member) => {
+        total={problematicCompanionships.length}
 
-                              const statusInfo = statusConfig[member.status];
+        page={problematicListPage}
 
-                              const StatusIcon = statusInfo.icon;
+        onPageChange={setListPage}
 
-                              return (
+        emptyText={t('observations.problematic.empty')}
 
-                                <Badge key={member.id} variant={statusInfo.variant} className="gap-1">
+        loading={loading}
 
-                                  <StatusIcon className="h-3 w-3" />
+      >
 
-                                  {member.firstName}
+        {problematicCompanionships
 
-                                </Badge>
+          .slice(problematicListStart, problematicListStart + OBSERVATION_LIST_PAGE_SIZE)
 
-                              );
+          .map((companionship) => {
 
-                            })}
+            const inactiveCompanions = companionship.companions.filter((companionName) => {
 
-                          </div>
+              const member = members.find(
 
-                        </div>
+                (m) => `${m.firstName} ${m.lastName}`.toLowerCase() === companionName.toLowerCase()
 
-                      ))}
+              );
 
-                    </div>
+              return member && (member.status === 'less_active' || member.status === 'inactive');
 
-                    <div className="flex justify-end">
+            });
 
-                      <Button
+            return (
 
-                        variant="outline"
+              <div key={companionship.id} className="flex items-start gap-3 py-3">
 
-                        size="sm"
+                <div className="min-w-0 flex-1 space-y-2">
 
-                        onClick={() => router.push(`/ministering/${companionship.id}`)}
+                  <p className="font-medium leading-tight">
 
-                      >
+                    {companionship.companions.join(' · ')}
 
-                        <Eye className="mr-2 h-4 w-4" />{t('observations.viewMore')}
+                  </p>
 
-                      </Button>
+                  <p className="text-xs text-muted-foreground">
 
-                    </div>
+                    {companionship.families.map((family) => family.name).join(' · ')}
 
-                  </CardContent>
+                  </p>
 
-                </Card>
+                  <div className="flex flex-wrap gap-1">
 
-              ))
+                    {inactiveCompanions.map((companionName, index) => {
 
-            )}
+                      const member = members.find(
 
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
-
-      {/* Sección Compañerías Problemáticas */}
-
-      <Card ref={problematicCompanionshipsRef}>
-
-        <CardHeader>
-
-          <CardTitle className="flex items-center gap-2">
-
-            <Users className="h-5 w-5 text-orange-600" />
-
-            {t('observations.problematic.sectionTitle')}
-
-          </CardTitle>
-
-          <CardDescription>
-
-            {t('observations.problematic.sectionDescription')}
-
-          </CardDescription>
-
-        </CardHeader>
-
-        <CardContent>
-
-          <div className="hidden md:block">
-
-            <Table>
-
-              <TableHeader>
-
-                <TableRow>
-
-                  <TableHead>{t('observations.col.companions')}</TableHead>
-
-                  <TableHead>{t('observations.col.assignedFamilies')}</TableHead>
-
-                  <TableHead>{t('observations.col.companionStatus')}</TableHead>
-
-                  <TableHead className="text-right">{t('common.actions')}</TableHead>
-
-                </TableRow>
-
-              </TableHeader>
-
-              <TableBody>
-
-                {loading ? (
-
-                  Array.from({ length: 3 }).map((_, i) => (
-
-                    <TableRow key={i}>
-
-                      <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-
-                      <TableCell><Skeleton className="h-5 w-48" /></TableCell>
-
-                      <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
-
-                      <TableCell className="text-right"><Skeleton className="h-8 w-24" /></TableCell>
-
-                    </TableRow>
-
-                  ))
-
-                ) : problematicCompanionships.length === 0 ? (
-
-                  <TableRow>
-
-                    <TableCell colSpan={4} className="h-24 text-center">
-
-                      {t('observations.problematic.empty')}
-
-                    </TableCell>
-
-                  </TableRow>
-
-                ) : (
-
-                  problematicCompanionships.map((companionship) => {
-
-                    const inactiveCompanions = companionship.companions.filter(companionName => {
-
-                      const member = members.find(m =>
-
-                        `${m.firstName} ${m.lastName}`.toLowerCase() === companionName.toLowerCase()
+                        (m) => `${m.firstName} ${m.lastName}`.toLowerCase() === companionName.toLowerCase()
 
                       );
 
-                      return member && (member.status === 'less_active' || member.status === 'inactive');
+                      if (!member) return null;
 
-                    });
+                      const statusInfo = statusConfig[member.status];
 
+                      const StatusIcon = statusInfo.icon;
 
+                      return (
 
-                    return (
+                        <Badge key={`${companionName}-${index}`} variant={statusInfo.variant} className="gap-1 text-[10px]">
 
-                      <TableRow key={companionship.id}>
+                          <StatusIcon className="h-3 w-3" />
 
-                        <TableCell className="font-medium">
+                          {companionName} · {t(`member.status.${member.status}`)}
 
-                          {companionship.companions.map((c, i) => (
+                        </Badge>
 
-                            <div key={i}>
+                      );
 
-                              <span>{c}</span>
+                    })}
 
-                              {i < companionship.companions.length - 1 && <hr className="my-1" />}
+                  </div>
 
-                            </div>
+                </div>
 
-                          ))}
+                <Button
 
-                        </TableCell>
+                  variant="outline"
 
-                        <TableCell>
+                  size="sm"
 
-                          {companionship.families.map((f, i) => (
+                  onClick={() => router.push(`/ministering/${companionship.id}`)}
 
-                            <div key={i}>
+                  title={t('observations.viewCompanionshipButton')}
 
-                              <span>{f.name}</span>
+                >
 
-                              {i < companionship.families.length - 1 && <hr className="my-1" />}
+                  <Eye className="h-4 w-4" />
 
-                            </div>
-
-                          ))}
-
-                        </TableCell>
-
-                        <TableCell>
-
-                          <div className="flex flex-wrap gap-1">
-
-                            {inactiveCompanions.map((companionName, i) => {
-
-                              const member = members.find(m =>
-
-                                `${m.firstName} ${m.lastName}`.toLowerCase() === companionName.toLowerCase()
-
-                              );
-
-                              if (!member) return null;
-
-                              const statusInfo = statusConfig[member.status];
-
-                              const StatusIcon = statusInfo.icon;
-
-                              return (
-
-                                <Badge key={i} variant={statusInfo.variant} className="gap-1">
-
-                                  <StatusIcon className="h-3 w-3" />
-
-                                  {t(`member.status.${member.status}`)}
-
-                                </Badge>
-
-                              );
-
-                            })}
-
-                          </div>
-
-                        </TableCell>
-
-                        <TableCell className="text-right">
-
-                          <Button
-
-                            variant="outline"
-
-                            size="sm"
-
-                            onClick={() => router.push(`/ministering/${companionship.id}`)}
-
-                            title={t('observations.viewCompanionshipButton')}
-
-                          >
-
-                            <Eye className="h-4 w-4" />
-
-                          </Button>
-
-                        </TableCell>
-
-                      </TableRow>
-
-                    );
-
-                  })
-
-                )}
-
-              </TableBody>
-
-            </Table>
-
-          </div>
-
-
-
-          {/* Mobile Cards */}
-
-          <div className="md:hidden space-y-4">
-
-            {loading ? (
-
-              Array.from({ length: 2 }).map((_, i) => (
-
-                <Skeleton key={i} className="h-32 w-full" />
-
-              ))
-
-            ) : problematicCompanionships.length === 0 ? (
-
-              <div className="text-center py-12">
-
-                <Users className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-
-                <p className="text-muted-foreground">
-
-                  {t('observations.problematic.empty')}
-
-                </p>
+                </Button>
 
               </div>
 
-            ) : (
+            );
 
-              problematicCompanionships.map((companionship) => {
+          })}
 
-                const inactiveCompanions = companionship.companions.filter(companionName => {
-
-                  const member = members.find(m =>
-
-                    `${m.firstName} ${m.lastName}`.toLowerCase() === companionName.toLowerCase()
-
-                  );
-
-                  return member && (member.status === 'less_active' || member.status === 'inactive');
-
-                });
-
-
-
-                return (
-
-                  <Card key={companionship.id}>
-
-                    <CardContent className="pt-4">
-
-                      <div className="mb-3">
-
-                        <p className="text-sm font-medium mb-2">{t('observations.companionsLabel')}</p>
-
-                        {companionship.companions.map((c, i) => (
-
-                          <div key={i}>
-
-                            <p>{c}</p>
-
-                            {i < companionship.companions.length - 1 && <hr className="my-1" />}
-
-                          </div>
-
-                        ))}
-
-                      </div>
-
-
-
-                      <div className="mb-3">
-
-                        <p className="text-sm font-medium mb-2">{t('observations.familiesLabel')}</p>
-
-                        {companionship.families.map((f, i) => (
-
-                          <div key={i}>
-
-                            <p>{f.name}</p>
-
-                            {i < companionship.families.length - 1 && <hr className="my-1" />}
-
-                          </div>
-
-                        ))}
-
-                      </div>
-
-
-
-                      <div className="mb-3">
-
-                        <p className="text-sm font-medium mb-2">{t('observations.companionStatusLabel')}</p>
-
-                        <div className="flex flex-wrap gap-1">
-
-                          {inactiveCompanions.map((companionName, i) => {
-
-                            const member = members.find(m =>
-
-                              `${m.firstName} ${m.lastName}`.toLowerCase() === companionName.toLowerCase()
-
-                            );
-
-                            if (!member) return null;
-
-                            const statusInfo = statusConfig[member.status];
-
-                            const StatusIcon = statusInfo.icon;
-
-                            return (
-
-                              <Badge key={i} variant={statusInfo.variant} className="gap-1">
-
-                                <StatusIcon className="h-3 w-3" />
-
-                                {t(`member.status.${member.status}`)}
-
-                              </Badge>
-
-                            );
-
-                          })}
-
-                        </div>
-
-                      </div>
-
-
-
-                      <div className="flex justify-end">
-
-                        <Button
-
-                          variant="outline"
-
-                          size="sm"
-
-                          onClick={() => router.push(`/ministering/${companionship.id}`)}
-
-                        >
-
-                          <Eye className="mr-2 h-4 w-4" />
-
-                          {t('observations.viewCompanionshipButton')}
-
-                        </Button>
-
-                      </div>
-
-                    </CardContent>
-
-                  </Card>
-
-                );
-
-              })
-
-            )}
-
-          </div>
-
-        </CardContent>
-
-      </Card>
-
-
+      </ObservationListDialog>
 
       <Dialog
         open={healthPickerOpen}
