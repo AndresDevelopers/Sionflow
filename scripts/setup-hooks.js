@@ -125,3 +125,25 @@ console.log('');
 console.log('To run the changelog generator manually:');
 console.log('  npm run changelog');
 console.log('');
+
+
+// Regression pre-push hook is installed alongside the existing post-commit
+// changelog hook. No core.hooksPath override and no remote/production changes.
+const PRE_PUSH = path.join(HOOKS_DIR, 'pre-push');
+const PRE_PUSH_CONTENT = '#!/bin/sh\n# Sionflow history-based regression gate; installed by scripts/setup-hooks.js\nnode scripts/local-regression-gate.mjs --pre-push\n';
+if (fs.existsSync(PRE_PUSH)) {
+  const previous = fs.readFileSync(PRE_PUSH, 'utf8');
+  if (!previous.includes('scripts/local-regression-gate.mjs --pre-push') &&
+      !previous.includes('scripts/setup-hooks.js')) {
+    console.error('Existing custom pre-push hook detected; refusing to replace it. Integrate the gate manually.');
+    process.exitCode = 1;
+  } else {
+    fs.writeFileSync(PRE_PUSH, PRE_PUSH_CONTENT, 'utf8');
+  }
+} else {
+  fs.writeFileSync(PRE_PUSH, PRE_PUSH_CONTENT, 'utf8');
+}
+if (process.exitCode !== 1) {
+  try { fs.chmodSync(PRE_PUSH, '755'); } catch {}
+  console.log('Sionflow pre-push regression guard installed; post-commit changelog preserved.');
+}

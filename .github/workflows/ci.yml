@@ -32,6 +32,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Verify regression and policy gate tests
+        run: node --test scripts/local-regression-gate.spec.mjs scripts/cloud-regression-gate.spec.mjs scripts/ci-policy-guard.spec.mjs
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -43,6 +46,9 @@ jobs:
 
       - name: Role unit tests (node:test)
         run: pnpm test:roles
+
+      - name: Dependency security audit (high or critical)
+        run: pnpm audit --audit-level=high
 
       - name: Production build
         run: pnpm build
