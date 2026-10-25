@@ -189,7 +189,7 @@ function approveTestChanges({ baseSha, headSha, plan }) {
   console.log("[regresión] Esta aprobación NO sustituye etiquetas y comentario SHA en un PR.");
 }
 
-/** Regression quality stages; the production path may not drop critical E2E. */
+/** Sionflow regression stages. Browser E2E are not configured in this repository; never claim they ran. */
 export function gateCommands(strict, shouldTest) {
   if (!strict && !shouldTest) return [];
   const selfTests = { bin: "node", args: ["--test", "scripts/local-regression-gate.spec.mjs", "scripts/cloud-regression-gate.spec.mjs", "scripts/ci-policy-guard.spec.mjs"], mode: "test" };
@@ -275,7 +275,7 @@ function main() {
       console.log(`[regresión] Ejecutando en entorno aislado: ${stage.bin} ${stage.args.join(" ")}`);
       run(stage.bin, stage.args, isolatedEnv(stage.mode));
     }
-    console.log("[regresión] VERIFICACIÓN PARCIAL COMPLETADA: pruebas unitarias/cobertura y TypeScript ejecutados; historial, diff, permisos y E2E NO VERIFICADOS.");
+    console.log("[regresión] VERIFICACIÓN PARCIAL COMPLETADA: pruebas unitarias y TypeScript ejecutados; historial, diff, permisos y E2E NO VERIFICADOS.");
     return;
   }
   let head;
@@ -305,13 +305,13 @@ function main() {
       throw new Error("El main remoto no es ancestro de HEAD o el SHA remoto no está disponible. Haz fetch/rebase sin forzar historial.");
     }
   }
-  const approvalOnMaster = mode === "--approve-tests" && ["main"].includes(git(["symbolic-ref", "--short", "HEAD"]));
-  if (approvalOnMaster) {
+  const approvalOnMain = mode === "--approve-tests" && ["main"].includes(git(["symbolic-ref", "--short", "HEAD"]));
+  if (approvalOnMain) {
     try { git(["merge-base", "--is-ancestor", sourceSha, head]); }
     catch { throw new Error("Actualiza origin/main; no se puede aprobar contra una base divergente."); }
   }
   let diffBase;
-  try { diffBase = strict || approvalOnMaster ? sourceSha : git(["merge-base", sourceSha, head]); }
+  try { diffBase = strict || approvalOnMain ? sourceSha : git(["merge-base", sourceSha, head]); }
   catch { throw new Error("No hay un ancestro común entre HEAD y la base Git. Revisa si falta historial (shallow clone) sin hacer reset ni reescribir commits."); }
   if (!/^[0-9a-f]{40}$/.test(diffBase)) throw new Error("No se pudo resolver base de comparación.");
   const changes = parseNameStatusZ(execFileSync("git", ["diff", "--name-status", "-z", "--find-renames", diffBase, head], {
@@ -394,7 +394,7 @@ function main() {
   if (git(["rev-parse", "HEAD"]) !== head || git(["status", "--porcelain", "--untracked-files=no"])) {
     throw new Error("El árbol Git cambió mientras se ejecutaban las pruebas. Vuelve a confirmar y verificar.");
   }
-  console.log(strict ? "[regresión] Main: las comprobaciones locales configuradas pasaron; GitHub CI aún debe validar el commit." : "[regresión] Tests locales aprobados; GitHub CI/E2E siguen siendo obligatorios en el PR.");
+  console.log(strict ? "[regresión] Main: las comprobaciones locales configuradas pasaron; GitHub CI aún debe validar el commit." : "[regresión] Tests locales aprobados; GitHub CI sigue siendo obligatorio en el PR; E2E no ejecutados.");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
