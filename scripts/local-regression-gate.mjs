@@ -262,11 +262,11 @@ function run(bin, args, env) {
 
 function main() {
   const mode = process.argv[2] || "--report";
-  if (!["--report", "--preflight", "--check-worktree", "--check-snapshot", "--check", "--check-master", "--approve-tests", "--pre-push"].includes(mode) || process.argv.length > 3) {
-    throw new Error("Uso: node scripts/local-regression-gate.mjs [--report|--preflight|--check-worktree|--check-snapshot|--check|--check-master|--approve-tests|--pre-push]");
+  if (!["--report", "--preflight", "--check-worktree", "--check-snapshot", "--check", "--check-main", "--approve-tests", "--pre-push"].includes(mode) || process.argv.length > 3) {
+    throw new Error("Uso: node scripts/local-regression-gate.mjs [--report|--preflight|--check-worktree|--check-snapshot|--check|--check-main|--approve-tests|--pre-push]");
   }
   // This non-certifying escape hatch intentionally performs NO Git operation.
-  // It is never selected by --check, --check-master, --approve-tests or --pre-push.
+  // It is never selected by --check, --check-main, --approve-tests or --pre-push.
   if (mode === "--check-snapshot") {
     console.warn("[regresión] VERIFICACIÓN PARCIAL SIN HISTORIAL GIT (--check-snapshot).");
     console.warn("[regresión] NO se comparó con main/HEAD, ni se verificaron modificaciones de tests previos, ni aprobaciones de cambios.");
@@ -282,8 +282,8 @@ function main() {
   try { head = git(["rev-parse", "--verify", "HEAD"]); }
   catch { throw new Error("No hay repositorio Git válido con un commit HEAD. Para comprobar el código SIN historial usa --check-snapshot (parcial, sin certificación); para subir cambios usa un clon Git y PR."); }
   const push = mode === "--pre-push" ? checkPrePushInput(readFileSync(0, "utf8"), head) : null;
-  const strict = Boolean(push?.production || mode === "--check-master");
-  if (strict && !["main", "main"].includes(git(["symbolic-ref", "--short", "HEAD"]))) {
+  const strict = Boolean(push?.production || mode === "--check-main");
+  if (strict && !["main"].includes(git(["symbolic-ref", "--short", "HEAD"]))) {
     throw new Error("Para verificar main, cambia primero a la rama principal local.");
   }
   if (requiresCleanTrackedTree(mode) && git(["status", "--porcelain", "--untracked-files=no"])) {
@@ -305,7 +305,7 @@ function main() {
       throw new Error("El main remoto no es ancestro de HEAD o el SHA remoto no está disponible. Haz fetch/rebase sin forzar historial.");
     }
   }
-  const approvalOnMaster = mode === "--approve-tests" && ["main", "main"].includes(git(["symbolic-ref", "--short", "HEAD"]));
+  const approvalOnMaster = mode === "--approve-tests" && ["main"].includes(git(["symbolic-ref", "--short", "HEAD"]));
   if (approvalOnMaster) {
     try { git(["merge-base", "--is-ancestor", sourceSha, head]); }
     catch { throw new Error("Actualiza origin/main; no se puede aprobar contra una base divergente."); }
@@ -324,7 +324,7 @@ function main() {
   if (protectedGuards.length) {
     console.warn("[regresión] Cambios en mecanismos de protección (requieren revisión por PR):");
     for (const entry of protectedGuards) console.warn(`  ${entry.status} ${entry.previousPath ? entry.previousPath + " -> " : ""}${entry.path}`);
-    if (strict || (mode === "--approve-tests" && ["main", "main"].includes(git(["symbolic-ref", "--short", "HEAD"])))) {
+    if (strict || (mode === "--approve-tests" && ["main"].includes(git(["symbolic-ref", "--short", "HEAD"])))) {
       throw new Error("No se permiten cambios directos de hooks, CI, instrucciones o controles críticos en main. Crea un PR con autorización humana.");
     }
   }
@@ -386,7 +386,7 @@ function main() {
     console.log("[regresión] Solo documentación en rama feature; no se ejecutan tests de aplicación.");
     return;
   }
-  console.log(strict ? "[regresión] Master directo: gates completos locales y E2E aislados (sin credenciales reales)." : "[regresión] Rama de desarrollo: tests unitarios con cobertura y TypeScript.");
+  console.log(strict ? "[regresión] Push directo a main: controles de tests, roles, lint, auditoría y build sintético aislado (sin credenciales reales)." : "[regresión] Rama de desarrollo: tests unitarios y TypeScript.");
   for (const stage of gateCommands(strict, plan.shouldTest)) {
     console.log(`[regresión] Ejecutando: ${stage.bin} ${stage.args.join(" ")}`);
     run(stage.bin, stage.args, isolatedEnv(stage.mode));
@@ -394,7 +394,7 @@ function main() {
   if (git(["rev-parse", "HEAD"]) !== head || git(["status", "--porcelain", "--untracked-files=no"])) {
     throw new Error("El árbol Git cambió mientras se ejecutaban las pruebas. Vuelve a confirmar y verificar.");
   }
-  console.log(strict ? "[regresión] Master: todas las comprobaciones locales aprobadas; GitHub CI aún debe validar el commit." : "[regresión] Tests locales aprobados; GitHub CI/E2E siguen siendo obligatorios en el PR.");
+  console.log(strict ? "[regresión] Main: las comprobaciones locales configuradas pasaron; GitHub CI aún debe validar el commit." : "[regresión] Tests locales aprobados; GitHub CI/E2E siguen siendo obligatorios en el PR.");
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
