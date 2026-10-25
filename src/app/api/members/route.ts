@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { unstable_cache, revalidateTag } from 'next/cache';
+import { revalidateTag } from 'next/cache';
 import { firestoreAdmin } from '@/lib/firebase-admin';
 import { Member, MemberStatus } from '@/lib/types';
 import { createMember } from '@/lib/members-data';
@@ -110,21 +110,6 @@ async function fetchMembers(
   return members;
 }
 
-// Cache key must include barrioOrg so different wards/orgs don't share cached data
-function getMembersCached(barrioOrg: string, status?: MemberStatus, limit?: number) {
-  const cacheKey = `members-${barrioOrg}-${status || 'all'}-${limit || 'nolimit'}`;
-  const tags = ['members', `members-${barrioOrg}`];
-
-  return unstable_cache(
-    () => fetchMembers(barrioOrg, status, { limit }),
-    [cacheKey],
-    {
-      revalidate: 3600, // 1 hour
-      tags
-    }
-  )();
-}
-
 export async function GET(request: Request) {
   const limited = await enforceRateLimit(request, 'api');
   if (limited) return limited;
@@ -138,19 +123,16 @@ export async function GET(request: Request) {
     const limitParam = searchParams.get('limit');
     const limit = limitParam ? parseInt(limitParam, 10) || undefined : undefined;
 
-    // In development, always fetch fresh data without cache
-    if (process.env.NODE_ENV !== 'production') {
-      const members = await fetchMembers(barrioOrg, status || undefined, { limit });
-      const response = NextResponse.json(members);
-      response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
-      response.headers.set('Pragma', 'no-cache');
-      response.headers.set('Expires', '0');
-      return response;
-    }
-
-    // Use cached version only in production
-    const members = await getMembersCached(barrioOrg, status || undefined, limit);
-    return NextResponse.json(members);
+    // Always read fresh: members are written straight to Firestore from the
+    // client SDK / Cloud Functions, so a Next.js data cache is never
+    // invalidated by those writes. Caching it made just-created members
+    // disappear from the list on the next automatic sync.
+    const members = await fetchMembers(barrioOrg, status || undefined, { limit });
+    const response = NextResponse.json(members);
+    response.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+    response.headers.set('Pragma', 'no-cache');
+    response.headers.set('Expires', '0');
+    return response;
   } catch (error) {
     const status = getErrorStatus(error, 500);
     if (status === 401 || status === 403) {

@@ -31,6 +31,8 @@ interface ObservationListDialogProps {
   loading?: boolean;
   /** Optional header action (e.g. "Add person" on the health list) */
   actions?: ReactNode;
+  /** Optional toolbar under the header (search / filters) */
+  toolbar?: ReactNode;
   children: ReactNode;
 }
 
@@ -52,6 +54,7 @@ export function ObservationListDialog({
   emptyText,
   loading = false,
   actions,
+  toolbar,
   children,
 }: ObservationListDialogProps) {
   const { t } = useI18n();
@@ -74,6 +77,10 @@ export function ObservationListDialog({
             {actions}
           </div>
         </DialogHeader>
+
+        {toolbar ? (
+          <div className="shrink-0 border-b px-6 py-3">{toolbar}</div>
+        ) : null}
 
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6">
           {loading ? (

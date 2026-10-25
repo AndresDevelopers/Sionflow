@@ -24,6 +24,15 @@ function makeMember(index: number): Member {
   } as unknown as Member;
 }
 
+function makeTempleRecommendMember(index: number, firstName: string, daysFromNow: number): Member {
+  return {
+    ...makeMember(index),
+    firstName,
+    hasTempleRecommend: true,
+    templeRecommendExpirationDate: new Date(Date.now() + daysFromNow * 86_400_000),
+  } as unknown as Member;
+}
+
 beforeEach(() => {
   localStorage.clear();
   vi.mocked(getMembersByStatus).mockResolvedValue(
@@ -55,6 +64,53 @@ describe('observations page lists', () => {
 
     expect(await within(dialog).findByText('Miembro19 Prueba')).toBeInTheDocument();
     expect(within(dialog).queryByText('Miembro0 Prueba')).not.toBeInTheDocument();
+  });
+
+  it('searches members inside the open list dialog', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ObservationsPage />);
+
+    await waitFor(() => {
+      expect(screen.getAllByText('20').length).toBeGreaterThan(0);
+    });
+
+    await user.click(screen.getAllByText(CARD_TITLE)[0]);
+
+    const dialog = await screen.findByRole('dialog');
+    const search = within(dialog).getByPlaceholderText(/buscar miembro|search member/i);
+    await user.type(search, 'Miembro19');
+
+    expect(await within(dialog).findByText('Miembro19 Prueba')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Miembro0 Prueba')).not.toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/mostrando 1[–-]1 de 1|showing 1[–-]1 of 1/i)
+    ).toBeInTheDocument();
+  });
+
+  it('filters temple recommends between expiring and expired', async () => {
+    vi.mocked(getMembersByStatus).mockResolvedValue([
+      makeTempleRecommendMember(1, 'Vencida', -5),
+      makeTempleRecommendMember(2, 'PorVencer', 10),
+    ]);
+    const user = userEvent.setup();
+    renderWithProviders(<ObservationsPage />);
+
+    const cardTitle = await screen.findByText(/por vencer y vencidas|expiring or expired/i);
+    await user.click(cardTitle);
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Vencida Prueba')).toBeInTheDocument();
+    expect(within(dialog).getByText('PorVencer Prueba')).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole('button', { name: /^vencidas$|^expired$/i }));
+    expect(within(dialog).queryByText('PorVencer Prueba')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Vencida Prueba')).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole('button', { name: /^por vencer$|^expiring soon$/i })
+    );
+    expect(within(dialog).queryByText('Vencida Prueba')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('PorVencer Prueba')).toBeInTheDocument();
   });
 
   it('shows the locally cached snapshot when the network fetch fails', async () => {

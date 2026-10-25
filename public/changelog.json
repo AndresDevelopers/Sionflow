@@ -7,34 +7,14 @@
       "changes": {
         "es": {
           "added": [
-            "Hemos añadido: add temple recommend tracking and expiry notifications."
+            "Hemos añadido una nueva función en la sección de Observaciones.",
+            "Hemos añadido el seguimiento de las recomendaciones para el templo y los avisos de vencimiento."
           ]
         },
         "en": {
           "added": [
-            "We added: add temple recommend tracking and expiry notifications."
-          ]
-        }
-      }
-    },
-    {
-      "version": "1.1.46",
-      "date": "2026-10-15",
-      "changes": {
-        "es": {
-          "improved": [
-            "Hemos mejorado: update .gitignore and ESLint configurations."
-          ],
-          "fixed": [
-            "Hemos corregido: update DeepSeek model references from v4-flash to flash."
-          ]
-        },
-        "en": {
-          "improved": [
-            "We improved: update .gitignore and ESLint configurations."
-          ],
-          "fixed": [
-            "We fixed: update DeepSeek model references from v4-flash to flash."
+            "We added search/filters to observation lists.",
+            "We added temple recommend tracking and expiry notifications."
           ]
         }
       }
@@ -45,44 +25,12 @@
       "changes": {
         "es": {
           "added": [
-            "Hemos añadido: add open source information and sponsorship details to donation page."
+            "Añadimos en la página de Donaciones la información del proyecto de código abierto y las formas de apoyarlo."
           ]
         },
         "en": {
           "added": [
-            "We added: add open source information and sponsorship details to donation page."
-          ]
-        }
-      }
-    },
-    {
-      "version": "1.1.44",
-      "date": "2026-08-17",
-      "changes": {
-        "es": {
-          "fixed": [
-            "Hemos corregido: adapt code to Zod v4 and bump dependencies."
-          ]
-        },
-        "en": {
-          "fixed": [
-            "We fixed: adapt code to Zod v4 and bump dependencies."
-          ]
-        }
-      }
-    },
-    {
-      "version": "1.1.43",
-      "date": "2026-08-04",
-      "changes": {
-        "es": {
-          "fixed": [
-            "Hemos corregido: bump dependencies and fix next-env types path."
-          ]
-        },
-        "en": {
-          "fixed": [
-            "We fixed: bump dependencies and fix next-env types path."
+            "We added open-source information and ways to support the project on the Donations page."
           ]
         }
       }
@@ -93,12 +41,12 @@
       "changes": {
         "es": {
           "added": [
-            "Hemos añadido: add member picker for health concerns."
+            "Ahora puedes seleccionar a los miembros afectados al registrar una necesidad de salud, en lugar de escribir sus nombres a mano."
           ]
         },
         "en": {
           "added": [
-            "We added: add member picker for health concerns."
+            "You can now pick the affected members when recording a health concern instead of typing their names by hand."
           ]
         }
       }
@@ -108,13 +56,13 @@
       "date": "2026-07-30",
       "changes": {
         "es": {
-          "added": [
-            "Hemos añadido: add pagination, infinite scroll, and locale updates."
+          "improved": [
+            "Las listas largas ahora cargan más registros de forma automática al desplazarte, sin tener que cambiar de página."
           ]
         },
         "en": {
-          "added": [
-            "We added: add pagination, infinite scroll, and locale updates."
+          "improved": [
+            "Long lists now load more records automatically as you scroll, without switching pages."
           ]
         }
       }
@@ -125,36 +73,12 @@
       "changes": {
         "es": {
           "added": [
-            "Hemos añadido: add newsletter subscription system and admin tools.",
-            "Hemos añadido: add demo barrio seed script and update dependencies."
+            "Ahora puedes suscribirte al boletín para recibir novedades y avisos del barrio por correo electrónico."
           ]
         },
         "en": {
           "added": [
-            "We added: add newsletter subscription system and admin tools.",
-            "We added: add demo barrio seed script and update dependencies."
-          ]
-        }
-      }
-    },
-    {
-      "version": "1.1.39",
-      "date": "2026-07-24",
-      "changes": {
-        "es": {
-          "improved": [
-            "Hemos mejorado: actualización de dependencias y parches de seguridad."
-          ],
-          "fixed": [
-            "Hemos corregido: update tooling, fix lint issues and bump dependencies."
-          ]
-        },
-        "en": {
-          "improved": [
-            "We improved: bump dependencies and apply security patches."
-          ],
-          "fixed": [
-            "We fixed: update tooling, fix lint issues and bump dependencies."
+            "You can now subscribe to the newsletter to receive ward news and updates by email."
           ]
         }
       }
@@ -165,16 +89,26 @@
       "changes": {
         "es": {
           "added": [
-            "Añadimos soporte para imágenes sin conexión en PWA y alineamos el alcance de las notificaciones.",
-            "Incluimos bendición patriarcal, insignias de ciclo de vida y herramientas.",
-            "Agregamos un sistema completo de programación, seguimiento y recordatorios de entrevistas."
+            "Puedes registrar la bendición patriarcal y ver insignias del ciclo de vida de cada miembro.",
+            "Nuevo sistema para programar entrevistas, darles seguimiento y recibir recordatorios."
+          ],
+          "improved": [
+            "Las imágenes de la aplicación ahora también están disponibles cuando no tienes conexión."
+          ],
+          "fixed": [
+            "Las notificaciones llegan únicamente a las personas del barrio correspondiente."
           ]
         },
         "en": {
           "added": [
-            "We added PWA offline image support and aligned notification scoping.",
-            "We added patriarchal blessing, lifecycle badges, and tooling.",
-            "We added a full interview scheduling, tracking and reminder system."
+            "You can now record patriarchal blessings and see lifecycle badges for each member.",
+            "A new system to schedule interviews, track them, and receive reminders."
+          ],
+          "improved": [
+            "Images in the app are now available even when you have no internet connection."
+          ],
+          "fixed": [
+            "Notifications now reach only the people in the corresponding ward."
           ]
         }
       }
@@ -202,43 +136,15 @@
       "date": "2026-07-20",
       "changes": {
         "es": {
-          "added": [
-            "Agregamos nuevas herramientas de mantenimiento para administradores: un comando para encontrar archivos huérfanos en el almacenamiento y otro para actualizar la configuración de caché de archivos existentes."
-          ],
           "improved": [
-            "Hemos mejorado la velocidad de subida de archivos y reducido los costos al optimizar la compresión de imágenes de perfil, que ahora se redimensionan a un máximo de 640px y un tamaño máximo de 180KB.",
-            "Ahora las subidas de archivos usan una configuración de caché unificada, lo que hace que las imágenes y documentos se carguen más rápido en todas las partes de la aplicación."
+            "Las fotos de perfil se suben más rápido y ocupan menos espacio: ahora se reducen a un máximo de 640px y 180 KB.",
+            "Las imágenes y los documentos cargan más rápido gracias a una mejor configuración de caché."
           ]
         },
         "en": {
-          "added": [
-            "We added new maintenance tools for admins: a command to find orphaned storage files and another to update cache settings on existing files."
-          ],
           "improved": [
-            "We've improved upload speed and reduced costs by optimizing profile image compression—now resized to a max of 640px and limited to 180KB.",
-            "File uploads now use a unified cache configuration, making images and documents load faster across all parts of the app."
-          ]
-        }
-      }
-    },
-    {
-      "version": "1.1.35",
-      "date": "2026-07-18",
-      "changes": {
-        "es": {
-          "added": [
-            "Añadimos cientos de pruebas automáticas que verifican que todas las páginas principales de la aplicación funcionan correctamente."
-          ],
-          "improved": [
-            "Mejoramos la infraestructura de pruebas migrando a Vitest, lo que hace que las pruebas sean más rápidas y confiables."
-          ]
-        },
-        "en": {
-          "added": [
-            "Added hundreds of automated tests to ensure all main pages of the app work correctly."
-          ],
-          "improved": [
-            "We upgraded our testing framework to Vitest, making tests faster and more reliable."
+            "Profile photos upload faster and take less space: they are now resized to a maximum of 640px and 180 KB.",
+            "Images and documents load faster thanks to better cache settings."
           ]
         }
       }
@@ -249,30 +155,30 @@
       "changes": {
         "es": {
           "added": [
-            "Añadimos el campo de apellido a los perfiles de usuario, con traducciones en español e inglés.",
-            "Implementamos anotaciones de servicio en la página de servicio, permitiendo filtrar por año."
+            "Añadimos el apellido a los perfiles de usuario.",
+            "Las anotaciones de la página de Servicio ahora se pueden filtrar por año."
           ],
           "improved": [
-            "Mejoramos la instalación de la PWA con iconos optimizados y actualizamos el manifiesto web.",
-            "Reducimos los tiempos de espera en las funciones de IA, mejorando la sincronización de datos y la gestión de errores.",
-            "Optimizamos el diseño móvil, el soporte sin conexión y la configuración de donaciones."
+            "Mejoramos la instalación de la app en el celular, con iconos optimizados y mejor funcionamiento sin conexión.",
+            "El diseño se adapta mejor a las pantallas pequeñas y la configuración de donaciones es más clara.",
+            "La IA responde más rápido y los datos se sincronizan mejor."
           ],
           "fixed": [
-            "Corregimos redirecciones inseguras al iniciar sesión y actualizamos dependencias para evitar errores."
+            "Corregimos redirecciones inseguras al iniciar sesión."
           ]
         },
         "en": {
           "added": [
-            "Added a last name field to user profiles, with translations in English and Spanish.",
-            "Introduced service annotations on the service page, with a year filter for easier browsing."
+            "We added a last name field to user profiles.",
+            "Service annotations can now be filtered by year."
           ],
           "improved": [
-            "Improved PWA setup with optimized icons, updated web manifest, and better offline caching.",
-            "Reduced AI function timeouts, improved data sync with separate manual and silent states, and added error handling.",
-            "Enhanced mobile layout, offline support, and donation configuration with better error logging."
+            "We improved installing the app on your phone, with optimized icons and better offline support.",
+            "The layout now fits small screens better and the donation settings are clearer.",
+            "The AI responds faster and data syncs more reliably."
           ],
           "fixed": [
-            "Fixed unsafe login redirects and updated dependencies to prevent compatibility issues."
+            "We fixed unsafe redirects when signing in."
           ]
         }
       }
@@ -300,31 +206,23 @@
       "date": "2026-07-15",
       "changes": {
         "es": {
-          "added": [
-            "Agregamos páginas de aterrizaje en español e inglés con metadatos SEO completos, incluyendo Open Graph y Twitter Cards, para mejorar tu visibilidad en buscadores."
-          ],
           "improved": [
-            "Ahora las notificaciones se pueden descartar suavemente en lugar de eliminarse permanentemente, dándote más control sobre tu bandeja de entrada.",
-            "Actualizamos varias dependencias de seguridad para proteger tu información y garantizar un funcionamiento más estable de la aplicación.",
-            "Mejoramos el manejo de errores en la carga de datos, mostrando información almacenada en caché cuando hay problemas de permisos en la base de datos.",
-            "Optimizamos la instalación de la aplicación en dispositivos móviles (PWA) para que funcione correctamente sin fallos de iconos."
+            "Ahora puedes descartar las notificaciones sin borrarlas, para mantener tu bandeja en orden.",
+            "Si hay un problema de permisos al cargar datos, la app muestra la información guardada en tu dispositivo.",
+            "La instalación en el celular funciona de forma más estable, sin fallos de iconos."
           ],
           "fixed": [
-            "Corregimos problemas de inicio de sesión que causaban bucles de redirección y fallos en cookies de sesión, haciendo que el acceso sea más confiable."
+            "Corregimos un problema de inicio de sesión que podía crear bucles de redirección y cerrar tu sesión."
           ]
         },
         "en": {
-          "added": [
-            "We added Spanish and English landing pages with full SEO metadata, including Open Graph and Twitter Cards, to boost your search engine visibility."
-          ],
           "improved": [
-            "Notifications can now be softly dismissed instead of permanently deleted, giving you more control over your inbox.",
-            "Updated several security dependencies to protect your data and ensure smoother app performance.",
-            "Improved error handling when loading data, showing cached information when database permission errors occur.",
-            "Optimized the mobile app installation (PWA) so it works correctly without icon-related failures."
+            "You can now dismiss notifications without deleting them, keeping your inbox tidy.",
+            "If there is a permissions problem while loading data, the app shows the information already saved on your device.",
+            "Installing the app on your phone is more reliable, with no missing icons."
           ],
           "fixed": [
-            "Fixed login issues that caused redirect loops and session cookie failures, making sign-in more reliable."
+            "We fixed a sign-in issue that could cause redirect loops and drop your session."
           ]
         }
       }
@@ -333,60 +231,84 @@
       "version": "1.1.31",
       "date": "2026-07-14",
       "changes": {
-        "es": [
-          "Cambiamos la licencia del proyecto a AGPL-3.0 para proteger mejor el software como servicio.",
-          "Ahora puedes ingresar un código de ubicación (Plus Code) que se convierte automáticamente a dirección postal.",
-          "Mejoramos la seguridad con verificación de sesión en el borde y aislamiento estricto entre barrios.",
-          "Agregamos un sistema de administración general de la plataforma para gestionar usuarios y configuración.",
-          "Las notificaciones push ahora se activan por dispositivo, dándote más control sobre qué recibes.",
-          "Corregimos errores de sincronización y optimizamos el rendimiento para evitar duplicados y fugas de datos."
-        ],
-        "en": [
-          "We changed the project license to AGPL-3.0 to better protect software as a service.",
-          "You can now enter a location code (Plus Code) that automatically converts to a street address.",
-          "Improved security with edge session verification and strict isolation between wards.",
-          "Added a general platform admin system to manage users and configuration.",
-          "Push notifications are now enabled per device, giving you more control over what you receive.",
-          "Fixed sync errors and optimized performance to prevent duplicates and data leaks."
-        ]
+        "es": {
+          "added": [
+            "Ahora puedes escribir un Plus Code (código de ubicación) y la app lo convierte automáticamente en la dirección postal.",
+            "Las notificaciones push se activan por dispositivo, así eliges en cuáles recibirlas."
+          ],
+          "improved": [
+            "Reforzamos la seguridad de la sesión y el aislamiento de los datos entre barrios."
+          ],
+          "fixed": [
+            "Corregimos errores de sincronización que podían duplicar información."
+          ]
+        },
+        "en": {
+          "added": [
+            "You can now type a Plus Code (location code) and the app turns it into a street address automatically.",
+            "Push notifications are now enabled per device, so you choose which ones receive them."
+          ],
+          "improved": [
+            "We strengthened session security and the separation of data between wards."
+          ],
+          "fixed": [
+            "We fixed sync errors that could create duplicate information."
+          ]
+        }
       }
     },
     {
       "version": "1.1.30",
       "date": "2026-07-13",
       "changes": {
-        "es": [
-          "Añadimos límites de velocidad configurables para proteger la aplicación de uso excesivo y mejoramos la experiencia del chat de la iglesia.",
-          "Ahora puedes añadir miembros manualmente al formulario de compañerismo de ministerio, disponible en inglés y español.",
-          "Mejoramos la experiencia sin conexión: las imágenes se muestran correctamente aunque no tengas internet.",
-          "La aplicación ahora funciona mejor sin conexión: puedes navegar, ver datos y la sesión se mantiene activa incluso si pierdes la señal.",
-          "Implementamos límites de asientos por rol para el registro y la asignación de roles, con alertas visuales cuando se alcanza el límite.",
-          "Movimos la sección de futuros miembros a la página de obra misional y añadimos accesos directos a WhatsApp, SMS y Telegram."
-        ],
-        "en": [
-          "Added configurable rate limiting to protect the app from abuse and improved church chat experience.",
-          "You can now manually add family members to the ministering companionship form, available in English and Spanish.",
-          "Improved offline experience: images now display correctly even without internet.",
-          "The app now works better offline: you can navigate, view data, and your session stays active even if you lose signal.",
-          "Implemented role-based seat limits for registration and role assignment, with visual alerts when limits are reached.",
-          "Moved the future members section to the missionary work page and added quick actions for WhatsApp, SMS, and Telegram."
-        ]
+        "es": {
+          "added": [
+            "Puedes añadir miembros manualmente al formulario de compañerismo de ministración.",
+            "La sección de Futuros miembros ahora está en Obra Misional, con accesos directos a WhatsApp, SMS y Telegram.",
+            "Los roles tienen un límite de integrantes al registrar usuarios, con un aviso cuando se alcanza."
+          ],
+          "improved": [
+            "Las imágenes y los datos se ven correctamente sin conexión, y tu sesión sigue activa si pierdes la señal.",
+            "Mejoramos la experiencia del Chat de la Iglesia."
+          ]
+        },
+        "en": {
+          "added": [
+            "You can now add members manually to the ministering companionship form.",
+            "The Future Members section is now on the Missionary Work page, with shortcuts to WhatsApp, SMS, and Telegram.",
+            "Roles now have a member limit when registering users, with a warning when it is reached."
+          ],
+          "improved": [
+            "Images and data display correctly offline, and your session stays active if you lose signal.",
+            "We improved the Church Chat experience."
+          ]
+        }
       }
     },
     {
       "version": "1.1.29",
       "date": "2026-07-11",
       "changes": {
-        "es": [
-          "Añadimos un subtítulo en la página de inicio de sesión y mejoramos el diseño del registro de cambios para que sea más fácil de leer.",
-          "Actualizamos la versión a 1.1.29, añadimos el modo de pensamiento desactivado en DeepSeek y mejoramos la seguridad con nuevas reglas CSP.",
-          "Agregamos controles de permisos de dispositivo (micrófono/GPS) en la configuración, ajustes de tamaño de letra en las FAQ y una nueva sección de Historias que reemplaza los informes antiguos."
-        ],
-        "en": [
-          "Added a subtitle to the login page and improved the changelog UI for better readability.",
-          "Updated to v1.1.29, disabled thinking mode for DeepSeek API, and enhanced security with updated CSP rules.",
-          "Added device permission controls (microphone/GPS) in settings, font size adjusters for FAQ sections, and a new Historias section to replace deprecated reports."
-        ]
+        "es": {
+          "added": [
+            "Añadimos controles de permisos de micrófono y GPS en Ajustes.",
+            "Nueva sección de Historias, que reemplaza a los informes anteriores.",
+            "Puedes ajustar el tamaño de la letra en las preguntas frecuentes."
+          ],
+          "improved": [
+            "Añadimos un subtítulo a la pantalla de inicio de sesión y renovamos el diseño del Historial de cambios."
+          ]
+        },
+        "en": {
+          "added": [
+            "We added microphone and GPS permission controls in Settings.",
+            "A new Historias section replaces the old reports.",
+            "You can now adjust the font size in the frequently asked questions."
+          ],
+          "improved": [
+            "We added a subtitle to the sign-in screen and redesigned the change history."
+          ]
+        }
       }
     },
     {
@@ -415,324 +337,332 @@
       "version": "1.1.27",
       "date": "2026-07-09",
       "changes": {
-        "es": [
-          "Actualización: Add internationalized date and changelog caching.",
-          "Actualización: Add SEO support, polish UI, and update configs."
-        ],
-        "en": [
-          "Update: Add internationalized date and changelog caching.",
-          "Update: Add SEO support, polish UI, and update configs."
-        ]
+        "es": {
+          "improved": [
+            "Las fechas se muestran según el idioma que elijas.",
+            "Pulimos detalles de la interfaz y el Historial de cambios carga más rápido."
+          ]
+        },
+        "en": {
+          "improved": [
+            "Dates are now displayed according to the language you choose.",
+            "We polished interface details and the change history loads faster."
+          ]
+        }
       }
     },
     {
       "version": "1.1.26",
       "date": "2026-07-08",
       "changes": {
-        "es": [
-          "Actualización: Add min-w-0 to fix flex layout overflow.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Add barrioOrg scoping to Firestore rules and update app code.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Fix Firestore filtering and add max tokens env config.",
-          "Actualización: Auto-update changelog [skip ci]."
-        ],
-        "en": [
-          "Update: Add min-w-0 to fix flex layout overflow.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Add barrioOrg scoping to Firestore rules and update app code.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Fix Firestore filtering and add max tokens env config.",
-          "Update: Auto-update changelog [skip ci]."
-        ]
+        "es": {
+          "improved": [
+            "Los datos de cada barrio quedan separados, para que solo veas la información de tu organización."
+          ],
+          "fixed": [
+            "Corregimos un problema de filtrado que podía ocultar información.",
+            "Corregimos un desbordamiento del diseño en pantallas pequeñas."
+          ]
+        },
+        "en": {
+          "improved": [
+            "Each ward's data is now kept separate, so you only see your own organization's information."
+          ],
+          "fixed": [
+            "We fixed a filtering problem that could hide information.",
+            "We fixed a layout overflow on small screens."
+          ]
+        }
       }
     },
     {
       "version": "1.1.25",
       "date": "2026-07-07",
       "changes": {
-        "es": [
-          "Actualización: Rebrand to SionFlow, add multi-tenant annotations & security settings."
-        ],
-        "en": [
-          "Update: Rebrand to SionFlow, add multi-tenant annotations & security settings."
-        ]
+        "es": {
+          "added": [
+            "La aplicación ahora se llama SionFlow y estrena nueva imagen.",
+            "Las anotaciones y los ajustes de seguridad ahora se manejan por organización."
+          ]
+        },
+        "en": {
+          "added": [
+            "The app is now called SionFlow and has a fresh new look.",
+            "Annotations and security settings are now managed per organization."
+          ]
+        }
       }
     },
     {
       "version": "1.1.24",
       "date": "2026-07-06",
       "changes": {
-        "es": [
-          "Actualización: Add install prompt and optimize PWA asset routes.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Bump to v1.1.24 with PWA and tooling updates.",
-          "Actualización: Add user deletion and update related configs.",
-          "Actualización: Implement permission-based access control system.",
-          "Actualización: Add PWA icons, fix notification scoping."
-        ],
-        "en": [
-          "Update: Add install prompt and optimize PWA asset routes.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Bump to v1.1.24 with PWA and tooling updates.",
-          "Update: Add user deletion and update related configs.",
-          "Update: Implement permission-based access control system.",
-          "Update: Add PWA icons, fix notification scoping."
-        ]
-      }
-    },
-    {
-      "version": "1.1.23",
-      "date": "2026-07-05",
-      "changes": {
-        "es": [
-          "Actualización: Actualizar manifest.json."
-        ],
-        "en": [
-          "Update: Actualizar manifest.json."
-        ]
+        "es": {
+          "added": [
+            "La app te invita a instalarla en tu celular y muestra los iconos correctos.",
+            "Los administradores pueden eliminar usuarios.",
+            "Nuevo sistema de permisos para decidir qué puede hacer cada rol."
+          ],
+          "improved": [
+            "Las notificaciones llegan solo a las personas del barrio correspondiente."
+          ]
+        },
+        "en": {
+          "added": [
+            "The app now invites you to install it on your phone and shows the correct icons.",
+            "Administrators can now delete users.",
+            "A new permission system decides what each role can do."
+          ],
+          "improved": [
+            "Notifications now reach only the people in the corresponding ward."
+          ]
+        }
       }
     },
     {
       "version": "1.1.22",
       "date": "2026-07-04",
       "changes": {
-        "es": [
-          "Actualización: Scope caches by barrioOrg.",
-          "Actualización: Add donation qr download.",
-          "Actualización: Add member sync and notification improvements.",
-          "Actualización: Add barrio-org data scoping and donation support."
-        ],
-        "en": [
-          "Update: Scope caches by barrioOrg.",
-          "Update: Add donation qr download.",
-          "Update: Add member sync and notification improvements.",
-          "Update: Add barrio-org data scoping and donation support."
-        ]
+        "es": {
+          "added": [
+            "Ahora puedes descargar el código QR para donaciones."
+          ],
+          "improved": [
+            "Mejoramos la sincronización de miembros y el envío de notificaciones."
+          ]
+        },
+        "en": {
+          "added": [
+            "You can now download the donation QR code."
+          ],
+          "improved": [
+            "We improved member sync and notification delivery."
+          ]
+        }
       }
     },
     {
       "version": "1.1.21",
       "date": "2026-07-03",
       "changes": {
-        "es": [
-          "Actualización: Add president role, optimize audit logs, fix PWA manifest.",
-          "Actualización: Send notifs to same barrio org.",
-          "Actualización: Implement white-labeling and data standardization.",
-          "Actualización: Initial commit: SionFlow church management system."
-        ],
-        "en": [
-          "Update: Add president role, optimize audit logs, fix PWA manifest.",
-          "Update: Send notifs to same barrio org.",
-          "Update: Implement white-labeling and data standardization.",
-          "Update: Initial commit: SionFlow church management system."
-        ]
+        "es": {
+          "added": [
+            "Estrenamos SionFlow, el sistema para gestionar la información del barrio.",
+            "Nuevo rol de presidente, además de los roles existentes."
+          ],
+          "improved": [
+            "Las notificaciones se envían solo a los usuarios del mismo barrio.",
+            "Puedes personalizar la app con el nombre e identidad de tu organización."
+          ]
+        },
+        "en": {
+          "added": [
+            "We launched SionFlow, the system for managing ward information.",
+            "A new president role joins the existing roles."
+          ],
+          "improved": [
+            "Notifications are sent only to users in the same ward.",
+            "You can customize the app with your organization's name and identity."
+          ]
+        }
       }
     },
     {
       "version": "1.1.20",
       "date": "2026-06-09",
       "changes": {
-        "es": [
-          "Actualización: Use empty string for blank address and fix death date format.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Add member address support and display.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Add gps autofill for member address."
-        ],
-        "en": [
-          "Update: Use empty string for blank address and fix death date format.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Add member address support and display.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Add gps autofill for member address."
-        ]
-      }
-    },
-    {
-      "version": "1.1.19",
-      "date": "2026-06-08",
-      "changes": {
-        "es": [
-          "Actualización: Update deps, fix date picker props, clean imports."
-        ],
-        "en": [
-          "Update: Update deps, fix date picker props, clean imports."
-        ]
-      }
-    },
-    {
-      "version": "1.1.18",
-      "date": "2026-04-28",
-      "changes": {
-        "es": [
-          "Actualización: Bump dependencies to latest versions."
-        ],
-        "en": [
-          "Update: Bump dependencies to latest versions."
-        ]
-      }
-    },
-    {
-      "version": "1.1.17",
-      "date": "2026-04-27",
-      "changes": {
-        "es": [
-          "Actualización: Enable stricter TypeScript checks and add non-null assertions."
-        ],
-        "en": [
-          "Update: Enable stricter TypeScript checks and add non-null assertions."
-        ]
+        "es": {
+          "added": [
+            "Cada miembro puede tener su dirección registrada, y se muestra en su perfil."
+          ],
+          "improved": [
+            "Puedes completar la dirección usando tu ubicación GPS."
+          ],
+          "fixed": [
+            "Corregimos el formato de la fecha de defunción y el tratamiento de direcciones vacías."
+          ]
+        },
+        "en": {
+          "added": [
+            "Each member can now have an address on file, shown on their profile."
+          ],
+          "improved": [
+            "You can fill in the address using your GPS location."
+          ],
+          "fixed": [
+            "We fixed the death date format and how empty addresses are handled."
+          ]
+        }
       }
     },
     {
       "version": "1.1.16",
       "date": "2026-04-25",
       "changes": {
-        "es": [
-          "Actualización: Add birthday notifications cron job and deduplicate notifications."
-        ],
-        "en": [
-          "Update: Add birthday notifications cron job and deduplicate notifications."
-        ]
+        "es": {
+          "added": [
+            "La app envía notificaciones automáticas de cumpleaños y evita avisarte dos veces del mismo."
+          ]
+        },
+        "en": {
+          "added": [
+            "The app now sends automatic birthday notifications and avoids telling you twice about the same one."
+          ]
+        }
       }
     },
     {
       "version": "1.1.15",
       "date": "2026-04-08",
       "changes": {
-        "es": [
-          "Actualización: ⚠️ **You have run out of credits for kevinsotov95@gmail.com. Please [click here](https://app.augmentcode.com/account?utm_source=vscode&utm_medium=in_agent_conversation&utm_campaign=usage_balance_depleted&utm_content=here) to upgrade.** ⚠️.",
-          "Actualización: Auto-update changelog [skip ci].",
-          "Actualización: Update changelog entries and enhance convert notes functionality."
-        ],
-        "en": [
-          "Update: ⚠️ **You have run out of credits for kevinsotov95@gmail.com. Please [click here](https://app.augmentcode.com/account?utm_source=vscode&utm_medium=in_agent_conversation&utm_campaign=usage_balance_depleted&utm_content=here) to upgrade.** ⚠️.",
-          "Update: Auto-update changelog [skip ci].",
-          "Update: Update changelog entries and enhance convert notes functionality."
-        ]
+        "es": {
+          "improved": [
+            "Ahora puedes editar las notas de los conversos y los cambios se guardan al instante."
+          ]
+        },
+        "en": {
+          "improved": [
+            "You can now edit convert notes and changes are saved instantly."
+          ]
+        }
       }
     },
     {
       "version": "1.1.14",
       "date": "2026-04-03",
       "changes": {
-        "es": [
-          "Actualización: Fix Ecuador timezone handling for birthday notifications."
-        ],
-        "en": [
-          "Update: Fix Ecuador timezone handling for birthday notifications."
-        ]
+        "es": {
+          "fixed": [
+            "Los avisos de cumpleaños ahora usan la fecha correcta de Ecuador, sin desfases por zona horaria."
+          ]
+        },
+        "en": {
+          "fixed": [
+            "Birthday notifications now use the correct Ecuador date, without timezone offsets."
+          ]
+        }
       }
     },
     {
       "version": "1.1.13",
       "date": "2026-03-23",
       "changes": {
-        "es": [
-          "Actualización: Update dependencies and improve push notification handling."
-        ],
-        "en": [
-          "Update: Update dependencies and improve push notification handling."
-        ]
+        "es": {
+          "improved": [
+            "Mejoramos la entrega de las notificaciones push."
+          ]
+        },
+        "en": {
+          "improved": [
+            "We improved push notification delivery."
+          ]
+        }
       }
     },
     {
       "version": "1.1.12",
       "date": "2026-03-17",
       "changes": {
-        "es": [
-          "Actualización: Fix web push delivery and deduplicate FCM tokens."
-        ],
-        "en": [
-          "Update: Fix web push delivery and deduplicate FCM tokens."
-        ]
+        "es": {
+          "fixed": [
+            "Corregimos el envío de notificaciones push y evitamos avisos duplicados en el mismo dispositivo."
+          ]
+        },
+        "en": {
+          "fixed": [
+            "We fixed push notification delivery and prevented duplicate alerts on the same device."
+          ]
+        }
       }
     },
     {
       "version": "1.1.11",
       "date": "2026-03-04",
       "changes": {
-        "es": [
-          "Actualización: Improve FCM delivery and add changelog utilities."
-        ],
-        "en": [
-          "Update: Improve FCM delivery and add changelog utilities."
-        ]
+        "es": {
+          "improved": [
+            "Las notificaciones push ahora llegan de forma más confiable."
+          ]
+        },
+        "en": {
+          "improved": [
+            "Push notifications now arrive more reliably."
+          ]
+        }
       }
     },
     {
       "version": "1.1.10",
       "date": "2026-03-03",
       "changes": {
-        "es": [
-          "feat: Introduce new pages for council management, converts, and member profiles, and update project dependencies.\""
-        ],
-        "en": [
-          "feat: Introduce new pages for council management, converts, and member profiles, and update project dependencies.\""
-        ]
+        "es": {
+          "added": [
+            "Nuevas páginas para el Consejo, los Conversos y el perfil de cada miembro."
+          ]
+        },
+        "en": {
+          "added": [
+            "New pages for the Council, Converts, and individual member profiles."
+          ]
+        }
       }
     },
     {
       "version": "1.1.9",
       "date": "2026-02-25",
       "changes": {
-        "es": [
-          "feat(notifications): add weekly deceased members ordinance notifications\n\nAdd push notification for deceased members lacking complete temple ordinances.\nThis feature runs weekly (Monday only) and notifies users with push enabled\nabout members who need temple work. It queries deceased members, checks\nfor missing ordinances, and sends a notification with member names and count.\n\nAlso update dependencies and add pnpm workspace configuration.",
-          "chore: auto-update changelog [skip ci]",
-          "feat(notifications): add council notes and deceased ordinances notifications\n\n- Send in-app notifications when council updates new convert notes\n- Add weekly push notifications for deceased members needing temple ordinances\n- Extend notification system with inAppOnly and pushOnly options\n- Create API endpoint for scheduled deceased ordinances notifications\n- Update service worker for custom push notification handling",
-          "chore: auto-update changelog [skip ci]",
-          "feat: add temple work tracking for deceased members\n\n- Add new locale entries for deceased members section in both English and Spanish\n- Extend Member type with templeOrdinances and templeWorkCompletedAt fields\n- Create getDeceasedMembers function to filter members needing temple work\n- Add temple ordinances section to member profile for deceased members\n- Update member form to include temple ordinances when status is deceased\n- Add deceased members section to council page showing missing ordinances\n- Add deceased members section to dashboard with interactive ordinance checkboxes",
-          "chore: auto-update changelog [skip ci]",
-          "fix(hooks): prevent dirty changelog by auto-committing after generation [skip ci]",
-          "chore: auto-update changelog [skip ci]",
-          "chore: auto-update changelog [skip ci]",
-          "chore: bump version to 1.1.9 and update changelog\n\nUpdate package.json and version metadata files for release 1.1.9.\nAdd changelog entry detailing recent notification system enhancements,\nFirebase upgrades, and UI improvements.",
-          "feat(notifications): enhance cross-platform push notifications and service worker\n\n- Upgrade Firebase Functions runtime to Node.js 22 and update dependencies\n- Add VAPID key requirement for web push token generation\n- Extend FCM payload with platform-specific configurations (Android, iOS, WebPush)\n- Update service worker to use Firebase v10 compat and improve notification handling\n- Remove manual refresh button from members page in favor of real-time updates\n- Add toast feedback for convert info updates and friend/teacher assignments\n- Update changelog with recent features"
-        ],
-        "en": [
-          "feat(notifications): add weekly deceased members ordinance notifications\n\nAdd push notification for deceased members lacking complete temple ordinances.\nThis feature runs weekly (Monday only) and notifies users with push enabled\nabout members who need temple work. It queries deceased members, checks\nfor missing ordinances, and sends a notification with member names and count.\n\nAlso update dependencies and add pnpm workspace configuration.",
-          "chore: auto-update changelog [skip ci]",
-          "feat(notifications): add council notes and deceased ordinances notifications\n\n- Send in-app notifications when council updates new convert notes\n- Add weekly push notifications for deceased members needing temple ordinances\n- Extend notification system with inAppOnly and pushOnly options\n- Create API endpoint for scheduled deceased ordinances notifications\n- Update service worker for custom push notification handling",
-          "chore: auto-update changelog [skip ci]",
-          "feat: add temple work tracking for deceased members\n\n- Add new locale entries for deceased members section in both English and Spanish\n- Extend Member type with templeOrdinances and templeWorkCompletedAt fields\n- Create getDeceasedMembers function to filter members needing temple work\n- Add temple ordinances section to member profile for deceased members\n- Update member form to include temple ordinances when status is deceased\n- Add deceased members section to council page showing missing ordinances\n- Add deceased members section to dashboard with interactive ordinance checkboxes",
-          "chore: auto-update changelog [skip ci]",
-          "fix(hooks): prevent dirty changelog by auto-committing after generation [skip ci]",
-          "chore: auto-update changelog [skip ci]",
-          "chore: auto-update changelog [skip ci]",
-          "chore: bump version to 1.1.9 and update changelog\n\nUpdate package.json and version metadata files for release 1.1.9.\nAdd changelog entry detailing recent notification system enhancements,\nFirebase upgrades, and UI improvements.",
-          "feat(notifications): enhance cross-platform push notifications and service worker\n\n- Upgrade Firebase Functions runtime to Node.js 22 and update dependencies\n- Add VAPID key requirement for web push token generation\n- Extend FCM payload with platform-specific configurations (Android, iOS, WebPush)\n- Update service worker to use Firebase v10 compat and improve notification handling\n- Remove manual refresh button from members page in favor of real-time updates\n- Add toast feedback for convert info updates and friend/teacher assignments\n- Update changelog with recent features"
-        ]
+        "es": {
+          "added": [
+            "Nuevo aviso semanal con los miembros fallecidos que aún necesitan ordenanzas del templo.",
+            "Recibes una notificación en la app cuando se actualizan las notas de un converso en el Consejo.",
+            "Ahora puedes registrar las ordenanzas del templo de los miembros fallecidos desde su perfil, el Consejo y el Tablero."
+          ],
+          "improved": [
+            "La lista de miembros se actualiza en tiempo real, sin botón de refrescar.",
+            "Mejoramos la entrega de notificaciones en Android, iPhone y web."
+          ]
+        },
+        "en": {
+          "added": [
+            "A new weekly notice lists deceased members who still need temple ordinances.",
+            "You get an in-app notification when a convert's notes are updated in the Council section.",
+            "You can now record temple ordinances for deceased members from their profile, the Council, and the Dashboard."
+          ],
+          "improved": [
+            "The members list now updates in real time, with no refresh button.",
+            "We improved notification delivery on Android, iPhone, and the web."
+          ]
+        }
       }
     },
     {
       "version": "1.1.8",
       "date": "2026-02-24",
       "changes": {
-        "es": [
-          "feat(consejo): add real-time notes editing for new converts\n\n- Implement real-time data fetching for annotations and converts using onSnapshot\n- Add notes editing functionality for each convert with ability to save to Firestore subcollection\n- Replace manual annotation refresh with real-time updates for better performance\n- Update UI with inline editing controls and improved visual feedback",
-          "feat: update changelog with recent changes and improve service worker registration logic",
-          "feat: enhance date selection in forms and improve calendar UI\n\n- Added defaultMonth prop to date pickers in ConvertForm, FutureMemberForm, ActivityForm, and ServiceForm for better user experience.\n- Refactored MemberForm to replace manual date inputs with a calendar popover for birthDate and baptismDate, improving usability and consistency.\n- Updated NotificationBell component to remove update notification logic, simplifying the notification handling.\n- Enhanced calendar component with dropdowns for month and year selection, and improved styling for better visual clarity.",
-          "feat: add approve-builds script to package.json and update changelog entries",
-          "feat: add service worker for PWA and fix notification preferences\n\n- Add service worker (sw.js) with Workbox for offline support and caching\n- Include custom push notification handlers for better user engagement\n- Fix notification preferences by memoizing default category prefs to prevent stale closures\n- Update root layout language to Spanish and add no-translate meta tag\n- Improve postinstall script to handle missing patches gracefully\n- Update changelog with recent fixes",
-          "fix(main-layout): fetch version from changelog.json instead of version.json\n\nUpdate the data source for the version number to use the new changelog.json file structure, where the version is now under the 'current' key.",
-          "docs: add missing changelog entry for version 1.1.8\n\nThe entry for version 1.1.8 was duplicated but missing the standalone entry. This adds the missing entry in both English and Spanish to maintain consistency in the changelog structure.",
-          "feat: add changelog entry for version 1.1.8",
-          "feat: update version to 1.1.8 and add changelog entry",
-          "feat: update version to 1.1.7 and add changelog functionality\n\n- Updated package version to 1.1.7 in package.json.\n- Added scripts for generating changelog and setting up git hooks.\n- Implemented ChangelogDialog component to fetch and display changelog from changelog.json.\n- Created changelog.json to store version history and changes in both English and Spanish.\n- Added localization strings for changelog in en.json and es.json.\n- Set up automatic changelog generation on git commit via post-commit hook."
-        ],
-        "en": [
-          "feat(consejo): add real-time notes editing for new converts\n\n- Implement real-time data fetching for annotations and converts using onSnapshot\n- Add notes editing functionality for each convert with ability to save to Firestore subcollection\n- Replace manual annotation refresh with real-time updates for better performance\n- Update UI with inline editing controls and improved visual feedback",
-          "feat: update changelog with recent changes and improve service worker registration logic",
-          "feat: enhance date selection in forms and improve calendar UI\n\n- Added defaultMonth prop to date pickers in ConvertForm, FutureMemberForm, ActivityForm, and ServiceForm for better user experience.\n- Refactored MemberForm to replace manual date inputs with a calendar popover for birthDate and baptismDate, improving usability and consistency.\n- Updated NotificationBell component to remove update notification logic, simplifying the notification handling.\n- Enhanced calendar component with dropdowns for month and year selection, and improved styling for better visual clarity.",
-          "feat: add approve-builds script to package.json and update changelog entries",
-          "feat: add service worker for PWA and fix notification preferences\n\n- Add service worker (sw.js) with Workbox for offline support and caching\n- Include custom push notification handlers for better user engagement\n- Fix notification preferences by memoizing default category prefs to prevent stale closures\n- Update root layout language to Spanish and add no-translate meta tag\n- Improve postinstall script to handle missing patches gracefully\n- Update changelog with recent fixes",
-          "fix(main-layout): fetch version from changelog.json instead of version.json\n\nUpdate the data source for the version number to use the new changelog.json file structure, where the version is now under the 'current' key.",
-          "docs: add missing changelog entry for version 1.1.8\n\nThe entry for version 1.1.8 was duplicated but missing the standalone entry. This adds the missing entry in both English and Spanish to maintain consistency in the changelog structure.",
-          "feat: add changelog entry for version 1.1.8",
-          "feat: update version to 1.1.8 and add changelog entry",
-          "feat: update version to 1.1.7 and add changelog functionality\n\n- Updated package version to 1.1.7 in package.json.\n- Added scripts for generating changelog and setting up git hooks.\n- Implemented ChangelogDialog component to fetch and display changelog from changelog.json.\n- Created changelog.json to store version history and changes in both English and Spanish.\n- Added localization strings for changelog in en.json and es.json.\n- Set up automatic changelog generation on git commit via post-commit hook."
-        ]
+        "es": {
+          "added": [
+            "Las notas de los conversos se pueden editar en tiempo real desde el Consejo."
+          ],
+          "improved": [
+            "Los formularios ahora usan un calendario para elegir fechas de nacimiento y bautismo, más fácil de usar.",
+            "La app instalada funciona sin conexión y maneja mejor las notificaciones push."
+          ],
+          "fixed": [
+            "Corregimos las preferencias de notificaciones para que se guarden correctamente."
+          ]
+        },
+        "en": {
+          "added": [
+            "Convert notes can now be edited in real time from the Council page."
+          ],
+          "improved": [
+            "Forms now use a calendar to pick birth and baptism dates, which is easier to use.",
+            "The installed app works offline and handles push notifications better."
+          ],
+          "fixed": [
+            "We fixed notification preferences so they are saved correctly."
+          ]
+        }
       }
     },
     {

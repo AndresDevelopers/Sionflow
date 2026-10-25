@@ -8,7 +8,7 @@ import { OfflineImage } from '@/components/offline-image';
 
 import type { ChangeEvent } from 'react';
 
-import { Users, AlertTriangle, UserX, UserCheck, Eye, ChevronUp, HeartPulse, Plus, Trash2, Loader2, Check, ChevronsUpDown, X, Pencil, MapPin, BadgeCheck, CalendarClock, FileX2 } from 'lucide-react';
+import { Users, AlertTriangle, UserX, UserCheck, Eye, ChevronUp, HeartPulse, Plus, Trash2, Loader2, Check, ChevronsUpDown, X, Pencil, MapPin, BadgeCheck, CalendarClock, FileX2, Search } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import {
   ObservationListDialog,
@@ -212,6 +212,51 @@ const renderPhoneWithAge = (member: Member, fallback: string, ageLabel: (age: nu
   return text;
 };
 
+/** Texto sin acentos ni mayúsculas para buscar dentro de los listados. */
+const normalizeListSearch = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+const matchesMemberSearch = (
+  person: Pick<Member, 'firstName' | 'lastName'>,
+  term: string
+): boolean =>
+  term.length === 0 ||
+  normalizeListSearch(`${person.firstName} ${person.lastName}`).includes(term);
+
+const matchesTextSearch = (
+  values: Array<string | undefined | null>,
+  term: string
+): boolean =>
+  term.length === 0 ||
+  normalizeListSearch(values.filter(Boolean).join(' ')).includes(term);
+
+function ObservationListSearch({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="relative w-full sm:max-w-xs">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        aria-label={placeholder}
+        className="pl-9"
+      />
+    </div>
+  );
+}
+
 
 
 const formatRecommendDate = (value: unknown): string => {
@@ -408,6 +453,11 @@ export default function ObservationsPage() {
   const [openList, setOpenList] = useState<ObservationListKey | null>(null);
 
   const [listPage, setListPage] = useState(1);
+
+  /** Búsqueda y filtro del listado abierto; se reinician al abrir o cerrar */
+  const [listSearch, setListSearch] = useState('');
+
+  const [expiringListFilter, setExpiringListFilter] = useState<'all' | 'expiring_soon' | 'expired'>('all');
 
 
 
@@ -1620,14 +1670,68 @@ export default function ObservationsPage() {
 
   const openObservationList = (key: ObservationListKey) => {
     setListPage(1);
+    setListSearch('');
+    setExpiringListFilter('all');
     setOpenList(key);
   };
 
-  const healthListPage = listPageFor(healthConcerns.length);
+  const handleListOpenChange = (key: ObservationListKey, open: boolean) => {
+    setOpenList(open ? key : null);
+    if (!open) {
+      setListSearch('');
+      setExpiringListFilter('all');
+    }
+  };
+
+  const handleListSearchChange = (value: string) => {
+    setListSearch(value);
+    setListPage(1);
+  };
+
+  const handleExpiringFilterChange = (value: 'all' | 'expiring_soon' | 'expired') => {
+    setExpiringListFilter(value);
+    setListPage(1);
+  };
+
+  /** Término normalizado del buscador del listado abierto */
+  const searchTerm = normalizeListSearch(listSearch);
+
+  const matchesExpiringListFilter = (member: Member) =>
+    expiringListFilter === 'all' || getTempleRecommendStatus(member) === expiringListFilter;
+
+  const filteredHealthConcerns = healthConcerns.filter((concern) =>
+    matchesMemberSearch(concern, searchTerm)
+  );
+
+  const filteredFamilyFocusCompanionships = familyFocusCompanionships.filter((companionship) =>
+    matchesTextSearch(
+      [
+        ...companionship.companions,
+        ...companionship.families.map((family) => family.name),
+        ...companionship.flaggedFamilies.flatMap((flagged) => [
+          flagged.family.name,
+          ...flagged.members.map((member) => `${member.firstName} ${member.lastName}`),
+        ]),
+      ],
+      searchTerm
+    )
+  );
+
+  const filteredProblematicCompanionships = problematicCompanionships.filter((companionship) =>
+    matchesTextSearch(
+      [
+        ...companionship.companions,
+        ...companionship.families.map((family) => family.name),
+      ],
+      searchTerm
+    )
+  );
+
+  const healthListPage = listPageFor(filteredHealthConcerns.length);
   const healthListStart = (healthListPage - 1) * OBSERVATION_LIST_PAGE_SIZE;
-  const familyFocusListPage = listPageFor(familyFocusCompanionships.length);
+  const familyFocusListPage = listPageFor(filteredFamilyFocusCompanionships.length);
   const familyFocusListStart = (familyFocusListPage - 1) * OBSERVATION_LIST_PAGE_SIZE;
-  const problematicListPage = listPageFor(problematicCompanionships.length);
+  const problematicListPage = listPageFor(filteredProblematicCompanionships.length);
   const problematicListStart = (problematicListPage - 1) * OBSERVATION_LIST_PAGE_SIZE;
 
   const memberLists: Array<{
@@ -1980,42 +2084,68 @@ export default function ObservationsPage() {
       {/* Listados: se abren desde las tarjetas y solo montan 15 registros por página */}
 
       {memberLists.map((list) => {
-
-        const page = listPageFor(list.items.length);
-
+        const baseItems =
+          list.key === 'templeRecommendExpiring'
+            ? list.items.filter((member) => matchesExpiringListFilter(member))
+            : list.items;
+        const filteredItems = baseItems.filter((member) =>
+          matchesMemberSearch(member, searchTerm)
+        );
+        const page = listPageFor(filteredItems.length);
         const start = (page - 1) * OBSERVATION_LIST_PAGE_SIZE;
 
         return (
-
           <ObservationListDialog
-
             key={list.key}
-
             open={openList === list.key}
-
-            onOpenChange={(open) => setOpenList(open ? list.key : null)}
-
+            onOpenChange={(open) => handleListOpenChange(list.key, open)}
             title={list.title}
-
             description={list.description}
-
             icon={list.icon}
-
             iconClassName={list.iconClassName}
-
-            total={list.items.length}
-
+            total={filteredItems.length}
             page={page}
-
             onPageChange={setListPage}
-
-            emptyText={list.emptyText}
-
+            emptyText={searchTerm ? t('observations.list.noSearchResults') : list.emptyText}
             loading={loading}
-
+            toolbar={
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <ObservationListSearch
+                  value={listSearch}
+                  onChange={handleListSearchChange}
+                  placeholder={t('observations.list.searchMember')}
+                />
+                {list.key === 'templeRecommendExpiring' && (
+                  <div className="flex flex-wrap gap-1">
+                    {(
+                      [
+                        { value: 'all', label: t('common.all') },
+                        {
+                          value: 'expiring_soon',
+                          label: t('observations.templeRecommend.filterExpiring'),
+                        },
+                        {
+                          value: 'expired',
+                          label: t('observations.templeRecommend.filterExpired'),
+                        },
+                      ] as const
+                    ).map((option) => (
+                      <Button
+                        key={option.value}
+                        type="button"
+                        size="sm"
+                        variant={expiringListFilter === option.value ? 'default' : 'outline'}
+                        onClick={() => handleExpiringFilterChange(option.value)}
+                      >
+                        {option.label}
+                      </Button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            }
           >
-
-            {list.items.slice(start, start + OBSERVATION_LIST_PAGE_SIZE).map((member) => (
+            {filteredItems.slice(start, start + OBSERVATION_LIST_PAGE_SIZE).map((member) => (
 
               <MemberObservationRow
 
@@ -2045,7 +2175,7 @@ export default function ObservationsPage() {
 
         open={openList === 'health'}
 
-        onOpenChange={(open) => setOpenList(open ? 'health' : null)}
+        onOpenChange={(open) => handleListOpenChange('health', open)}
 
         title={t('observations.health.sectionTitle')}
 
@@ -2055,15 +2185,25 @@ export default function ObservationsPage() {
 
         iconClassName="text-rose-600"
 
-        total={healthConcerns.length}
+        total={filteredHealthConcerns.length}
 
         page={healthListPage}
 
         onPageChange={setListPage}
 
-        emptyText={t('observations.health.empty')}
+        emptyText={
+          searchTerm ? t('observations.list.noSearchResults') : t('observations.health.empty')
+        }
 
         loading={healthLoading}
+
+        toolbar={
+          <ObservationListSearch
+            value={listSearch}
+            onChange={handleListSearchChange}
+            placeholder={t('observations.list.searchMember')}
+          />
+        }
 
         actions={
           canWrite ? (
@@ -2083,7 +2223,7 @@ export default function ObservationsPage() {
 
       >
 
-        {healthConcerns
+        {filteredHealthConcerns
 
           .slice(healthListStart, healthListStart + OBSERVATION_LIST_PAGE_SIZE)
 
@@ -2241,7 +2381,7 @@ export default function ObservationsPage() {
 
         open={openList === 'familyFocus'}
 
-        onOpenChange={(open) => setOpenList(open ? 'familyFocus' : null)}
+        onOpenChange={(open) => handleListOpenChange('familyFocus', open)}
 
         title={t('observations.familyFocus.sectionTitle')}
 
@@ -2251,19 +2391,31 @@ export default function ObservationsPage() {
 
         iconClassName="text-sky-600"
 
-        total={familyFocusCompanionships.length}
+        total={filteredFamilyFocusCompanionships.length}
 
         page={familyFocusListPage}
 
         onPageChange={setListPage}
 
-        emptyText={t('observations.familyFocus.empty')}
+        emptyText={
+          searchTerm
+            ? t('observations.list.noSearchResults')
+            : t('observations.familyFocus.empty')
+        }
 
         loading={loading}
 
+        toolbar={
+          <ObservationListSearch
+            value={listSearch}
+            onChange={handleListSearchChange}
+            placeholder={t('observations.list.searchCompanionship')}
+          />
+        }
+
       >
 
-        {familyFocusCompanionships
+        {filteredFamilyFocusCompanionships
 
           .slice(familyFocusListStart, familyFocusListStart + OBSERVATION_LIST_PAGE_SIZE)
 
@@ -2347,7 +2499,7 @@ export default function ObservationsPage() {
 
         open={openList === 'problematic'}
 
-        onOpenChange={(open) => setOpenList(open ? 'problematic' : null)}
+        onOpenChange={(open) => handleListOpenChange('problematic', open)}
 
         title={t('observations.problematic.sectionTitle')}
 
@@ -2357,19 +2509,31 @@ export default function ObservationsPage() {
 
         iconClassName="text-orange-600"
 
-        total={problematicCompanionships.length}
+        total={filteredProblematicCompanionships.length}
 
         page={problematicListPage}
 
         onPageChange={setListPage}
 
-        emptyText={t('observations.problematic.empty')}
+        emptyText={
+          searchTerm
+            ? t('observations.list.noSearchResults')
+            : t('observations.problematic.empty')
+        }
 
         loading={loading}
 
+        toolbar={
+          <ObservationListSearch
+            value={listSearch}
+            onChange={handleListSearchChange}
+            placeholder={t('observations.list.searchCompanionship')}
+          />
+        }
+
       >
 
-        {problematicCompanionships
+        {filteredProblematicCompanionships
 
           .slice(problematicListStart, problematicListStart + OBSERVATION_LIST_PAGE_SIZE)
 

@@ -394,7 +394,7 @@ Panel de atención especial con indicadores calculados, entre otros:
 ## Instalación
 
 ### Requisitos
-- Node.js v22+
+- Node.js 22.23.4+ (LTS con los parches de seguridad de octubre 2026; versión fijada en `.nvmrc`, se recomienda `nvm use`)
 - pnpm
 - Proyecto Firebase (Firestore, Auth, Storage, Functions, Cloud Messaging)
 - API key de **DeepSeek** (opcional) — IA de **todo** el sistema en texto (dashboard, sugerencias, chat, etc.)

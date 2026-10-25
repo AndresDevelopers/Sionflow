@@ -83,6 +83,17 @@ function getSections(
   });
 }
 
+/** ISO date from changelog.json → readable date in the active language. */
+export function formatEntryDate(date: string, language: "es" | "en"): string {
+  const parsed = new Date(`${date}T00:00:00`);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat(language === "en" ? "en-US" : "es-EC", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(parsed);
+}
+
 function ChangeList({ items }: { items: string[] }) {
   return (
     <ul className="list-disc list-outside pl-5 text-sm text-muted-foreground space-y-1">
@@ -192,14 +203,16 @@ export function ChangelogDialog({ children }: { children: React.ReactNode }) {
                 <div key={entry.version} className="min-w-0 max-w-full space-y-2">
                   <div>
                     <h3 className="font-semibold">
-                      v {entry.version}
+                      v{entry.version}
                       {index === 0 && (
                         <span className="ml-2 text-xs font-normal text-muted-foreground">
                           ({t("changelog.current")})
                         </span>
                       )}
                     </h3>
-                    <p className="text-xs text-muted-foreground">{entry.date}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatEntryDate(entry.date, lang)}
+                    </p>
                   </div>
 
                   {sections.map((section) => {
