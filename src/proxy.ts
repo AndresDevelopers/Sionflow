@@ -1,6 +1,9 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE_NAME } from '@/lib/auth-session';
-import { verifyFirebaseIdTokenEdge } from '@/lib/firebase-token-edge';
+import {
+  isInvalidTokenError,
+  verifyFirebaseIdTokenEdge,
+} from '@/lib/firebase-token-edge';
 
 /**
  * Edge/network gate for authenticated app shells (Next.js "proxy" convention).
@@ -8,6 +11,11 @@ import { verifyFirebaseIdTokenEdge } from '@/lib/firebase-token-edge';
  *
  * Offline/PWA: cached navigations may be served by the SW without re-hitting this
  * proxy; client PrivateRoute remains the offline UX authority.
+ *
+ * Resilience: only a token the verifier actually rejected sends the user to
+ * /login. Verification infrastructure failures (Google JWKS unreachable, missing
+ * project config) let the shell through instead of locking the PWA out — every
+ * API still validates its own Bearer token and Firestore rules protect data.
  */
 
 const PUBLIC_EXACT = new Set([
@@ -131,10 +139,16 @@ export async function proxy(request: NextRequest) {
   try {
     await verifyFirebaseIdTokenEdge(token);
     return NextResponse.next();
-  } catch {
+  } catch (error) {
     const isRsc =
       request.headers.get('rsc') === '1' || request.nextUrl.searchParams.has('_rsc');
     if (isRsc || request.headers.get('next-router-prefetch') === '1') {
+      return NextResponse.next();
+    }
+    if (!isInvalidTokenError(error)) {
+      // Cannot verify right now (JWKS/network/config). Never clear the cookie or
+      // bounce to /login: keep the app usable and let the client + APIs decide.
+      console.warn('[proxy] session verification unavailable; allowing shell', error);
       return NextResponse.next();
     }
     return loginRedirect(request, 'invalid');

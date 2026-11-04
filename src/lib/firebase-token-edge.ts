@@ -10,6 +10,29 @@ const GOOGLE_JWKS = createRemoteJWKSet(
   )
 );
 
+/** jose codes that mean the presented token itself is not valid. */
+const TOKEN_REJECTION_CODES = new Set([
+  'ERR_JWT_EXPIRED',
+  'ERR_JWT_CLAIM_VALIDATION_FAILED',
+  'ERR_JWT_INVALID',
+  'ERR_JWS_SIGNATURE_VERIFICATION_FAILED',
+  'ERR_JWS_INVALID',
+  'ERR_JOSE_ALG_NOT_ALLOWED',
+  'ERR_JOSE_NOT_SUPPORTED',
+]);
+
+/**
+ * True only when the token was rejected (expired, forged, malformed).
+ * Anything else — JWKS fetch/timeout, missing project config, unexpected
+ * errors — is an infrastructure failure and must NOT sign the user out:
+ * the app shell stays reachable and APIs keep verifying their own Bearer.
+ */
+export function isInvalidTokenError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const code = (error as { code?: unknown }).code;
+  return typeof code === 'string' && TOKEN_REJECTION_CODES.has(code);
+}
+
 export type VerifiedFirebaseToken = JWTPayload & {
   sub: string;
   user_id?: string;

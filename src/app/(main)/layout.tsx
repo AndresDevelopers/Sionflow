@@ -116,7 +116,10 @@ function PrivateRoute({ children }: { children: ReactNode }) {
     }
   }, [loading, user, profileLoaded, isRestricted, isAppAdmin, router, mainPage, visiblePages]);
 
-  if (loading || (user && !profileLoaded)) {
+  // Only the very first boot (no session yet) may show the skeleton. Role and
+  // permissions are confirmed in the background by AuthProvider, so a slow
+  // Firestore, an offline device or a hosting outage never blocks the shell.
+  if (loading && !user) {
     return (
       <div className="flex h-svh w-full items-center justify-center">
         <div className="flex flex-col items-center gap-4 px-4">
@@ -170,6 +173,8 @@ function PrivateRoute({ children }: { children: ReactNode }) {
     );
   }
 
+  // Restricted member: no shell. The role scan runs in the background, so an
+  // unknown role (null) keeps navigating; Firestore rules/APIs enforce access.
   if (isRestricted) {
     return null;
   }

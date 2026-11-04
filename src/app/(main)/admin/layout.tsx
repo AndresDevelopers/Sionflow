@@ -9,7 +9,7 @@ import { getDoc } from '@/lib/firestore-query';
 import { usersCollection } from "@/lib/collections";
 import { useI18n } from "@/contexts/i18n-context";
 import { isAdmin, normalizeRole, type UserRole } from "@/lib/roles";
-import { Skeleton } from "@/components/ui/skeleton";
+import { isBrowserOnline } from "@/lib/network";
 import { AlertCircle, ShieldAlert } from "lucide-react";
 import {
   Card,
@@ -21,67 +21,59 @@ import {
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 
+/** Upper bound for the background role re-check so a stuck read never lingers. */
+const ROLE_CHECK_TIMEOUT_MS = 2_500;
+
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const { user, loading, userRole } = useAuth();
   const router = useRouter();
   const { t } = useI18n();
-  const [checkingRole, setCheckingRole] = useState(true);
-  const [role, setRole] = useState<UserRole | null>(null);
+
+  /**
+   * The Firestore read below only CONFIRMS the role in the background. Until it
+   * resolves (or if it fails) we already have AuthProvider's cached/live role,
+   * so the guard never blocks navigation on a network read.
+   */
+  const [verification, setVerification] = useState<{ uid: string; role: UserRole } | null>(null);
 
   useEffect(() => {
+    if (!user) return;
     let isMounted = true;
 
-    const check = async () => {
-      if (!user) {
-        setCheckingRole(false);
-        return;
-      }
+    const timeout = new Promise<null>((resolve) => {
+      window.setTimeout(() => resolve(null), ROLE_CHECK_TIMEOUT_MS);
+    });
 
-      try {
-        const snap = await getDoc(doc(usersCollection, user.uid));
-        if (!isMounted) return;
-        if (snap.exists()) {
-          setRole(normalizeRole(snap.data().role));
-        } else {
-          setRole(userRole);
-        }
-      } catch {
-        if (isMounted) setRole(userRole);
-      } finally {
-        if (isMounted) setCheckingRole(false);
-      }
-    };
-
-    check();
+    void Promise.race([getDoc(doc(usersCollection, user.uid)), timeout])
+      .then((snap) => {
+        if (!isMounted || !snap || !snap.exists()) return;
+        setVerification({ uid: user.uid, role: normalizeRole(snap.data().role) });
+      })
+      .catch(() => {
+        // Offline / backend down: keep the cached role, never block the shell.
+      });
 
     return () => {
       isMounted = false;
     };
-  }, [user, userRole]);
+  }, [user]);
+
+  // Fresh read wins for the same uid; otherwise use the cached/live role.
+  const role =
+    verification && user && verification.uid === user.uid ? verification.role : userRole;
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Offline: never hard-navigate (a full page load dies without network).
+    if (!loading && !user && isBrowserOnline()) {
       router.push("/login");
     }
   }, [user, loading, router]);
 
-  if (loading || checkingRole) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Skeleton className="h-12 w-12 rounded-full" />
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-[220px]" />
-            <Skeleton className="h-4 w-[160px]" />
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   if (!user) return null;
 
-  if (!isAdmin(role)) {
+  // Only restrict when the role is KNOWN to be insufficient. An unknown role
+  // keeps the cached shell usable while the background scan resolves.
+  if (role != null && !isAdmin(role)) {
     return (
       <div className="page-section">
         <Card className="border-rose-200 bg-rose-50 dark:border-rose-800 dark:bg-rose-950">

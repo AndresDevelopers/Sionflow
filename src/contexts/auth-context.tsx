@@ -60,6 +60,14 @@ interface CachedAuthProfile {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * The app must never stay behind the boot skeleton. Auth and Firestore are
+ * background confirmations: with a cached profile the shell is usable at once,
+ * and even without one we stop blocking so PWA navigation still works when the
+ * backend is slow, the hosting is down or the device lost connectivity.
+ */
+const AUTH_BOOT_TIMEOUT_MS = 3_500;
+
 const formatUser = (user: FirebaseUser): User => ({
     uid: user.uid,
     email: user.email,
@@ -220,6 +228,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     [setTheme]
   );
 
+  /**
+   * The profile could not be read (offline, timeout, Firestore/hosting down).
+   * Never invent a role here: leaving it null means "unknown / read-only" until
+   * the background snapshot resolves, so a restricted member is not mislabeled
+   * and an operator is not locked out by a failed scan.
+   */
+  const markProfileUnknown = useCallback(() => {
+    setProfileLoaded(true);
+  }, []);
+
+  /**
+   * Re-apply the last CONFIRMED profile stored on this device while the
+   * background check is still pending. Returns false when there is no cache.
+   * Never fabricates a role: it only replays what Firestore already confirmed.
+   */
+  const applyCachedProfile = useCallback(
+    (
+      uid: string,
+      overrides?: { email?: string | null; displayName?: string | null }
+    ): boolean => {
+      const cached = loadCachedProfile(uid);
+      if (!cached) return false;
+      applyProfile({
+        role: cached.role,
+        permission: cached.permission,
+        mainPage: cached.mainPage,
+        visiblePages: cached.visiblePages,
+        barrio: cached.barrio,
+        organizacion: cached.organizacion,
+        barrioOrg: cached.barrioOrg,
+        theme: cached.theme,
+        photoURL: cached.photoURL,
+        isAppAdmin: cached.isAppAdmin === true,
+        ...overrides,
+      });
+      return true;
+    },
+    [applyProfile]
+  );
+
   // Instant hydrate from last session while Firebase Auth boots (esp. offline cold start)
   useEffect(() => {
     const lastUid = loadLastSessionUid();
@@ -255,10 +303,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
     profileAppliedFromCache.current = true;
     setProfileLoaded(true);
-    // Keep loading=true until onAuthStateChanged confirms, unless offline
-    if (!isBrowserOnline()) {
-      setLoading(false);
-    }
+    // Optimistic session: the cached profile is enough to render and navigate.
+    // Firebase Auth confirms (or signs the session out) in the background.
+    setLoading(false);
   }, [applyProfile]);
 
   // Keep proxy session cookie in sync with Firebase ID token.
@@ -384,6 +431,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribe();
   }, [applyProfile]);
 
+  // Hard stop for the boot skeleton: auth never decides navigation by itself.
+  useEffect(() => {
+    if (!loading) return;
+    const timer = window.setTimeout(() => {
+      console.warn('[auth] boot timeout: continuing with cached/unknown session');
+      setLoading(false);
+    }, AUTH_BOOT_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [loading]);
+
   // Live subscription so admin changes to role/permission/visiblePages apply immediately.
   // Offline: Firestore persistentLocalCache + localStorage profile keep the shell usable.
   useEffect(() => {
@@ -407,22 +464,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       !isBrowserOnline() && !profileAppliedFromCache.current
         ? window.setTimeout(() => {
             if (settled) return;
-            const cached = loadCachedProfile(firebaseUser.uid);
-            if (cached) {
-              applyProfile({
-                role: cached.role,
-                permission: cached.permission,
-                mainPage: cached.mainPage,
-                visiblePages: cached.visiblePages,
-                barrio: cached.barrio,
-                organizacion: cached.organizacion,
-                barrioOrg: cached.barrioOrg,
-                theme: cached.theme,
-                photoURL: cached.photoURL,
-                isAppAdmin: cached.isAppAdmin === true,
-              });
-            } else {
-              applyProfile({});
+            if (!applyCachedProfile(firebaseUser.uid)) {
+              markProfileUnknown();
             }
             markLoaded();
           }, 800)
@@ -431,22 +474,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Always ensure we don't hang forever even if online snapshot is slow on flaky mobile
     const hardTimeout = window.setTimeout(() => {
       if (settled) return;
-      const cached = loadCachedProfile(firebaseUser.uid);
-      if (cached) {
-        applyProfile({
-          role: cached.role,
-          permission: cached.permission,
-          mainPage: cached.mainPage,
-          visiblePages: cached.visiblePages,
-          barrio: cached.barrio,
-          organizacion: cached.organizacion,
-          barrioOrg: cached.barrioOrg,
-          theme: cached.theme,
-          photoURL: cached.photoURL,
-          isAppAdmin: cached.isAppAdmin === true,
-        });
-      } else if (!profileAppliedFromCache.current) {
-        applyProfile({});
+      if (
+        !applyCachedProfile(firebaseUser.uid) &&
+        !profileAppliedFromCache.current
+      ) {
+        markProfileUnknown();
       }
       markLoaded();
     }, 5000);
@@ -455,23 +487,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       userDocRef,
       (userDoc) => {
         if (!userDoc.exists()) {
-          applyProfile(
-            {
+          // Profile document missing (deleted or not readable yet): never
+          // fabricate a role and never overwrite the stored one. Keep the last
+          // confirmed profile until Firestore reports a real value.
+          if (
+            !applyCachedProfile(firebaseUser.uid, {
               email: firebaseUser.email,
               displayName: firebaseUser.displayName,
-              isAppAdmin: false,
-            },
-            { persistUid: firebaseUser.uid }
-          );
+            })
+          ) {
+            markProfileUnknown();
+          }
           markLoaded();
           return;
         }
 
         const data = userDoc.data();
+        const cached = loadCachedProfile(firebaseUser.uid);
+        // A partial document (missing role/permission) keeps the last confirmed
+        // value instead of resolving to an invented "user" role.
+        const confirmedRole =
+          typeof data.role === 'string' && data.role.trim().length > 0
+            ? data.role
+            : cached?.role;
+        const confirmedPermission =
+          typeof data.permission === 'string' ? data.permission : cached?.permission;
         applyProfile(
           {
-            role: data.role,
-            permission: data.permission,
+            role: confirmedRole,
+            permission: confirmedPermission,
             mainPage: data.mainPage,
             visiblePages: data.visiblePages,
             barrio: data.barrio,
@@ -489,22 +533,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       },
       () => {
         if (!profileAppliedFromCache.current) {
-          const cached = loadCachedProfile(firebaseUser.uid);
-          if (cached) {
-            applyProfile({
-              role: cached.role,
-              permission: cached.permission,
-              mainPage: cached.mainPage,
-              visiblePages: cached.visiblePages,
-              barrio: cached.barrio,
-              organizacion: cached.organizacion,
-              barrioOrg: cached.barrioOrg,
-              theme: cached.theme,
-              photoURL: cached.photoURL,
-              isAppAdmin: cached.isAppAdmin === true,
-            });
-          } else {
-            applyProfile({});
+          if (!applyCachedProfile(firebaseUser.uid)) {
+            markProfileUnknown();
           }
         }
         markLoaded();
@@ -516,7 +546,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (offlineTimeout != null) window.clearTimeout(offlineTimeout);
       window.clearTimeout(hardTimeout);
     };
-  }, [firebaseUser, applyProfile]);
+  }, [firebaseUser, applyProfile, applyCachedProfile, markProfileUnknown]);
   
   const refreshAuth = useCallback(async () => {
     const currentUser = auth?.currentUser;
